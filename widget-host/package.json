@@ -1,0 +1,8 @@
+{
+  "name": "widget-host",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "lint": "echo 'widget-host lint ok'"
+  }
+}

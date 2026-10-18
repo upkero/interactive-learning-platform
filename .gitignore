@@ -1,0 +1,7 @@
+node_modules/
+.pnpm-store/
+.ruff_cache/
+.mypy_cache/
+.venv/
+*.env
+!*.env.example
