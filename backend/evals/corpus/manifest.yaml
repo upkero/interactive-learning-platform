@@ -1,0 +1,211 @@
+{
+  "version": 1,
+  "candidates": {
+    "graph-messages": {
+      "effort": "L",
+      "summary": "nodes and messages between them over time"
+    },
+    "array-ops": {
+      "effort": "M",
+      "summary": "an array and stepwise operations on it"
+    },
+    "tree-ops": {
+      "effort": "L",
+      "summary": "a tree and insert, delete, or rotation operations"
+    },
+    "state-machine": {
+      "effort": "M",
+      "summary": "states and transitions triggered by events"
+    },
+    "lane-timeline": {
+      "effort": "M",
+      "summary": "lanes over time for processes and transactions"
+    },
+    "param-plot": {
+      "effort": "S",
+      "summary": "a y(x) curve and its dependence on a parameter"
+    }
+  },
+  "chapters": [
+    {
+      "id": "net-01",
+      "discipline": "networks",
+      "lang": "ru",
+      "title": "Сетевая модель OSI",
+      "path": "chapters/net-01.md",
+      "source": "https://ru.wikipedia.org/wiki/%D0%A1%D0%B5%D1%82%D0%B5%D0%B2%D0%B0%D1%8F_%D0%BC%D0%BE%D0%B4%D0%B5%D0%BB%D1%8C_OSI",
+      "license": "CC BY-SA 4.0"
+    },
+    {
+      "id": "net-02",
+      "discipline": "networks",
+      "lang": "ru",
+      "title": "TCP: протокол управления передачей",
+      "path": "chapters/net-02.md",
+      "source": "https://ru.wikipedia.org/wiki/TCP",
+      "license": "CC BY-SA 4.0"
+    },
+    {
+      "id": "net-03",
+      "discipline": "networks",
+      "lang": "en",
+      "title": "Unreliable Datagram Protocol (UDP)",
+      "path": "chapters/net-03.md",
+      "source": "https://github.com/SystemsApproach/book/blob/main/e2e/udp.rst",
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "net-04",
+      "discipline": "networks",
+      "lang": "en",
+      "title": "Ethernet and the local area network",
+      "path": "chapters/net-04.md",
+      "source": "https://github.com/SystemsApproach/book/blob/main/direct/ethernet.rst",
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "net-05",
+      "discipline": "networks",
+      "lang": "en",
+      "title": "Routing in internetworks",
+      "path": "chapters/net-05.md",
+      "source": "https://github.com/SystemsApproach/book/blob/main/internetworking/routing.rst",
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "os-01",
+      "discipline": "os",
+      "lang": "ru",
+      "title": "Операционная система",
+      "path": "chapters/os-01.md",
+      "source": "https://ru.wikipedia.org/wiki/%D0%9E%D0%BF%D0%B5%D1%80%D0%B0%D1%86%D0%B8%D0%BE%D0%BD%D0%BD%D0%B0%D1%8F_%D1%81%D0%B8%D1%81%D1%82%D0%B5%D0%BC%D0%B0",
+      "license": "CC BY-SA 4.0"
+    },
+    {
+      "id": "os-02",
+      "discipline": "os",
+      "lang": "en",
+      "title": "The Abstraction: The Process",
+      "path": "private/os-02.md",
+      "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-intro.pdf",
+      "license": "private"
+    },
+    {
+      "id": "os-03",
+      "discipline": "os",
+      "lang": "en",
+      "title": "Scheduling: Introduction",
+      "path": "private/os-03.md",
+      "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched.pdf",
+      "license": "private"
+    },
+    {
+      "id": "os-04",
+      "discipline": "os",
+      "lang": "en",
+      "title": "The Abstraction: Address Spaces",
+      "path": "private/os-04.md",
+      "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-intro.pdf",
+      "license": "private"
+    },
+    {
+      "id": "os-05",
+      "discipline": "os",
+      "lang": "en",
+      "title": "Files and Directories",
+      "path": "private/os-05.md",
+      "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-intro.pdf",
+      "license": "private"
+    },
+    {
+      "id": "alg-01",
+      "discipline": "algorithms",
+      "lang": "en",
+      "title": "Recursion",
+      "path": "chapters/alg-01.md",
+      "source": "https://github.com/jeffgerickson/algorithms/blob/master/Chapters/01-recursion.pdf",
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "alg-02",
+      "discipline": "algorithms",
+      "lang": "en",
+      "title": "Backtracking",
+      "path": "chapters/alg-02.md",
+      "source": "https://github.com/jeffgerickson/algorithms/blob/master/Chapters/02-backtracking.pdf",
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "alg-03",
+      "discipline": "algorithms",
+      "lang": "en",
+      "title": "Dynamic Programming",
+      "path": "chapters/alg-03.md",
+      "source": "https://github.com/jeffgerickson/algorithms/blob/master/Chapters/03-dynprog.pdf",
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "alg-04",
+      "discipline": "algorithms",
+      "lang": "en",
+      "title": "Greedy Algorithms",
+      "path": "chapters/alg-04.md",
+      "source": "https://github.com/jeffgerickson/algorithms/blob/master/Chapters/04-greedy.pdf",
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "alg-05",
+      "discipline": "algorithms",
+      "lang": "ru",
+      "title": "Алгоритм Дейкстры",
+      "path": "chapters/alg-05.md",
+      "source": "https://ru.wikipedia.org/wiki/%D0%90%D0%BB%D0%B3%D0%BE%D1%80%D0%B8%D1%82%D0%BC_%D0%94%D0%B5%D0%B9%D0%BA%D1%81%D1%82%D1%80%D1%8B",
+      "license": "CC BY-SA 4.0"
+    },
+    {
+      "id": "db-01",
+      "discipline": "databases",
+      "lang": "en",
+      "title": "Queries",
+      "path": "chapters/db-01.md",
+      "source": "https://www.postgresql.org/docs/current/queries.html",
+      "license": "PostgreSQL License"
+    },
+    {
+      "id": "db-02",
+      "discipline": "databases",
+      "lang": "en",
+      "title": "Data Definition",
+      "path": "chapters/db-02.md",
+      "source": "https://www.postgresql.org/docs/current/ddl.html",
+      "license": "PostgreSQL License"
+    },
+    {
+      "id": "db-03",
+      "discipline": "databases",
+      "lang": "en",
+      "title": "Concurrency Control",
+      "path": "chapters/db-03.md",
+      "source": "https://www.postgresql.org/docs/current/mvcc.html",
+      "license": "PostgreSQL License"
+    },
+    {
+      "id": "db-04",
+      "discipline": "databases",
+      "lang": "en",
+      "title": "Data Manipulation",
+      "path": "chapters/db-04.md",
+      "source": "https://www.postgresql.org/docs/current/dml.html",
+      "license": "PostgreSQL License"
+    },
+    {
+      "id": "db-05",
+      "discipline": "databases",
+      "lang": "ru",
+      "title": "SQL",
+      "path": "chapters/db-05.md",
+      "source": "https://ru.wikipedia.org/wiki/SQL",
+      "license": "CC BY-SA 4.0"
+    }
+  ]
+}
