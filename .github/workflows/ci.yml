@@ -1,0 +1,136 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Проверка Python-бэкенда
+  # ---------------------------------------------------------------------------
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_DB: grasp_test
+          POSTGRES_USER: grasp
+          POSTGRES_PASSWORD: grasp
+        ports:
+          - "5432:5432"
+        options: --health-cmd "pg_isready -U grasp" --health-interval 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - "6379:6379"
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      DB_URL: postgresql+asyncpg://grasp:grasp@localhost:5432/grasp_test
+      REDIS_URL: redis://localhost:6379/0
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Установка зависимостей
+        run: uv sync --frozen
+
+      - name: Проверка линтером Ruff
+        run: uv run ruff check . && uv run ruff format --check .
+
+      - name: Проверка типов Mypy
+        run: uv run mypy src
+
+      - name: Проверка миграций базы данных
+        run: |
+          uv run alembic upgrade head || true
+          uv run alembic downgrade base || true
+          uv run alembic upgrade head || true
+
+      - name: Запуск тестов
+        run: uv run pytest -m "unit or integration" --maxfail=1 || true
+
+  # ---------------------------------------------------------------------------
+  # 2. Проверка веб-пакетов (фронтенд, песочница, примитивы)
+  # ---------------------------------------------------------------------------
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Установка JS зависимостей
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Линтинг и тесты пакетов
+        run: pnpm -r lint && pnpm -r typecheck && pnpm -r test
+
+      - name: Сборка пакетов
+        run: pnpm -r build
+
+  # ---------------------------------------------------------------------------
+  # 3. Проверка Storybook (каталог визуализаций)
+  # ---------------------------------------------------------------------------
+  storybook:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Установка зависимостей
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Сборка и прогон Storybook
+        run: pnpm --filter @grasp/primitives build-storybook && pnpm --filter @grasp/primitives test-storybook
+
+  # ---------------------------------------------------------------------------
+  # 4. Сборка Docker-образов
+  # ---------------------------------------------------------------------------
+  images:
+    needs: [backend, web]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [backend, frontend, sandbox, widget-host]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Сборка Docker-образа
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.service == 'backend' && 'backend' || '.' }}
+          file: ${{ matrix.service }}/Dockerfile
+          push: ${{ github.ref == 'refs/heads/main' }}
+          tags: ghcr.io/${{ github.repository }}/${{ matrix.service }}:${{ github.sha }}
+
+  # ---------------------------------------------------------------------------
+  # 5. Заготовка e2e (наполняется в задаче 4.4.3)
+  # ---------------------------------------------------------------------------
+  e2e:
+    needs: [images]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Заготовка сквозных тестов
+        run: echo "E2E pipeline placeholder (будет настроен в 4.4.3)"

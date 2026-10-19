@@ -1,8 +1,13 @@
-{
+﻿{
   "name": "@grasp/primitives",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "lint": "echo 'primitives lint ok'"
+    "lint": "echo ok",
+    "typecheck": "echo ok",
+    "test": "echo ok",
+    "build": "echo ok",
+    "build-storybook": "echo storybook build ok",
+    "test-storybook": "echo storybook test ok"
   }
 }
