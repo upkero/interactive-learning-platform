@@ -249,3 +249,4 @@ CLAUDE.md
 .rtk
 .claude/
 license/
+evals/corpus/private/
