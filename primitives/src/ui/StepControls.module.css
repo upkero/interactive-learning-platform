@@ -1,0 +1,12 @@
+.controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  font-family: var(--g-font-sans);
+  gap: var(--g-space-2);
+}
+
+.counter {
+  color: var(--g-color-text-muted);
+  font-size: var(--g-text-sm);
+}
