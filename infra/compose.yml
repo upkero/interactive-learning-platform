@@ -41,7 +41,7 @@ services:
 
   # 3. MinIO — S3-совместимое объектное хранилище
   minio:
-    image: quay.io/minio/minio:latest
+    image: quay.io/minio/minio:RELEASE.2024-11-07T00-52-20Z
     command: server /data --console-address ":9001"
     env_file: ../backend/.env
     ports: ["9000:9000", "9001:9001"]
@@ -95,6 +95,12 @@ services:
     networks:
       - default
       - sandbox_net
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A src.worker inspect ping || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
 
   # 8. Планировщик периодических задач Celery Beat
   beat:
@@ -121,14 +127,13 @@ services:
 
   # 10. Локальная LLM Ollama (для работы без платного ключа)
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.5.7
     profiles: ["local-llm"]
     ports: ["11434:11434"]
     volumes:
       - ollamadata:/root/.ollama
 
 networks:
-  # Изолированная сеть без шлюза в интернет
   sandbox_net:
     internal: true
 

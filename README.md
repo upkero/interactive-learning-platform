@@ -11,3 +11,9 @@ Grasp превращает учебные материалы (PDF, DOCX, Markdow
 ```bash
 cp backend/.env.example backend/.env
 ```
+## Запуск проекта локально
+
+### Первый запуск:
+```bash
+cp backend/.env.example backend/.env
+docker compose -f infra/compose.yml up -d0
