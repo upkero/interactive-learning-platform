@@ -1,4 +1,4 @@
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncIterator
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -9,17 +9,25 @@ from src.app.interfaces.llm.llm_client import LLMClient
 
 
 def get_container(request: Request) -> ApplicationContainer:
-    return request.app.state.container  # type: ignore[no-any-return]
+    """Извлекает DI-контейнер из состояния приложения FastAPI."""
+    container: ApplicationContainer = request.app.state.container
+    return container
 
 
-def get_llm_client(request: Request) -> LLMClient:
-    return request.app.state.container.llm_client  # type: ignore[no-any-return]
+ContainerDep = Annotated[ApplicationContainer, Depends(get_container)]
 
 
-async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
-    async with request.app.state.container.session_factory() as session:
-        yield session
+def get_llm_client(container: ContainerDep) -> LLMClient:
+    return container.llm_client
 
 
 LLMClientDep = Annotated[LLMClient, Depends(get_llm_client)]
+
+
+async def get_db_session(container: ContainerDep) -> AsyncIterator[AsyncSession]:
+    """Генератор сессии БД для эндпоинтов API."""
+    async with container.session_factory() as session:
+        yield session
+
+
 DBSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
