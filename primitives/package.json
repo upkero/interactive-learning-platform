@@ -1,13 +1,22 @@
-﻿{
+{
   "name": "@grasp/primitives",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
+  "exports": {
+    "./tokens.css": "./src/tokens/tokens.css"
+  },
   "scripts": {
-    "lint": "echo ok",
+    "lint": "stylelint \"src/**/*.css\"",
+    "lint:styles": "stylelint \"src/**/*.css\"",
+    "check:contrast": "node --experimental-strip-types scripts/check-contrast.ts",
     "typecheck": "echo ok",
     "test": "echo ok",
     "build": "echo ok",
     "build-storybook": "echo storybook build ok",
     "test-storybook": "echo storybook test ok"
+  },
+  "devDependencies": {
+    "stylelint": "^16.19.1"
   }
 }
