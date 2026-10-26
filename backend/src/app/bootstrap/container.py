@@ -18,8 +18,6 @@ class ApplicationContainer:
     @cached_property
     def _db_engine(self) -> AsyncEngine:
         settings = get_app_settings()
-        if settings.db_url is None:
-            raise RuntimeError("DB_URL is not configured.")
         return build_engine(str(settings.db_url))
 
     @cached_property
