@@ -49,13 +49,10 @@ jobs:
         run: uv run mypy src
 
       - name: Проверка миграций базы данных
-        run: |
-          uv run alembic upgrade head || true
-          uv run alembic downgrade base || true
-          uv run alembic upgrade head || true
+        run: uv run alembic upgrade head && uv run alembic downgrade base && uv run alembic upgrade head
 
       - name: Запуск тестов
-        run: uv run pytest -m "unit or integration" --maxfail=1 || true
+        run: uv run pytest -m "unit or integration" --maxfail=1
 
   # ---------------------------------------------------------------------------
   # 2. Проверка веб-пакетов (фронтенд, песочница, примитивы)
