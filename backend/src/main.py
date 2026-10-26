@@ -12,6 +12,7 @@ from src.app.api.v1.routers.health import router as health_router
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.core.logging import setup_logging
 from src.app.core.settings.app import get_app_settings
+from src.app.core.settings.auth import get_auth_settings
 from src.app.core.settings.logging import get_logging_settings
 
 
@@ -28,7 +29,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 def create_app() -> FastAPI:
     setup_logging(get_logging_settings())
 
-    app = FastAPI(title="UPK Assistant", version="0.1.0", lifespan=lifespan)
+    # Валидация обязательных секретов при старте (DoD 1.1.4)
+    get_auth_settings()
+
+    app = FastAPI(title="Grasp API", version="0.1.0", lifespan=lifespan)
 
     settings = get_app_settings()
     app.add_middleware(
