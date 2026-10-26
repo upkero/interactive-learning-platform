@@ -1,0 +1,25 @@
+.field {
+  color: var(--g-color-text);
+  display: grid;
+  font-family: var(--g-font-sans);
+  gap: var(--g-space-1);
+}
+
+.label {
+  font-size: var(--g-text-md);
+}
+
+.slider {
+  accent-color: var(--g-color-accent);
+  cursor: pointer;
+  inline-size: 100%;
+}
+
+.slider:focus-visible {
+  outline: 3px solid var(--g-color-accent);
+  outline-offset: 2px;
+}
+
+.slider:disabled {
+  cursor: not-allowed;
+}
