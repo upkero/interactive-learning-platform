@@ -100,3 +100,7 @@ markers = [
     "integration: tests against real Postgres/Redis/MinIO from compose",
     "live: tests that call external paid APIs (Anthropic, Voyage)",
 ]
+
+[[tool.mypy.overrides]]
+module = ["celery", "celery.*", "kombu", "kombu.*"]
+ignore_missing_imports = true
