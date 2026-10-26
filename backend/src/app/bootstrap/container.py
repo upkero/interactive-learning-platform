@@ -26,7 +26,12 @@ class ApplicationContainer:
     @cached_property
     def _db_engine(self) -> AsyncEngine:
         settings = get_app_settings()
-        return build_engine(str(settings.db_url))
+        return build_engine(
+            str(settings.db_url),
+            pool_size=settings.db_pool_size,
+            max_overflow=settings.db_max_overflow,
+            null_pool=settings.db_use_null_pool,
+        )
 
     @cached_property
     def session_factory(self) -> async_sessionmaker[AsyncSession]:
