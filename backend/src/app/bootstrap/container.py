@@ -1,5 +1,6 @@
 import inspect
 from functools import cached_property
+from logging import getLogger
 
 import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
@@ -8,7 +9,7 @@ from src.app.core.clock import SystemClock
 from src.app.core.settings.app import get_app_settings
 from src.app.core.settings.auth import AuthSettings, get_auth_settings
 from src.app.core.settings.celery import get_celery_settings
-from src.app.core.settings.llm import get_llm_settings
+from src.app.core.settings.llm import CheapLLMSettings, LLMSettings, get_cheap_llm_settings, get_llm_settings
 from src.app.core.settings.processing import ProcessingSettings, get_processing_settings
 from src.app.core.settings.progress import get_progress_settings
 from src.app.core.settings.reports import ReportsSettings, get_reports_settings
@@ -19,6 +20,8 @@ from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.interfaces.services.part_pipeline import PartPipeline
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.llm.factory import create_llm_client
+from src.app.llm.instrumented_llm_client import InstrumentedLLMClient
+from src.app.interfaces.observability.metrics_collector import MetricsCollector
 from src.app.observability.decision_log import DecisionLog
 from src.app.observability.noop_metrics_collector import NoopMetricsCollector
 from src.app.observability.progress_notifier import RedisProgressNotifier
@@ -232,8 +235,32 @@ class ApplicationContainer:
     # -- infrastructure -----------------------------------------------------
 
     @cached_property
-    def llm_client(self) -> LLMClient:
-        return create_llm_client(get_llm_settings())
+    def llm_settings(self) -> LLMSettings:
+        return get_llm_settings()
+
+    @cached_property
+    def cheap_llm_overrides(self) -> CheapLLMSettings:
+        return get_cheap_llm_settings()
+
+    @cached_property
+    def metrics_collector(self) -> MetricsCollector:
+        return PrometheusMetricsCollector()
+
+    @cached_property
+    def main_llm(self) -> LLMClient:
+        return InstrumentedLLMClient(
+            client=create_llm_client(self.llm_settings),
+            logger=getLogger("grasp.llm"),
+            metrics=self.metrics_collector,
+        )
+
+    @cached_property
+    def cheap_llm(self) -> LLMClient:
+        return InstrumentedLLMClient(
+            client=create_llm_client(self.cheap_llm_overrides.resolve(self.llm_settings)),
+            logger=getLogger("grasp.llm.cheap"),
+            metrics=self.metrics_collector,
+        )
 
     @cached_property
     def object_storage(self) -> ObjectStorageClient:

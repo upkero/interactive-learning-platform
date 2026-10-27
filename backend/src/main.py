@@ -9,6 +9,7 @@ from src.app.api.v1.middleware.rate_limit import register_rate_limit
 from src.app.api.v1.middleware.request_id import register_request_id_middleware
 from src.app.api.v1.router import api_router
 from src.app.api.v1.routers.health import router as health_router
+from src.app.api.v1.routers.metrics import router as metrics_router
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.core.logging import setup_logging
 from src.app.core.settings.auth import get_auth_settings
@@ -54,6 +55,7 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
 
     app.include_router(health_router)
+    app.include_router(metrics_router)
     app.include_router(api_router)
 
     return app
