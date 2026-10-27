@@ -5,6 +5,3 @@ node_modules/
 .venv/
 *.env
 !*.env.example
-
-# Local working notes, not for the repository
-PROJECT_CONTEXT.md

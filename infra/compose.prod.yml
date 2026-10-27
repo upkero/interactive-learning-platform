@@ -29,12 +29,8 @@ services:
       - widget-host
       - minio
     healthcheck:
-      # nginx -t: конфигурация валидна; wget: сервер отвечает (301 редирект — тоже ответ)
-      test:
-        [
-          "CMD-SHELL",
-          "nginx -t && wget -qO- http://localhost/ >/dev/null || exit 1",
-        ]
+      # /healthz — конечный 2xx на HTTP без редиректа на TLS-контекст localhost
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
       interval: 10s
       retries: 5
       start_period: 5s
