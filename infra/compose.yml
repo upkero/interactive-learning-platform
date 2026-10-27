@@ -41,7 +41,7 @@ services:
 
   # 3. MinIO — S3-совместимое объектное хранилище
   minio:
-    image: quay.io/minio/minio:RELEASE.2024-11-07T00-52-20Z
+    image: quay.io/minio/aistor/minio:${MINIO_IMAGE_TAG:-latest}
     command: server /data --console-address ":9001"
     env_file: ../backend/.env
     ports: ["9000:9000", "9001:9001"]
