@@ -38,7 +38,7 @@ async def _call_health_ready(
     patches.update(overrides or {})
     for name, replacement in patches.items():
         monkeypatch.setattr(health_module, name, replacement)
-    app.dependency_overrides[get_container] = lambda: container  # type: ignore[arg-type,return-value]
+    app.dependency_overrides[get_container] = lambda: container
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
