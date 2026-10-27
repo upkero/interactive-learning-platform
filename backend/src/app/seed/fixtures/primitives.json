@@ -1,0 +1,72 @@
+[
+    {
+        "id": "key-terms",
+        "version": "0.1.0",
+        "description": "Collapsible glossary that explains the key terms used in a part of the material.",
+        "modes": ["single", "multiple"],
+        "params_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "terms": {"type": "array", "items": {"type": "string"}}
+            },
+            "required": ["title", "terms"]
+        }
+    },
+    {
+        "id": "quiz-choice",
+        "version": "0.1.0",
+        "description": "Single-choice quiz question with one correct option and instant feedback.",
+        "modes": ["single"],
+        "params_schema": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string"},
+                "options": {"type": "array", "items": {"type": "string"}},
+                "correct_index": {"type": "integer"}
+            },
+            "required": ["question", "options", "correct_index"]
+        }
+    },
+    {
+        "id": "flash-card",
+        "version": "0.1.0",
+        "description": "Two-sided flash card with a flipped state for spaced repetition practice.",
+        "modes": ["single"],
+        "params_schema": {
+            "type": "object",
+            "properties": {
+                "front": {"type": "string"},
+                "back": {"type": "string"}
+            },
+            "required": ["front", "back"]
+        }
+    },
+    {
+        "id": "sort-order",
+        "version": "0.1.0",
+        "description": "Drag-and-drop exercise where the learner orders steps or items correctly.",
+        "modes": ["single"],
+        "params_schema": {
+            "type": "object",
+            "properties": {
+                "steps": {"type": "array", "items": {"type": "string"}}
+            },
+            "required": ["steps"]
+        }
+    },
+    {
+        "id": "fill-blank",
+        "version": "0.1.0",
+        "description": "Sentence completion exercise with editable blanks and validation.",
+        "modes": ["single"],
+        "params_schema": {
+            "type": "object",
+            "properties": {
+                "text_with_blanks": {"type": "string"},
+                "answers": {"type": "array", "items": {"type": "string"}}
+            },
+            "required": ["text_with_blanks", "answers"]
+        }
+    }
+]

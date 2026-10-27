@@ -142,6 +142,16 @@ services:
     volumes:
       - ollamadata:/root/.ollama
 
+  # 11. Deterministic demo seed (runs and exits); enabled with --profile seed
+  seed:
+    <<: *backend
+    profiles: ["seed"]
+    command: ["python", "-m", "src.cli", "seed-dev", "--fake-embeddings"]
+    depends_on: *backend-deps
+    volumes:
+      - ../primitives/dist:/app/primitives-dist:ro
+    restart: "no"
+
 networks:
   sandbox_net:
     internal: true

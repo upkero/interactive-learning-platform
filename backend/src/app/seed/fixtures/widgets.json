@@ -1,0 +1,124 @@
+[
+    {
+        "kind": "config",
+        "primitive_id": "key-terms",
+        "mode": "single",
+        "params": {
+            "title": "Key terms",
+            "terms": ["adaptive learning", "semantic chunking", "topic tree"]
+        },
+        "directive_ref": "wdg-key-terms",
+        "position": 0,
+        "descriptions": [
+            {
+                "text": "Show a glossary explaining the key terms mentioned in this part.",
+                "is_paraphrase": false
+            },
+            {
+                "text": "A collapsible block that defines the terminology used above.",
+                "is_paraphrase": true
+            }
+        ]
+    },
+    {
+        "kind": "config",
+        "primitive_id": "quiz-choice",
+        "mode": "single",
+        "params": {
+            "question": "Why does the platform use a topic tree before generating content?",
+            "options": [
+                "To split the material into consistent semantic parts",
+                "To speed up PDF rendering",
+                "To reduce the monthly quota"
+            ],
+            "correct_index": 0
+        },
+        "directive_ref": "wdg-quiz-topic-tree",
+        "position": 1,
+        "descriptions": [
+            {
+                "text": "Multiple-choice question about the role of the topic tree.",
+                "is_paraphrase": false
+            }
+        ]
+    },
+    {
+        "kind": "config",
+        "primitive_id": "flash-card",
+        "mode": "single",
+        "params": {
+            "front": "What is a semantic chunk?",
+            "back": "A self-contained fragment of the source document of about 15k tokens."
+        },
+        "directive_ref": "wdg-flash-card",
+        "position": 2,
+        "descriptions": [
+            {
+                "text": "Two-sided flash card for revising the definition of a semantic chunk.",
+                "is_paraphrase": false
+            },
+            {
+                "text": "Revision card with a flip interaction for spaced repetitions.",
+                "is_paraphrase": true
+            }
+        ]
+    },
+    {
+        "kind": "code",
+        "primitive_id": null,
+        "mode": null,
+        "params": null,
+        "source_tsx": "export default function GradientDemo() {\n  return (\n    <div className=\"demo\">\n      <p>Descends the loss gradient step by step until the minimum.</p>\n    </div>\n  );\n}\n",
+        "compiled_js": "function GradientDemo(){return null;}\nexport { GradientDemo as default };\n",
+        "directive_ref": "wdg-code-gradient",
+        "position": 3,
+        "descriptions": [
+            {
+                "text": "Interactive animation that visibly demonstrates gradient descent steps.",
+                "is_paraphrase": false
+            }
+        ]
+    },
+    {
+        "kind": "config",
+        "primitive_id": "sort-order",
+        "mode": "single",
+        "params": {
+            "steps": [
+                "Upload the document",
+                "Build the topic tree",
+                "Split into semantic parts",
+                "Generate widgets for each part"
+            ]
+        },
+        "directive_ref": "wdg-sort-pipeline",
+        "position": 4,
+        "descriptions": [
+            {
+                "text": "Exercise for ordering the main steps of the processing pipeline.",
+                "is_paraphrase": false
+            }
+        ]
+    },
+    {
+        "kind": "config",
+        "primitive_id": "fill-blank",
+        "mode": "single",
+        "params": {
+            "text_with_blanks": "The assistant charges quota with a ___ operation and returns the rest with a ___.",
+            "answers": ["reserve", "refund"]
+        },
+        "directive_ref": "wdg-fill-quota",
+        "position": 5,
+        "descriptions": [
+            {
+                "text": "Fill-in-the-blank task about the quota ledger operations.",
+                "is_paraphrase": false
+            },
+            {
+                "text": "Short cloze task on how the quota reserve and refund work.",
+                "is_paraphrase": true
+            }
+        ]
+    }
+]
