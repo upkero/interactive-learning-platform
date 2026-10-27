@@ -1,0 +1,11 @@
+{
+  "name": "widget-host",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "lint": "echo ok",
+    "typecheck": "echo ok",
+    "test": "echo ok",
+    "build": "echo ok"
+  }
+}

@@ -1,0 +1,107 @@
+[project]
+name = "grasp-backend"
+version = "0.1.0"
+description = "Grasp learning platform backend"
+requires-python = ">=3.12"
+dependencies = [
+    # Веб-фреймворк и сервер
+    "fastapi[standard]>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "pydantic-settings>=2.7.0",
+
+    # База данных PostgreSQL и векторы
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "pgvector>=0.3.6",
+
+    # Очереди и кэш
+    "celery[redis]>=5.4.0",
+    "redis>=5.2.0",
+
+    # Хранилище файлов MinIO (S3)
+    "boto3>=1.35.0",
+    "httpx>=0.28.0",  # health-probe MinIO в /health/ready
+
+    # Безопасность и авторизация
+    "pwdlib[argon2]>=0.2.0",
+    "pyjwt>=2.10.0",
+    "slowapi>=0.1.9",
+
+    # Потоки событий и метрики
+    "sse-starlette>=2.2.1",
+    "prometheus-client>=0.21.0",
+
+    # Нейросети и парсинг
+    "anthropic>=0.40.0",
+    "openai>=1.60.0",
+    "pypdf>=5.1.0",
+    "tiktoken>=0.8.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9.0",
+    "mypy>=1.14.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.25.0",
+    "pytest-cov>=6.0.0",
+    "pytest-repeat>=0.9.3",
+    "httpx>=0.28.0",
+]
+
+# -----------------------------------------------------------------------------
+# Линтер и форматтер Ruff
+# -----------------------------------------------------------------------------
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+# E, F - базовые ошибки Python
+# I - сортировка импортов
+# UP - проверка на современный синтаксис Python 3.12
+# B, SIM - защита от частых багов и упрощение кода
+# ASYNC - запрет синхронных блокировок в async функциях
+# TID - строгий контроль импортов (запрещенные библиотеки)
+# RUF - встроенные правила Ruff
+select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC", "TID", "RUF"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"anthropic".msg = "Import provider SDKs only in src/app/llm/."
+"openai".msg = "Import provider SDKs only in src/app/llm/."
+"boto3".msg = "Import boto3 only in src/app/storage/ and bootstrap/."
+"requests".msg = "Use httpx.AsyncClient."
+
+[tool.ruff.lint.per-file-ignores]
+# Разрешаем импортировать SDK только в предназначенных для этого пакетах
+"src/app/llm/**" = ["TID251"]
+"src/app/storage/**" = ["TID251"]
+"src/app/bootstrap/**" = ["TID251"]
+
+# -----------------------------------------------------------------------------
+# Проверка типов Mypy
+# -----------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+mypy_path = "."
+explicit_package_bases = true
+
+# -----------------------------------------------------------------------------
+# Настройки тестов Pytest
+# -----------------------------------------------------------------------------
+[tool.pytest.ini_options]
+pythonpath = [".", "src"]
+asyncio_mode = "auto"
+addopts = "--strict-markers -m 'not live'"
+markers = [
+    "unit: fast isolated tests, no network, no database",
+    "integration: tests against real Postgres/Redis/MinIO from compose",
+    "live: tests that call external paid APIs (Anthropic, Voyage)",
+]
+
+[[tool.mypy.overrides]]
+module = ["celery", "celery.*", "kombu", "kombu.*"]
+ignore_missing_imports = true

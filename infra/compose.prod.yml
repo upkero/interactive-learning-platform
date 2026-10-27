@@ -1,0 +1,87 @@
+# ==============================================================================
+# Production overlay для развёртывания на VPS.
+# Используется вместе с базовым файлом:
+#   docker compose -f infra/compose.yml -f infra/compose.prod.yml up -d
+#
+# Отличия от dev-стека:
+#   - образы берутся из GHCR (собранные CI), локальная сборка отключена;
+#   - наружные порты внутренних сервисов закрыты (`ports: !reset []`);
+#   - все сервисы автоматически поднимаются при перезагрузке сервера;
+#   - снаружи торчит только Nginx с портами 80/443 (см. docs/adr/0009-deployment.md).
+# ==============================================================================
+name: grasp
+
+services:
+  # Единственная точка входа: 80 -> 443, маршрутизация по 4 поддоменам
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/grasp.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+    depends_on:
+      - api
+      - frontend
+      - widget-host
+      - minio
+    healthcheck:
+      # /healthz — конечный 2xx на HTTP без редиректа на TLS-контекст localhost
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+
+  # Внутренние сервисы: порты, проброшенные наружу в dev, в production закрыты
+  db:
+    ports: !reset []
+    restart: unless-stopped
+
+  redis:
+    ports: !reset []
+    restart: unless-stopped
+
+  minio:
+    ports: !reset []
+    restart: unless-stopped
+
+  # Backend-сервисы (сборка обозначена тегом backend в CI), образ из GHCR
+  api:
+    image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/backend:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
+    build: !reset {}
+    ports: !reset []
+    restart: unless-stopped
+
+  worker:
+    image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/backend:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
+    build: !reset {}
+    restart: unless-stopped
+
+  beat:
+    image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/backend:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
+    build: !reset {}
+    restart: unless-stopped
+
+  # Одноразовые миграции: не рестартуем после exit 0, иначе они зациклятся
+  migrate:
+    image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/backend:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
+    build: !reset {}
+    restart: "no"
+
+  sandbox:
+    image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/sandbox:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
+    build: !reset {}
+    restart: unless-stopped
+
+  frontend:
+    image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/frontend:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
+    ports: !reset []
+    restart: unless-stopped
+
+  widget-host:
+    image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/widget-host:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
+    ports: !reset []
+    restart: unless-stopped
