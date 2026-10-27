@@ -8,35 +8,30 @@ dependencies = [
     "fastapi[standard]>=0.115.0",
     "uvicorn[standard]>=0.34.0",
     "pydantic-settings>=2.7.0",
-
     # База данных PostgreSQL и векторы
     "sqlalchemy[asyncio]>=2.0.36",
     "asyncpg>=0.30.0",
     "alembic>=1.14.0",
     "pgvector>=0.3.6",
-
     # Очереди и кэш
     "celery[redis]>=5.4.0",
     "redis>=5.2.0",
-
     # Хранилище файлов MinIO (S3)
     "boto3>=1.35.0",
     "httpx>=0.28.0",  # health-probe MinIO в /health/ready
-
     # Безопасность и авторизация
     "pwdlib[argon2]>=0.2.0",
     "pyjwt>=2.10.0",
     "slowapi>=0.1.9",
-
     # Потоки событий и метрики
     "sse-starlette>=2.2.1",
     "prometheus-client>=0.21.0",
-
     # Нейросети и парсинг
     "anthropic>=0.40.0",
     "openai>=1.60.0",
     "pypdf>=5.1.0",
     "tiktoken>=0.8.0",
+    "pydantic>=2.14.1",
 ]
 
 [dependency-groups]
@@ -78,6 +73,8 @@ select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC", "TID", "RUF"]
 "src/app/llm/**" = ["TID251"]
 "src/app/storage/**" = ["TID251"]
 "src/app/bootstrap/**" = ["TID251"]
+# Тесты llm - фейковый SDK конструирует реальные исключения провайдеров
+"tests/unit/llm/**" = ["TID251"]
 
 # -----------------------------------------------------------------------------
 # Проверка типов Mypy

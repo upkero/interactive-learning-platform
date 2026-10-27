@@ -1,3 +1,9 @@
+"""Prompt assembler for the template's plain-complete path.
+
+Note (Grasp 2.1): there is no system role in LLMMessage — shared context
+should be passed as SystemBlock to complete_structured instead.
+"""
+
 from collections.abc import Iterable
 
 from src.app.contracts.llm.llm_message import LLMMessage, LLMRole
@@ -10,9 +16,6 @@ class PromptBuilder:
     def add(self, *, role: LLMRole, content: str) -> "PromptBuilder":
         self._messages.append(LLMMessage(role=role, content=content))
         return self
-
-    def system(self, content: str) -> "PromptBuilder":
-        return self.add(role="system", content=content)
 
     def user(self, content: str) -> "PromptBuilder":
         return self.add(role="user", content=content)
