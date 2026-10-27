@@ -66,7 +66,6 @@ async def test_health_ready_reports_unhealthy_deps(monkeypatch: pytest.MonkeyPat
     async def fail_db(*args: object) -> str | None:
         return "PostgreSQL unavailable"
 
-    monkeypatch.setattr(health_module, "_check_db", fail_db)
     response = await _call_health_ready(monkeypatch, FakeContainer(), overrides={"_check_db": fail_db})
     assert response.status_code == 503
     assert "PostgreSQL" in response.json()["detail"]

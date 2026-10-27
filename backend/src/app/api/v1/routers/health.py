@@ -1,6 +1,6 @@
 """Liveness and readiness endpoints.
 
-По правилам Grasp (PROJECT_CONTEXT.md, 1.4.1):
+Правила readiness (история 1.4.1, наблюдаемость платформы):
 - ``/health/live`` — процесс жив, проверки нет.
 - ``/health/ready`` — API готов принимать трафик: PostgreSQL (SELECT 1),
   Redis (PING) и MinIO (health/live, если хранилище настроено).

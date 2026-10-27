@@ -28,6 +28,16 @@ services:
       - frontend
       - widget-host
       - minio
+    healthcheck:
+      # nginx -t: конфигурация валидна; wget: сервер отвечает (301 редирект — тоже ответ)
+      test:
+        [
+          "CMD-SHELL",
+          "nginx -t && wget -qO- http://localhost/ >/dev/null || exit 1",
+        ]
+      interval: 10s
+      retries: 5
+      start_period: 5s
 
   # Внутренние сервисы: порты, проброшенные наружу в dev, в production закрыты
   db:
@@ -44,38 +54,38 @@ services:
 
   # Backend-сервисы (сборка обозначена тегом backend в CI), образ из GHCR
   api:
-    image: ghcr.io/${GITHUB_REPOSITORY:-grasp}/backend:${IMAGE_TAG:-latest}
+    image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/backend:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
     build: !reset {}
     ports: !reset []
     restart: unless-stopped
 
   worker:
-    image: ghcr.io/${GITHUB_REPOSITORY:-grasp}/backend:${IMAGE_TAG:-latest}
+    image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/backend:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
     build: !reset {}
     restart: unless-stopped
 
   beat:
-    image: ghcr.io/${GITHUB_REPOSITORY:-grasp}/backend:${IMAGE_TAG:-latest}
+    image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/backend:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
     build: !reset {}
     restart: unless-stopped
 
   # Одноразовые миграции: не рестартуем после exit 0, иначе они зациклятся
   migrate:
-    image: ghcr.io/${GITHUB_REPOSITORY:-grasp}/backend:${IMAGE_TAG:-latest}
+    image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/backend:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
     build: !reset {}
     restart: "no"
 
   sandbox:
-    image: ghcr.io/${GITHUB_REPOSITORY:-grasp}/sandbox:${IMAGE_TAG:-latest}
+    image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/sandbox:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
     build: !reset {}
     restart: unless-stopped
 
   frontend:
-    image: ghcr.io/${GITHUB_REPOSITORY:-grasp}/frontend:${IMAGE_TAG:-latest}
+    image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/frontend:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
     ports: !reset []
     restart: unless-stopped
 
   widget-host:
-    image: ghcr.io/${GITHUB_REPOSITORY:-grasp}/widget-host:${IMAGE_TAG:-latest}
+    image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/widget-host:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
     ports: !reset []
     restart: unless-stopped
