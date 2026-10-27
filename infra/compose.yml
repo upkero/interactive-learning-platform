@@ -48,7 +48,12 @@ services:
     volumes:
       - miniodata:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      # Современные образы MinIO не содержат curl; в них есть mc с алиасом local
+      test:
+        [
+          "CMD-SHELL",
+          "mc ready local || curl -f http://localhost:9000/minio/health/live || exit 1",
+        ]
       interval: 10s
       retries: 10
 
@@ -69,6 +74,8 @@ services:
     command: ["alembic", "upgrade", "head"]
     depends_on:
       db: { condition: service_healthy }
+    # В миграциях нет веб-сервера — HTTP-healthcheck из Dockerfile неуместен
+    healthcheck: { disable: true }
     restart: "no"
 
   # 6. Основной API бэкенда (FastAPI)
@@ -115,6 +122,8 @@ services:
         "/tmp/celerybeat-schedule",
       ]
     depends_on: *backend-deps
+    # В beat нет веб-сервера — HTTP-healthcheck из Dockerfile неуместен
+    healthcheck: { disable: true }
 
   # 9. Изолированная песочница для безопасного рендера виджетов
   sandbox:

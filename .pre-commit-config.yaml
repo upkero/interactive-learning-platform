@@ -5,6 +5,9 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+        # Docker Compose требует теги !reset / !override (compose-go), которые
+        # не входят в стандартный PyYAML — этот файл валидируется самим compose
+        exclude: ^infra/compose\.prod\.yml$
       - id: check-added-large-files
         args: ["--maxkb=2000"]
 

@@ -1,19 +1,56 @@
 # Grasp — Интерактивная платформа обучения
 
-Grasp превращает учебные материалы (PDF, DOCX, Markdown, Google Docs) в интерактивные конспекты с визуализациями и тестовыми заданиями.
+Grasp превращает учебные материалы (PDF, DOCX, Markdown, Google Docs) в интерактивные конспекты с визуализацией и тестовыми заданиями.
 
 ## Быстрый старт для разработки
 
 ### 1. Подготовка окружения
 
-Перед первым запуском скопируйте файл с переменными окружения:
+Скопируйте шаблон переменных окружения один раз перед первым запуском:
 
 ```bash
 cp backend/.env.example backend/.env
 ```
-## Запуск проекта локально
 
-### Первый запуск:
+### 2. Запуск проекта
+
 ```bash
-cp backend/.env.example backend/.env
-docker compose -f infra/compose.yml up -d0
+docker compose -f infra/compose.yml up -d
+```
+
+### 3. Запуск с локальной моделью (профиль local-llm)
+
+Чтобы работать без платного ключа Anthropic, поднимите локальную Ollama вместе со стеком:
+
+```bash
+docker compose -f infra/compose.yml --profile local-llm up -d
+```
+
+## Проверка, что всё поднялось
+
+```bash
+docker compose -f infra/compose.yml ps
+```
+
+Readiness-проверка API (БД, Redis, MinIO):
+
+```bash
+curl http://localhost:8000/health/ready
+```
+
+Swagger / OpenAPI-документация доступна в браузере:
+
+```text
+http://localhost:8000/docs
+```
+
+## Production deployment на VPS
+
+Боевая конфигурация описана в `docs/adr/0009-deployment.md`.
+
+```bash
+# на VPS, из репозитория
+./infra/deploy.sh
+```
+
+Скрипт проверяет `backend/.env` (права 600), тянет образы из GHCR и поднимает стек с Nginx-прокси (порты 80/443).

@@ -1,0 +1,81 @@
+# ==============================================================================
+# Production overlay для развёртывания на VPS.
+# Используется вместе с базовым файлом:
+#   docker compose -f infra/compose.yml -f infra/compose.prod.yml up -d
+#
+# Отличия от dev-стека:
+#   - образы берутся из GHCR (собранные CI), локальная сборка отключена;
+#   - наружные порты внутренних сервисов закрыты (`ports: !reset []`);
+#   - все сервисы автоматически поднимаются при перезагрузке сервера;
+#   - снаружи торчит только Nginx с портами 80/443 (см. docs/adr/0009-deployment.md).
+# ==============================================================================
+name: grasp
+
+services:
+  # Единственная точка входа: 80 -> 443, маршрутизация по 4 поддоменам
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/grasp.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+    depends_on:
+      - api
+      - frontend
+      - widget-host
+      - minio
+
+  # Внутренние сервисы: порты, проброшенные наружу в dev, в production закрыты
+  db:
+    ports: !reset []
+    restart: unless-stopped
+
+  redis:
+    ports: !reset []
+    restart: unless-stopped
+
+  minio:
+    ports: !reset []
+    restart: unless-stopped
+
+  # Backend-сервисы (сборка обозначена тегом backend в CI), образ из GHCR
+  api:
+    image: ghcr.io/${GITHUB_REPOSITORY:-grasp}/backend:${IMAGE_TAG:-latest}
+    build: !reset {}
+    ports: !reset []
+    restart: unless-stopped
+
+  worker:
+    image: ghcr.io/${GITHUB_REPOSITORY:-grasp}/backend:${IMAGE_TAG:-latest}
+    build: !reset {}
+    restart: unless-stopped
+
+  beat:
+    image: ghcr.io/${GITHUB_REPOSITORY:-grasp}/backend:${IMAGE_TAG:-latest}
+    build: !reset {}
+    restart: unless-stopped
+
+  # Одноразовые миграции: не рестартуем после exit 0, иначе они зациклятся
+  migrate:
+    image: ghcr.io/${GITHUB_REPOSITORY:-grasp}/backend:${IMAGE_TAG:-latest}
+    build: !reset {}
+    restart: "no"
+
+  sandbox:
+    image: ghcr.io/${GITHUB_REPOSITORY:-grasp}/sandbox:${IMAGE_TAG:-latest}
+    build: !reset {}
+    restart: unless-stopped
+
+  frontend:
+    image: ghcr.io/${GITHUB_REPOSITORY:-grasp}/frontend:${IMAGE_TAG:-latest}
+    ports: !reset []
+    restart: unless-stopped
+
+  widget-host:
+    image: ghcr.io/${GITHUB_REPOSITORY:-grasp}/widget-host:${IMAGE_TAG:-latest}
+    ports: !reset []
+    restart: unless-stopped

@@ -21,6 +21,7 @@ dependencies = [
 
     # Хранилище файлов MinIO (S3)
     "boto3>=1.35.0",
+    "httpx>=0.28.0",  # health-probe MinIO в /health/ready
 
     # Безопасность и авторизация
     "pwdlib[argon2]>=0.2.0",
