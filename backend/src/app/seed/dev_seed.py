@@ -61,6 +61,18 @@ TOPIC_TREE: Final[dict[str, Any]] = {
     ]
 }
 
+# Screen E6: the done document needs its own tree for topic navigation.
+DONE_TOPIC_TREE: Final[dict[str, Any]] = {
+    "topics": [
+        {
+            "id": "topic-neurons",
+            "title": "From neurons to layers",
+            "children": [],
+        },
+        {"id": "topic-training", "title": "Training and activation", "children": []},
+    ]
+}
+
 
 async def _load_fixture(name: str) -> Any:
     """Read a JSON fixture off the event loop thread."""
@@ -92,7 +104,7 @@ async def _seed_users(session: AsyncSession, password_hash: str) -> tuple[UserRe
 async def _seed_documents(
     session: AsyncSession, alice: UserRecord, bob: UserRecord
 ) -> tuple[DocumentRecord, list[PartRecord]]:
-    """Create the parsed document (with a topic tree) and the done document."""
+    """Create the parsed and the done document, both with a topic tree."""
     document_repository = DocumentRepository(session)
     material_repository = UserMaterialRepository(session)
     part_repository = DocumentPartRepository(session)
@@ -155,6 +167,7 @@ async def _seed_documents(
     done = await document_repository.set_status(doc_networks.id, DocumentStatus.DONE)
     if done is None:  # pragma: no cover - impossible on a fresh row
         raise RuntimeError("Fresh document not found after create")
+    await document_repository.set_topic_tree(done.id, DONE_TOPIC_TREE)
 
     published = await _load_fixture("published_part.json")
     (part,) = await part_repository.add_many(

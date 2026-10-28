@@ -6,8 +6,7 @@ inserts the demo dataset, the second one must be a no-op returning
 """
 
 import pytest
-from sqlalchemy import func, select, text
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy import func, select
 
 from src.app.contracts.documents.statuses import DocumentStatus, PartStatus, SourceType
 from src.app.models.document import Document
@@ -20,9 +19,8 @@ from tests.support.types import SessionFactory
 pytestmark = pytest.mark.integration
 
 
-async def test_seed_dev_is_idempotent(session_factory: SessionFactory, db_engine: AsyncEngine) -> None:
+async def test_seed_dev_is_idempotent(session_factory: SessionFactory) -> None:
     """Second seed run is a no-op; the demo dataset stays intact."""
-    db_engine.sync_engine.echo = True  # TEMP DIAGNOSTICS
     async with session_factory() as session:
         assert (await session.scalar(select(func.count()).select_from(User))) == 0
 
@@ -55,18 +53,6 @@ async def test_seed_dev_is_idempotent(session_factory: SessionFactory, db_engine
         assert done_owner == BOB_EMAIL
         assert done.source_type == SourceType.GDOCS.value and done.source_uri is not None
         assert done.topic_tree is not None and "topics" in done.topic_tree
-        # TEMP DIAGNOSTICS: raw state of the documents rows
-        rows = (
-            await session.execute(
-                text(
-                    "SELECT title, status, topic_tree IS NULL AS is_sql_null, "
-                    "jsonb_typeof(topic_tree) AS json_type, left(topic_tree::text, 60) AS head "
-                    "FROM documents ORDER BY title"
-                )
-            )
-        ).all()
-        for row in rows:
-            print("DOC ROW:", row)
         part = (
             await session.scalars(
                 select(DocumentPart).where(
