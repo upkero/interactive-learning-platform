@@ -84,11 +84,18 @@ async def test_nearest_neighbor_found(session_factory: SessionFactory, code_widg
 async def test_explain_uses_hnsw_index(
     session_factory: SessionFactory, code_widget_with_vectors: VectorFixture
 ) -> None:
-    """EXPLAIN of ORDER BY embedding <=> :q LIMIT 5 must use the HNSW index."""
+    """The nearest-neighbor query is index-satisfiable via the HNSW index.
+
+    Sequential scans are disabled for the current transaction so the
+    planner cannot fall back to Seq Scan + Sort: on a small test table
+    that is cheaper under the default cost model and would make the
+    assertion depend on planner statistics, not on the index itself.
+    """
     _, vectors = code_widget_with_vectors
     target = _vector_literal(vectors[0])
     query = f"EXPLAIN SELECT id FROM widget_descriptions ORDER BY embedding <=> '{target}'::vector LIMIT 5"
     async with session_factory() as session:
+        await session.execute(text("SET LOCAL enable_seqscan = off"))
         plan_rows = (await session.execute(text(query))).scalars().all()
     plan = "\n".join(plan_rows)
     assert "ix_widget_descriptions_embedding_hnsw" in plan
