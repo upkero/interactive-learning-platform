@@ -74,11 +74,19 @@ async def test_user_repository_roundtrip(session_factory: SessionFactory) -> Non
     async with session_factory() as session, session.begin():
         repository = UserRepository(session)
         created = await repository.create(email=email.upper(), password_hash="h", display_name="N")
+        # Before commit the identity map still holds the value we passed:
+        # CITEXT folding happens on the database side, not in Python.
+        assert created.email == email.upper()
         fetched = await repository.get(created.id)
         by_email = await repository.get_by_email(email.upper())
-    assert created.email == email
-    assert fetched == created
-    assert by_email == created
+        assert fetched == created
+        assert by_email == created
+    # A fresh session reads the folded value straight from the database.
+    async with session_factory() as session:
+        folded = await UserRepository(session).get_by_email(email)
+    assert folded is not None
+    assert folded.id == created.id
+    assert folded.email == email
 
 
 async def test_duplicate_email_raises_domain_exception(session_factory: SessionFactory) -> None:
