@@ -1,6 +1,7 @@
 """ORM model of documents."""
 
 import uuid
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -15,6 +16,10 @@ class Document(Base):
     """A learning material uploaded by a user and kept in MinIO."""
 
     __tablename__ = "documents"
+    # Server-generated values (created_at, updated_at onupdate) are fetched
+    # via RETURNING during flush; otherwise they stay expired after an
+    # UPDATE and reading them from sync code raises MissingGreenlet.
+    __mapper_args__: Mapping[str, Any] = {"eager_defaults": True}
     __table_args__ = (
         CheckConstraint(
             "source_type IN ('upload', 'gdocs')",
