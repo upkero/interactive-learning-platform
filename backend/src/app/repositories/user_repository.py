@@ -7,9 +7,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.users import UserRecord
-from src.app.exceptions.users import UserAlreadyExistsError
+from src.app.exceptions.users import UserAlreadyExistsError, UsersIntegrityError
 from src.app.interfaces.repositories.users import UserRepositoryProtocol
 from src.app.models.user import User
+from src.app.repositories._errors import constraint_name
+
+USER_EMAIL_UNIQUE: str = "uq_users_email"
 
 
 class UserRepository(UserRepositoryProtocol):
@@ -61,7 +64,9 @@ class UserRepository(UserRepositoryProtocol):
         try:
             await self._session.flush()
         except IntegrityError as exc:
-            raise UserAlreadyExistsError from exc
+            if constraint_name(exc) == USER_EMAIL_UNIQUE:
+                raise UserAlreadyExistsError from exc
+            raise UsersIntegrityError from exc
         return self._to_record(row)
 
     async def lock_for_update(self, user_id: UUID) -> UserRecord | None:

@@ -10,9 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.app.contracts.documents.part_draft import PartDraft
 from src.app.contracts.documents.part_record import PartRecord
 from src.app.contracts.documents.statuses import PartStatus
-from src.app.exceptions.documents import DocumentPartDuplicateError
+from src.app.exceptions.documents import DocumentPartDuplicateError, DocumentsIntegrityError
 from src.app.interfaces.repositories.documents import DocumentPartRepositoryProtocol
 from src.app.models.document_part import DocumentPart
+from src.app.repositories._errors import constraint_name
+
+DOCUMENT_PART_UNIQUE: str = "uq_document_parts_document_id_index"
 
 
 class DocumentPartRepository(DocumentPartRepositoryProtocol):
@@ -70,7 +73,9 @@ class DocumentPartRepository(DocumentPartRepositoryProtocol):
         try:
             await self._session.flush()
         except IntegrityError as exc:
-            raise DocumentPartDuplicateError from exc
+            if constraint_name(exc) == DOCUMENT_PART_UNIQUE:
+                raise DocumentPartDuplicateError from exc
+            raise DocumentsIntegrityError from exc
         return [self._to_record(row) for row in created]
 
     async def transition(

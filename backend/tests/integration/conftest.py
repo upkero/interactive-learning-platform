@@ -7,6 +7,7 @@ whole integration suite is skipped, so local unit-only runs stay green.
 """
 
 import asyncio
+import os
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from uuid import UUID
@@ -61,6 +62,10 @@ def db_engine() -> Iterator[AsyncEngine]:
     try:
         asyncio.run(_ping(engine))
     except (OSError, ConnectionRefusedError, TimeoutError) as exc:
+        if os.environ.get("CI"):
+            # In CI a broken database service must fail the build, not
+            # silently turn the whole integration suite into skips.
+            pytest.fail(f"Postgres must be reachable in CI: {exc}")
         pytest.skip(f"Postgres is not reachable, skipping integration tests: {exc}")
     _apply_migrations("head")
     yield engine

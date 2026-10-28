@@ -4,9 +4,11 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.widgets import ReportReason, ReportRecord
+from src.app.exceptions.widgets import WidgetsIntegrityError
 from src.app.interfaces.repositories.widgets import ReportRepositoryProtocol
 from src.app.models.report import Report
 
@@ -58,5 +60,10 @@ class ReportRepository(ReportRepositoryProtocol):
             .on_conflict_do_nothing(index_elements=[Report.widget_id, Report.user_id])
             .returning(Report)
         )
-        row = (await self._session.scalars(stmt)).first()
+        try:
+            row = (await self._session.scalars(stmt)).first()
+        except IntegrityError as exc:
+            # ON CONFLICT covers only the (widget_id, user_id) duplicate;
+            # FK violations of widget/user/part still surface as an error.
+            raise WidgetsIntegrityError from exc
         return self._to_record(row) if row is not None else None

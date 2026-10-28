@@ -7,9 +7,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.widgets import UsageStatus, WidgetUsageDraft, WidgetUsageRecord
-from src.app.exceptions.widgets import WidgetUsageDuplicateError
+from src.app.exceptions.widgets import WidgetsIntegrityError, WidgetUsageDuplicateError
 from src.app.interfaces.repositories.widgets import WidgetUsageRepositoryProtocol
 from src.app.models.widget_usage import WidgetUsage
+from src.app.repositories._errors import constraint_name
+
+WIDGET_USAGE_UNIQUE: str = "uq_widget_usages_part_id_directive_ref"
 
 
 class WidgetUsageRepository(WidgetUsageRepositoryProtocol):
@@ -52,7 +55,9 @@ class WidgetUsageRepository(WidgetUsageRepositoryProtocol):
         try:
             await self._session.flush()
         except IntegrityError as exc:
-            raise WidgetUsageDuplicateError from exc
+            if constraint_name(exc) == WIDGET_USAGE_UNIQUE:
+                raise WidgetUsageDuplicateError from exc
+            raise WidgetsIntegrityError from exc
         return [self._to_record(row) for row in created]
 
     async def set_status(self, usage_id: UUID, status: UsageStatus) -> None:

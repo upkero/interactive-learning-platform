@@ -22,8 +22,8 @@ class AppSettings(BaseSettings):
     )
 
     cors_allow_origins: list[str] = Field(
-        default_factory=list,
-        description="List of allowed CORS origins.",
+        default=["http://localhost:3000"],
+        description="List of allowed CORS origins (defaults to the dev frontend URL).",
     )
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

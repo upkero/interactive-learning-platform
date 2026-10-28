@@ -267,4 +267,3 @@ def downgrade() -> None:
     op.drop_table("documents")
     op.drop_table("users")
     # Extensions are intentionally kept after downgrade.
-    # Do not drop vector and citext extensions

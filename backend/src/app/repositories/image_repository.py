@@ -4,10 +4,12 @@ from collections.abc import Sequence
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.documents.image_draft import ImageDraft
 from src.app.contracts.documents.image_record import ImageRecord
+from src.app.exceptions.documents import DocumentsIntegrityError
 from src.app.interfaces.repositories.documents import ImageRepositoryProtocol
 from src.app.models.image import Image
 
@@ -56,5 +58,8 @@ class ImageRepository(ImageRepositoryProtocol):
             for draft in images
         ]
         self._session.add_all(created)
-        await self._session.flush()
+        try:
+            await self._session.flush()
+        except IntegrityError as exc:
+            raise DocumentsIntegrityError from exc
         return [self._to_record(row) for row in created]

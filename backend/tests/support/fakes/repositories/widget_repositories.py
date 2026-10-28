@@ -1,13 +1,10 @@
-"""In-memory fakes of the widget and quota repositories."""
+"""In-memory fakes of the widget repositories."""
 
 from collections.abc import Sequence
 from dataclasses import replace
-from datetime import date
 from typing import Any
 from uuid import UUID, uuid4
 
-from src.app.contracts.quizzes import QuizAttemptRecord
-from src.app.contracts.quota import LedgerEntry, LedgerOp
 from src.app.contracts.widgets import (
     PrimitiveRecord,
     ReportReason,
@@ -20,8 +17,6 @@ from src.app.contracts.widgets import (
     WidgetUsageDraft,
     WidgetUsageRecord,
 )
-from src.app.interfaces.repositories.quizzes import QuizAttemptRepositoryProtocol
-from src.app.interfaces.repositories.quota import GenerationLedgerRepositoryProtocol
 from src.app.interfaces.repositories.widgets import (
     PrimitiveRepositoryProtocol,
     ReportRepositoryProtocol,
@@ -201,69 +196,3 @@ class FakeReportRepository(ReportRepositoryProtocol):
         )
         self._reports[record.id] = record
         return record
-
-
-class FakeQuizAttemptRepository(QuizAttemptRepositoryProtocol):
-    """Dict-backed stub mirroring QuizAttemptRepository API."""
-
-    def __init__(self) -> None:
-        self._attempts: dict[UUID, QuizAttemptRecord] = {}
-
-    async def create(
-        self,
-        *,
-        user_id: UUID,
-        part_id: UUID,
-        quiz_key: str,
-        answer: dict[str, Any],
-        is_correct: bool,
-    ) -> QuizAttemptRecord:
-        record = QuizAttemptRecord(
-            id=uuid4(),
-            user_id=user_id,
-            part_id=part_id,
-            quiz_key=quiz_key,
-            answer=answer,
-            is_correct=is_correct,
-            created_at=now(),
-        )
-        self._attempts[record.id] = record
-        return record
-
-    async def list_by_part(self, part_id: UUID) -> list[QuizAttemptRecord]:
-        return [a for a in self._attempts.values() if a.part_id == part_id]
-
-
-class FakeGenerationLedgerRepository(GenerationLedgerRepositoryProtocol):
-    """List-backed stub mirroring GenerationLedgerRepository API."""
-
-    def __init__(self) -> None:
-        self._entries: list[LedgerEntry] = []
-        self._next_id = 1
-
-    async def add(
-        self,
-        *,
-        user_id: UUID,
-        op: LedgerOp,
-        delta: int,
-        period_start: date,
-        document_id: UUID | None = None,
-        part_id: UUID | None = None,
-    ) -> LedgerEntry:
-        entry = LedgerEntry(
-            id=self._next_id,
-            user_id=user_id,
-            document_id=document_id,
-            part_id=part_id,
-            op=op,
-            delta=delta,
-            period_start=period_start,
-            created_at=now(),
-        )
-        self._next_id += 1
-        self._entries.append(entry)
-        return entry
-
-    async def sum_delta(self, user_id: UUID, period_start: date) -> int:
-        return sum(e.delta for e in self._entries if e.user_id == user_id and e.period_start >= period_start)

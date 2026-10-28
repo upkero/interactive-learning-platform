@@ -5,6 +5,7 @@ from datetime import date
 from uuid import UUID, uuid4
 
 import pytest
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.documents.image_draft import ImageDraft
@@ -22,6 +23,7 @@ from src.app.contracts.widgets import (
     WidgetUsageDraft,
 )
 from src.app.exceptions.users import UserAlreadyExistsError
+from src.app.models.document_part import DocumentPart
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
 from src.app.repositories.generation_ledger_repository import GenerationLedgerRepository
@@ -146,9 +148,15 @@ async def test_document_part_repository_roundtrip(session_factory: SessionFactor
             ],
         )
         listed = await repository.list_by_document(document_id)
+        # Unpublished parts must store SQL NULL, not JSON "null", so that
+        # `content IS NULL` queries (watchdog, publishing) work correctly.
+        content_type = await session.scalar(
+            select(func.jsonb_typeof(DocumentPart.content)).where(DocumentPart.id == created[1].id)
+        )
     assert [p.index for p in listed] == [0, 1]
     assert created[0].topic_ids == ("t",)
     assert listed[0].id == created[1].id
+    assert content_type is None
 
 
 async def test_image_repository_roundtrip(session_factory: SessionFactory) -> None:

@@ -29,7 +29,7 @@ class DocumentPart(Base):
     document_id: Mapped[UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
     index: Mapped[int]
     title: Mapped[str] = mapped_column(String(300))
-    topic_ids: Mapped[list[str]] = mapped_column(JSONB)
+    topic_ids: Mapped[list[str]] = mapped_column(JSONB(none_as_null=True))
     source_markdown: Mapped[str] = mapped_column(Text)
     token_count: Mapped[int]
     profile: Mapped[dict[str, Any]] = mapped_column(server_default="{}")

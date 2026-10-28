@@ -40,12 +40,6 @@ _ALL_REPOS: list[type[object]] = [
 ]
 
 
-def _model_module_names() -> set[str]:
-
-    # Every ORM class lives in src.app.models (or src.app.models.*)
-    return {"src.app.models"}
-
-
 def _annotation_uses_models(annotation: object) -> bool:
     """True if the annotation type references an ORM model class."""
     if annotation is typing.Any or annotation is type(None):

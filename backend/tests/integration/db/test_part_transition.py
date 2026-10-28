@@ -4,7 +4,7 @@ import asyncio
 from uuid import UUID
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from src.app.contracts.documents.statuses import PartStatus
 from src.app.models.document_part import DocumentPart
@@ -63,12 +63,20 @@ async def test_two_parallel_transitions_exactly_one_wins(
     """Two concurrent transitions of one part: exactly one True, one False."""
     _, _, part_id = part_ids
 
-    async def attempt(to: PartStatus) -> bool:
+    async def attempt(to: PartStatus, hold_lock: bool = False) -> bool:
         async with session_factory() as session, session.begin():
             repository = DocumentPartRepository(session)
-            return await repository.transition(part_id, expected=frozenset({PartStatus.QUEUED}), to=to)
+            ok = await repository.transition(part_id, expected=frozenset({PartStatus.QUEUED}), to=to)
+            if hold_lock:
+                # Keep the row lock for a moment so the second attempt is
+                # already waiting on the UPDATE while this one commits.
+                await session.execute(text("SELECT pg_sleep(0.05)"))
+            return ok
 
-    results = await asyncio.gather(attempt(PartStatus.MAIN_PASS), attempt(PartStatus.MAIN_PASS))
+    first = asyncio.ensure_future(attempt(PartStatus.MAIN_PASS, hold_lock=True))
+    await asyncio.sleep(0)  # let the first attempt start before the second
+    second = asyncio.ensure_future(attempt(PartStatus.MAIN_PASS))
+    results = await asyncio.gather(first, second)
     assert sorted(results) == [False, True]
 
     async with session_factory() as session:

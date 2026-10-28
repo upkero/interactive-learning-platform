@@ -1,6 +1,7 @@
 {
     "index": 0,
     "title": "From neurons to layers",
+    "topic_ids": ["topic-neurons"],
     "source_markdown": "## From neurons to layers\n\nA neuron computes a weighted sum of its inputs and applies a\nnon-linear activation. Layers stack neurons so that each one\ntransforms the representation of the previous layer.\n",
     "token_count": 121,
     "profile": { "difficulty": "beginner" },

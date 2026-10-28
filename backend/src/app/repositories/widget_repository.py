@@ -7,9 +7,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.widgets import WidgetKind, WidgetRecord, WidgetStatus
-from src.app.exceptions.widgets import WidgetConstraintError
+from src.app.exceptions.widgets import WidgetConstraintError, WidgetsIntegrityError
 from src.app.interfaces.repositories.widgets import WidgetRepositoryProtocol
 from src.app.models.widget import Widget
+from src.app.repositories._errors import constraint_name
+
+WIDGET_KIND_FIELDS_CHECK: str = "ck_widgets_kind_fields"
 
 
 class WidgetRepository(WidgetRepositoryProtocol):
@@ -63,7 +66,9 @@ class WidgetRepository(WidgetRepositoryProtocol):
         try:
             await self._session.flush()
         except IntegrityError as exc:
-            raise WidgetConstraintError from exc
+            if constraint_name(exc) == WIDGET_KIND_FIELDS_CHECK:
+                raise WidgetConstraintError from exc
+            raise WidgetsIntegrityError from exc
         return self._to_record(row)
 
     async def set_status(self, widget_id: UUID, status: WidgetStatus) -> None:

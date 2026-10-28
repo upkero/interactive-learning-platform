@@ -30,6 +30,9 @@ class Base(DeclarativeBase):
         UUID: Uuid,
         datetime: DateTime(timezone=True),
         date: Date,
-        dict[str, Any]: JSONB,
-        list[Any]: JSONB,
+        # JSON/JSONB encodes Python None as JSON ``null`` by default; for our
+        # schema that bypasses ``IS NOT NULL`` CHECKs and ``IS NULL`` filters.
+        # ``none_as_null`` keeps SQL NULL semantics for optional JSONB columns.
+        dict[str, Any]: JSONB(none_as_null=True),
+        list[Any]: JSONB(none_as_null=True),
     }
