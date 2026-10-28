@@ -81,12 +81,16 @@ async def test_user_repository_roundtrip(session_factory: SessionFactory) -> Non
         by_email = await repository.get_by_email(email.upper())
         assert fetched == created
         assert by_email == created
-    # A fresh session reads the folded value straight from the database.
+    # A fresh session reads straight from the database. asyncpg encodes
+    # unknown-to-it types (citext) in binary format, and citext folds case
+    # only in its input function - so the stored value keeps the original
+    # case, while comparisons (and the unique index) stay case-insensitive.
+    # The lookup with a differently-cased email proves the folding.
     async with session_factory() as session:
         folded = await UserRepository(session).get_by_email(email)
     assert folded is not None
     assert folded.id == created.id
-    assert folded.email == email
+    assert folded.email.lower() == email
 
 
 async def test_duplicate_email_raises_domain_exception(session_factory: SessionFactory) -> None:
