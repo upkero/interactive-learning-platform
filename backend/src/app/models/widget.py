@@ -1,18 +1,11 @@
 """ORM model of widgets (both config- and code-generated kinds)."""
 
+import uuid
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import (
-    CheckConstraint,
-    ForeignKey,
-    Integer,
-    String,
-    Text,
-    func,
-)
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import CheckConstraint, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.app.models.base import Base
@@ -38,15 +31,15 @@ class Widget(Base):
         ),
     )
 
-    id: Mapped[UUID] = mapped_column(primary_key=True)
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     kind: Mapped[str] = mapped_column(String(16))
     primitive_id: Mapped[str | None] = mapped_column(ForeignKey("primitives.id", ondelete="SET NULL"))
     mode: Mapped[str | None] = mapped_column(String(32))
-    params: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    params: Mapped[dict[str, Any] | None]
     source_tsx: Mapped[str | None] = mapped_column(Text)
     compiled_js: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16), server_default="active")
     canonical_id: Mapped[UUID | None] = mapped_column(ForeignKey("widgets.id", ondelete="SET NULL"))
-    version: Mapped[int] = mapped_column(Integer, server_default="1")
+    version: Mapped[int] = mapped_column(server_default="1")
     created_from_part_id: Mapped[UUID | None] = mapped_column(ForeignKey("document_parts.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

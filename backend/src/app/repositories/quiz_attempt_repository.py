@@ -4,13 +4,16 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.quizzes import QuizAttemptRecord
+from src.app.exceptions.quizzes import QuizIntegrityError
+from src.app.interfaces.repositories.quizzes import QuizAttemptRepositoryProtocol
 from src.app.models.quiz_attempt import QuizAttempt
 
 
-class QuizAttemptRepository:
+class QuizAttemptRepository(QuizAttemptRepositoryProtocol):
     """Access to the quiz_attempts table."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -45,7 +48,10 @@ class QuizAttemptRepository:
             is_correct=is_correct,
         )
         self._session.add(row)
-        await self._session.flush()
+        try:
+            await self._session.flush()
+        except IntegrityError as exc:
+            raise QuizIntegrityError from exc
         return self._to_record(row)
 
     async def list_by_part(self, part_id: UUID) -> list[QuizAttemptRecord]:

@@ -31,4 +31,5 @@ class Base(DeclarativeBase):
         datetime: DateTime(timezone=True),
         date: Date,
         dict[str, Any]: JSONB,
+        list[Any]: JSONB,
     }

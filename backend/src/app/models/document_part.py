@@ -1,18 +1,11 @@
 """ORM model of document parts."""
 
+import uuid
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import (
-    CheckConstraint,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    Text,
-    UniqueConstraint,
-    func,
-)
+from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -30,20 +23,19 @@ class DocumentPart(Base):
             name="ck_document_parts_status",
         ),
         Index("ix_document_parts_status_stage_changed_at", "status", "stage_changed_at"),
-        Index("ix_document_parts_document_id", "document_id"),
     )
 
-    id: Mapped[UUID] = mapped_column(primary_key=True)
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     document_id: Mapped[UUID] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
-    index: Mapped[int] = mapped_column(Integer)
+    index: Mapped[int]
     title: Mapped[str] = mapped_column(String(300))
     topic_ids: Mapped[list[str]] = mapped_column(JSONB)
     source_markdown: Mapped[str] = mapped_column(Text)
-    token_count: Mapped[int] = mapped_column(Integer)
-    profile: Mapped[dict[str, object]] = mapped_column(JSONB, server_default="{}")
+    token_count: Mapped[int]
+    profile: Mapped[dict[str, Any]] = mapped_column(server_default="{}")
     status: Mapped[str] = mapped_column(String(16), server_default="queued")
-    content: Mapped[dict[str, object] | None] = mapped_column(JSONB)
-    attempts: Mapped[int] = mapped_column(Integer, server_default="0")
+    content: Mapped[dict[str, Any] | None]
+    attempts: Mapped[int] = mapped_column(server_default="0")
     stage_changed_at: Mapped[datetime] = mapped_column(server_default=func.now())
     error: Mapped[str | None] = mapped_column(Text)
-    published_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    published_at: Mapped[datetime | None]

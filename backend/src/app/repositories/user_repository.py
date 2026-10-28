@@ -3,13 +3,16 @@
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.app.contracts.users.user_record import UserRecord
+from src.app.contracts.users import UserRecord
+from src.app.exceptions.users import UserAlreadyExistsError
+from src.app.interfaces.repositories.users import UserRepositoryProtocol
 from src.app.models.user import User
 
 
-class UserRepository:
+class UserRepository(UserRepositoryProtocol):
     """CRUD-style access to the users table."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -55,7 +58,10 @@ class UserRepository:
             monthly_limit=monthly_limit,
         )
         self._session.add(row)
-        await self._session.flush()
+        try:
+            await self._session.flush()
+        except IntegrityError as exc:
+            raise UserAlreadyExistsError from exc
         return self._to_record(row)
 
     async def lock_for_update(self, user_id: UUID) -> UserRecord | None:

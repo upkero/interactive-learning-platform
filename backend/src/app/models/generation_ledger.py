@@ -1,4 +1,8 @@
-"""ORM model of the quota ledger (financial journal of reserving/charging refunds)."""
+"""ORM model of the quota ledger (append-only journal of quota operations).
+
+Delta semantics follow the quota ADR (story 1.6): reserve holds quota,
+charge burns it, refund returns it.
+"""
 
 from datetime import date, datetime
 from uuid import UUID

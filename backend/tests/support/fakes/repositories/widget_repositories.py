@@ -1,7 +1,9 @@
 """In-memory fakes of the widget and quota repositories."""
 
+from collections.abc import Sequence
+from dataclasses import replace
 from datetime import date
-from typing import Any, cast
+from typing import Any
 from uuid import UUID, uuid4
 
 from src.app.contracts.quizzes import QuizAttemptRecord
@@ -15,12 +17,22 @@ from src.app.contracts.widgets import (
     WidgetKind,
     WidgetRecord,
     WidgetStatus,
+    WidgetUsageDraft,
     WidgetUsageRecord,
+)
+from src.app.interfaces.repositories.quizzes import QuizAttemptRepositoryProtocol
+from src.app.interfaces.repositories.quota import GenerationLedgerRepositoryProtocol
+from src.app.interfaces.repositories.widgets import (
+    PrimitiveRepositoryProtocol,
+    ReportRepositoryProtocol,
+    WidgetDescriptionRepositoryProtocol,
+    WidgetRepositoryProtocol,
+    WidgetUsageRepositoryProtocol,
 )
 from tests.support.time import now
 
 
-class FakePrimitiveRepository:
+class FakePrimitiveRepository(PrimitiveRepositoryProtocol):
     """Dict-backed stub mirroring PrimitiveRepository API."""
 
     def __init__(self) -> None:
@@ -39,7 +51,7 @@ class FakePrimitiveRepository:
         version: str,
         description: str,
         modes: list[str],
-        params_schema: dict[str, object],
+        params_schema: dict[str, Any],
     ) -> PrimitiveRecord:
         created = PrimitiveRecord(
             id=primitive_id,
@@ -53,7 +65,7 @@ class FakePrimitiveRepository:
         return created
 
 
-class FakeWidgetRepository:
+class FakeWidgetRepository(WidgetRepositoryProtocol):
     """Dict-backed stub mirroring WidgetRepository API."""
 
     def __init__(self) -> None:
@@ -68,7 +80,7 @@ class FakeWidgetRepository:
         kind: WidgetKind,
         primitive_id: str | None = None,
         mode: str | None = None,
-        params: dict[str, object] | None = None,
+        params: dict[str, Any] | None = None,
         source_tsx: str | None = None,
         compiled_js: str | None = None,
         created_from_part_id: UUID | None = None,
@@ -93,10 +105,10 @@ class FakeWidgetRepository:
     async def set_status(self, widget_id: UUID, status: WidgetStatus) -> None:
         row = self._widgets.get(widget_id)
         if row is not None:
-            self._widgets[widget_id] = WidgetRecord(**{**{f: getattr(row, f) for f in row.__slots__}, "status": status})
+            self._widgets[widget_id] = replace(row, status=status)
 
 
-class FakeWidgetDescriptionRepository:
+class FakeWidgetDescriptionRepository(WidgetDescriptionRepositoryProtocol):
     """Dict-backed stub mirroring WidgetDescriptionRepository API."""
 
     def __init__(self) -> None:
@@ -125,7 +137,7 @@ class FakeWidgetDescriptionRepository:
         return [d for d in self._descriptions.values() if d.widget_id == widget_id]
 
 
-class FakeWidgetUsageRepository:
+class FakeWidgetUsageRepository(WidgetUsageRepositoryProtocol):
     """Dict-backed stub mirroring WidgetUsageRepository API."""
 
     def __init__(self) -> None:
@@ -134,21 +146,17 @@ class FakeWidgetUsageRepository:
     async def get(self, usage_id: UUID) -> WidgetUsageRecord | None:
         return self._usages.get(usage_id)
 
-    async def add_many(
-        self,
-        part_id: UUID,
-        rows: list[dict[str, Any]],
-    ) -> list[WidgetUsageRecord]:
+    async def add_many(self, part_id: UUID, usages: Sequence[WidgetUsageDraft]) -> list[WidgetUsageRecord]:
         created: list[WidgetUsageRecord] = []
-        for row in rows:
+        for draft in usages:
             record = WidgetUsageRecord(
                 id=uuid4(),
                 part_id=part_id,
-                widget_id=None,
-                directive_ref=str(row["directive_ref"]),
-                params=None,
-                position=int(cast(int, row["position"])),
-                status=UsageStatus.PENDING,
+                widget_id=draft.widget_id,
+                directive_ref=draft.directive_ref,
+                params=draft.params,
+                position=draft.position,
+                status=draft.status,
                 created_at=now(),
             )
             self._usages[record.id] = record
@@ -158,12 +166,10 @@ class FakeWidgetUsageRepository:
     async def set_status(self, usage_id: UUID, status: UsageStatus) -> None:
         row = self._usages.get(usage_id)
         if row is not None:
-            self._usages[usage_id] = WidgetUsageRecord(
-                **{**{f: getattr(row, f) for f in row.__slots__}, "status": status}
-            )
+            self._usages[usage_id] = replace(row, status=status)
 
 
-class FakeReportRepository:
+class FakeReportRepository(ReportRepositoryProtocol):
     """Dict-backed stub mirroring ReportRepository API."""
 
     def __init__(self) -> None:
@@ -182,7 +188,6 @@ class FakeReportRepository:
         user_id: UUID,
         reason: ReportReason,
         part_id: UUID | None = None,
-        comment: str | None = None,
     ) -> ReportRecord | None:
         if await self.get_by_widget_and_user(widget_id, user_id) is not None:
             return None
@@ -192,14 +197,13 @@ class FakeReportRepository:
             user_id=user_id,
             part_id=part_id,
             reason=reason,
-            comment=comment,
             created_at=now(),
         )
         self._reports[record.id] = record
         return record
 
 
-class FakeQuizAttemptRepository:
+class FakeQuizAttemptRepository(QuizAttemptRepositoryProtocol):
     """Dict-backed stub mirroring QuizAttemptRepository API."""
 
     def __init__(self) -> None:
@@ -211,7 +215,7 @@ class FakeQuizAttemptRepository:
         user_id: UUID,
         part_id: UUID,
         quiz_key: str,
-        answer: dict[str, object],
+        answer: dict[str, Any],
         is_correct: bool,
     ) -> QuizAttemptRecord:
         record = QuizAttemptRecord(
@@ -230,7 +234,7 @@ class FakeQuizAttemptRepository:
         return [a for a in self._attempts.values() if a.part_id == part_id]
 
 
-class FakeGenerationLedgerRepository:
+class FakeGenerationLedgerRepository(GenerationLedgerRepositoryProtocol):
     """List-backed stub mirroring GenerationLedgerRepository API."""
 
     def __init__(self) -> None:
@@ -263,16 +267,3 @@ class FakeGenerationLedgerRepository:
 
     async def sum_delta(self, user_id: UUID, period_start: date) -> int:
         return sum(e.delta for e in self._entries if e.user_id == user_id and e.period_start >= period_start)
-
-    async def part_owner(self, part_id: UUID) -> UUID | None:
-        for entry in reversed(self._entries):
-            if entry.part_id == part_id:
-                return entry.user_id
-        return None
-
-    async def reserve_period(self, user_id: UUID) -> date:
-        periods = [e.period_start for e in self._entries if e.user_id == user_id]
-        if periods:
-            return min(periods)
-        # Fallback: first day of the current month
-        return now().date().replace(day=1)

@@ -7,12 +7,12 @@ pytestmark = pytest.mark.unit
 
 
 def test_build_engine_with_null_pool() -> None:
-    """Проверяет, что при null_pool=True создается NullPool."""
+    """null_pool=True produces a NullPool engine."""
     engine = build_engine("postgresql+asyncpg://grasp:pass@localhost:5432/grasp", null_pool=True)
     assert isinstance(engine.pool, NullPool)
 
 
 def test_build_engine_default_pool() -> None:
-    """Проверяет, что по умолчанию создается стандартный пул соединений."""
+    """By default a standard connection pool is created."""
     engine = build_engine("postgresql+asyncpg://grasp:pass@localhost:5432/grasp", null_pool=False)
     assert isinstance(engine.pool, AsyncAdaptedQueuePool)

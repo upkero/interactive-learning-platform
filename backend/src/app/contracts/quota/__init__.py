@@ -1,24 +1,5 @@
 """Immutable contracts of the quota ledger."""
 
-from dataclasses import dataclass
-from datetime import date, datetime
-from enum import StrEnum
-from uuid import UUID
+from src.app.contracts.quota.ledger_entry import LedgerEntry, LedgerOp
 
-
-class LedgerOp(StrEnum):
-    RESERVE = "reserve"
-    CHARGE = "charge"
-    REFUND = "refund"
-
-
-@dataclass(frozen=True, slots=True)
-class LedgerEntry:
-    id: int
-    user_id: UUID
-    document_id: UUID | None
-    part_id: UUID | None
-    op: LedgerOp
-    delta: int
-    period_start: date
-    created_at: datetime
+__all__ = ["LedgerEntry", "LedgerOp"]

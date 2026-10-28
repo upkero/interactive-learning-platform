@@ -5,20 +5,22 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class StorageSettings(BaseSettings):
-    endpoint_url: str = Field(default="http://localhost:9000", description="Внутренний адрес MinIO для бэкенда.")
+    endpoint_url: str = Field(
+        default="http://localhost:9000", description="Internal MinIO address used by the backend."
+    )
     public_endpoint_url: str = Field(
         default="http://localhost:9000",
-        description="Публичный адрес MinIO для подписи presigned-ссылок в браузере.",
+        description="Public MinIO address used to presign image links in the browser.",
     )
-    access_key_id: str = Field(default="minioadmin", description="Логин администратора MinIO.")
+    access_key_id: str = Field(default="minioadmin", description="MinIO administrator login.")
     secret_access_key: SecretStr = Field(
         default=SecretStr("minioadmin"),
-        description="Секретный пароль MinIO.",
+        description="MinIO secret password.",
     )
-    region_name: str = Field(default="us-east-1", description="Регион S3.")
-    bucket_documents: str = Field(default="documents", description="Бакет для исходных PDF/DOCX файлов.")
-    bucket_images: str = Field(default="images", description="Бакет для извлеченных картинок.")
-    presign_ttl_seconds: int = Field(default=3600, gt=0, description="Срок жизни временной ссылки на картинку.")
+    region_name: str = Field(default="us-east-1", description="S3 region.")
+    bucket_documents: str = Field(default="documents", description="Bucket for source PDF/DOCX files.")
+    bucket_images: str = Field(default="images", description="Bucket for extracted images.")
+    presign_ttl_seconds: int = Field(default=3600, gt=0, description="Lifetime of a presigned image link.")
 
     model_config = SettingsConfigDict(
         env_prefix="S3_",

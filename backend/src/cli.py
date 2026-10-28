@@ -9,35 +9,25 @@ Usage: ``python -m src.cli <command> <flags>``
 
 import argparse
 import asyncio
-import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 
 from src.app.core.settings.app import get_app_settings
+from src.app.core.settings.seed import get_seed_settings
 from src.app.db.session import build_engine, build_session_factory
 from src.app.seed.dev_seed import seed_dev
 from src.app.seed.primitives_seed import resolve_catalog_path, seed_primitives_from_catalog
-
-DEFAULT_SEED_PASSWORD = "grasp123"
 
 
 async def _run_seed_dev(fake_embeddings: bool) -> int:
     """Open a dedicated engine for the CLI process and seed demo data."""
     settings = get_app_settings()
-    engine = build_engine(
-        str(settings.db_url),
-        pool_size=1,
-        max_overflow=0,
-        null_pool=True,
-    )
+    engine = build_engine(str(settings.db_url), null_pool=True)
     try:
         session_factory = build_session_factory(engine)
-        outcome = await seed_dev(
-            session_factory,
-            password=os.environ.get("SEED_PASSWORD", DEFAULT_SEED_PASSWORD),
-            fake_embeddings=fake_embeddings,
-        )
+        password = get_seed_settings().seed_password
+        outcome = await seed_dev(session_factory, password=password, fake_embeddings=fake_embeddings)
         print(f"seed-dev: {outcome}")
     finally:
         await engine.dispose()
@@ -48,7 +38,7 @@ async def _run_seed_primitives(catalog: Path | None) -> int:
     """Open a dedicated engine for the CLI process and sync the catalog."""
     settings = get_app_settings()
     catalog_path = resolve_catalog_path(catalog)
-    engine = build_engine(str(settings.db_url), pool_size=1, max_overflow=0, null_pool=True)
+    engine = build_engine(str(settings.db_url), null_pool=True)
     try:
         session_factory = build_session_factory(engine)
         async with session_factory() as session, session.begin():

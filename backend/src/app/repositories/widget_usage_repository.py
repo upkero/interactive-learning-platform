@@ -1,15 +1,18 @@
 """Repository of widget usages."""
 
-from typing import Any
+from collections.abc import Sequence
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.app.contracts.widgets import UsageStatus, WidgetUsageRecord
+from src.app.contracts.widgets import UsageStatus, WidgetUsageDraft, WidgetUsageRecord
+from src.app.exceptions.widgets import WidgetUsageDuplicateError
+from src.app.interfaces.repositories.widgets import WidgetUsageRepositoryProtocol
 from src.app.models.widget_usage import WidgetUsage
 
 
-class WidgetUsageRepository:
+class WidgetUsageRepository(WidgetUsageRepositoryProtocol):
     """Access to the widget_usages table."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -32,14 +35,24 @@ class WidgetUsageRepository:
         row = await self._session.get(WidgetUsage, usage_id)
         return self._to_record(row) if row is not None else None
 
-    async def add_many(
-        self,
-        part_id: UUID,
-        rows: list[dict[str, Any]],
-    ) -> list[WidgetUsageRecord]:
-        created = [WidgetUsage(part_id=part_id, **row) for row in rows]
+    async def add_many(self, part_id: UUID, usages: Sequence[WidgetUsageDraft]) -> list[WidgetUsageRecord]:
+        """Insert new usages; only flush, never commit."""
+        created = [
+            WidgetUsage(
+                part_id=part_id,
+                widget_id=draft.widget_id,
+                directive_ref=draft.directive_ref,
+                params=draft.params,
+                position=draft.position,
+                status=draft.status.value,
+            )
+            for draft in usages
+        ]
         self._session.add_all(created)
-        await self._session.flush()
+        try:
+            await self._session.flush()
+        except IntegrityError as exc:
+            raise WidgetUsageDuplicateError from exc
         return [self._to_record(row) for row in created]
 
     async def set_status(self, usage_id: UUID, status: UsageStatus) -> None:

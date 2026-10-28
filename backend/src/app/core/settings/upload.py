@@ -8,22 +8,22 @@ class UploadSettings(BaseSettings):
     max_bytes: int = Field(
         default=52_428_800,  # 50 MB
         gt=0,
-        description="Максимальный размер PDF и DOCX файла в байтах (по умолчанию 50 МБ).",
+        description="Maximum size of a PDF or DOCX file in bytes (default 50 MB).",
     )
     max_markdown_bytes: int = Field(
         default=5_242_880,  # 5 MB
         gt=0,
-        description="Максимальный размер Markdown файла в байтах (по умолчанию 5 МБ).",
+        description="Maximum size of a Markdown file in bytes (default 5 MB).",
     )
     max_pages: int = Field(
         default=300,
         gt=0,
-        description="Максимальное количество страниц в документе.",
+        description="Maximum number of pages in a document.",
     )
     max_unzipped_bytes: int = Field(
         default=209_715_200,  # 200 MB
         gt=0,
-        description="Максимальный распакованный размер DOCX архива (защита от zip-бомб).",
+        description="Maximum unzipped DOCX archive size (zip-bomb protection).",
     )
 
     model_config = SettingsConfigDict(

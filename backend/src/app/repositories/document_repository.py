@@ -1,16 +1,20 @@
 """Repository of documents."""
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.documents.document_record import DocumentRecord
 from src.app.contracts.documents.statuses import DocumentStatus, SourceType
+from src.app.exceptions.documents import DocumentsIntegrityError
+from src.app.interfaces.repositories.documents import DocumentRepositoryProtocol
 from src.app.models.document import Document
 
 
-class DocumentRepository:
+class DocumentRepository(DocumentRepositoryProtocol):
     """CRUD-style access to the documents table."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -73,7 +77,10 @@ class DocumentRepository:
             source_uri=source_uri,
         )
         self._session.add(row)
-        await self._session.flush()
+        try:
+            await self._session.flush()
+        except IntegrityError as exc:
+            raise DocumentsIntegrityError from exc
         return self._to_record(row)
 
     async def set_status(
@@ -82,15 +89,27 @@ class DocumentRepository:
         status: DocumentStatus,
         *,
         error: str | None = None,
-    ) -> None:
+    ) -> DocumentRecord | None:
+        """Update the status of a document and return the fresh record."""
         row = await self._session.get(Document, document_id)
-        if row is not None:
-            row.status = status.value
-            row.error = error
-            await self._session.flush()
+        if row is None:
+            return None
+        row.status = status.value
+        row.error = error
+        await self._session.flush()
+        return self._to_record(row)
+
+    async def set_topic_tree(self, document_id: UUID, topic_tree: dict[str, Any]) -> DocumentRecord | None:
+        """Store the parsed topic tree of a document and return the fresh record."""
+        row = await self._session.get(Document, document_id)
+        if row is None:
+            return None
+        row.topic_tree = topic_tree
+        await self._session.flush()
+        return self._to_record(row)
 
     async def count_active(self, owner_id: UUID) -> int:
-        """Count documents still being processed for the monthly quota."""
+        """Count documents currently in a processing state for an owner."""
         stmt = (
             select(func.count())
             .select_from(Document)

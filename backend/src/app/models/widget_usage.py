@@ -1,11 +1,11 @@
 """ORM model of widget placements on document pages."""
 
+import uuid
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, ForeignKey, Integer, String, UniqueConstraint, func
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import CheckConstraint, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.app.models.base import Base
@@ -20,11 +20,11 @@ class WidgetUsage(Base):
         CheckConstraint("status IN ('ready', 'pending', 'fallback')", name="ck_widget_usages_status"),
     )
 
-    id: Mapped[UUID] = mapped_column(primary_key=True)
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     part_id: Mapped[UUID] = mapped_column(ForeignKey("document_parts.id", ondelete="CASCADE"))
     widget_id: Mapped[UUID | None] = mapped_column(ForeignKey("widgets.id", ondelete="SET NULL"))
     directive_ref: Mapped[str] = mapped_column(String(64))
-    params: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
-    position: Mapped[int] = mapped_column(Integer)
+    params: Mapped[dict[str, Any] | None]
+    position: Mapped[int]
     status: Mapped[str] = mapped_column(String(16), server_default="pending")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

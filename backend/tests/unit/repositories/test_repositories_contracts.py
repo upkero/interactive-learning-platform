@@ -43,7 +43,7 @@ _ALL_REPOS: list[type[object]] = [
 def _model_module_names() -> set[str]:
 
     # Every ORM class lives in src.app.models (or src.app.models.*)
-    return {"src.app.models", "src.app.models.base"}
+    return {"src.app.models"}
 
 
 def _annotation_uses_models(annotation: object) -> bool:
@@ -51,7 +51,7 @@ def _annotation_uses_models(annotation: object) -> bool:
     if annotation is typing.Any or annotation is type(None):
         return False
     if isinstance(annotation, type):
-        return annotation.__module__ in _model_module_names()
+        return annotation.__module__.startswith("src.app.models")
     return any(_annotation_uses_models(arg) for arg in typing.get_args(annotation))
 
 

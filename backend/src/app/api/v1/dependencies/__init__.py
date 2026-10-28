@@ -9,7 +9,7 @@ from src.app.interfaces.llm.llm_client import LLMClient
 
 
 def get_container(request: Request) -> ApplicationContainer:
-    """Извлекает DI-контейнер из состояния приложения FastAPI."""
+    """Extract the DI container from the FastAPI application state."""
     container: ApplicationContainer = request.app.state.container
     return container
 
@@ -25,7 +25,7 @@ LLMClientDep = Annotated[LLMClient, Depends(get_llm_client)]
 
 
 async def get_db_session(container: ContainerDep) -> AsyncIterator[AsyncSession]:
-    """Генератор сессии БД для эндпоинтов API."""
+    """Database session generator for API endpoints."""
     async with container.session_factory() as session:
         yield session
 

@@ -13,9 +13,7 @@ class DocumentStatus(StrEnum):
 
 
 class SourceType(StrEnum):
-    PDF = "pdf"
-    DOCX = "docx"
-    MD = "md"
+    UPLOAD = "upload"
     GDOCS = "gdocs"
 
 

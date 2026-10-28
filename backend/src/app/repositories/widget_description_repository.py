@@ -3,13 +3,16 @@
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.widgets import WidgetDescriptionRecord
+from src.app.exceptions.widgets import WidgetsIntegrityError
+from src.app.interfaces.repositories.widgets import WidgetDescriptionRepositoryProtocol
 from src.app.models.widget_description import WidgetDescription
 
 
-class WidgetDescriptionRepository:
+class WidgetDescriptionRepository(WidgetDescriptionRepositoryProtocol):
     """Access to the widget_descriptions table."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -41,7 +44,10 @@ class WidgetDescriptionRepository:
             embedding=embedding,
         )
         self._session.add(row)
-        await self._session.flush()
+        try:
+            await self._session.flush()
+        except IntegrityError as exc:
+            raise WidgetsIntegrityError from exc
         return self._to_record(row)
 
     async def list_by_widget(self, widget_id: UUID) -> list[WidgetDescriptionRecord]:

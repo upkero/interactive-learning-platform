@@ -18,7 +18,7 @@ def _error_response(
     error_code: str,
     headers: Mapping[str, str] | None = None,
 ) -> JSONResponse:
-    # Приводим к dict, так как JSONResponse требует dict для headers
+    # Cast to dict: JSONResponse requires dict headers
     resp_headers = dict(headers) if headers else None
     return JSONResponse(
         status_code=status,

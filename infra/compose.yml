@@ -150,6 +150,8 @@ services:
     depends_on: *backend-deps
     volumes:
       - ../primitives/dist:/app/primitives-dist:ro
+      # JSON fixtures of the seed data (source of the demo documents/widgets)
+      - ../backend/tests/support/fixtures/seed:/app/tests/support/fixtures/seed:ro
     restart: "no"
 
 networks:

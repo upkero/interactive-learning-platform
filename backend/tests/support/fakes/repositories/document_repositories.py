@@ -1,18 +1,28 @@
 """In-memory fakes of the document aggregate repositories."""
 
+from collections.abc import Sequence
+from dataclasses import replace
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any
 from uuid import UUID, uuid4
 
 from src.app.contracts.documents.document_record import DocumentRecord
+from src.app.contracts.documents.image_draft import ImageDraft
 from src.app.contracts.documents.image_record import ImageRecord
 from src.app.contracts.documents.material_record import MaterialRecord
+from src.app.contracts.documents.part_draft import PartDraft
 from src.app.contracts.documents.part_record import PartRecord
 from src.app.contracts.documents.statuses import DocumentStatus, MaterialRole, PartStatus, SourceType
+from src.app.interfaces.repositories.documents import (
+    DocumentPartRepositoryProtocol,
+    DocumentRepositoryProtocol,
+    ImageRepositoryProtocol,
+    UserMaterialRepositoryProtocol,
+)
 from tests.support.time import now
 
 
-class FakeDocumentRepository:
+class FakeDocumentRepository(DocumentRepositoryProtocol):
     """Dict-backed stub mirroring DocumentRepository API."""
 
     def __init__(self) -> None:
@@ -67,23 +77,28 @@ class FakeDocumentRepository:
         status: DocumentStatus,
         *,
         error: str | None = None,
-    ) -> None:
+    ) -> DocumentRecord | None:
         row = self._documents.get(document_id)
         if row is not None:
-            self._documents[document_id] = DocumentRecord(
-                **{
-                    **{f: getattr(row, f) for f in row.__slots__},
-                    "status": status,
-                    "error": error,
-                }
-            )
+            updated = replace(row, status=status, error=error, updated_at=now())
+            self._documents[document_id] = updated
+            return updated
+        return None
+
+    async def set_topic_tree(self, document_id: UUID, topic_tree: dict[str, Any]) -> DocumentRecord | None:
+        row = self._documents.get(document_id)
+        if row is not None:
+            updated = replace(row, topic_tree=topic_tree, updated_at=now())
+            self._documents[document_id] = updated
+            return updated
+        return None
 
     async def count_active(self, owner_id: UUID) -> int:
         active = {DocumentStatus.UPLOADED, DocumentStatus.PARSING, DocumentStatus.PARSED, DocumentStatus.GENERATING}
         return sum(1 for d in self._documents.values() if d.owner_id == owner_id and d.status in active)
 
 
-class FakeDocumentPartRepository:
+class FakeDocumentPartRepository(DocumentPartRepositoryProtocol):
     """Dict-backed stub with a serialized conditional transition."""
 
     def __init__(self) -> None:
@@ -98,24 +113,20 @@ class FakeDocumentPartRepository:
             key=lambda p: p.index,
         )
 
-    async def add_many(
-        self,
-        document_id: UUID,
-        rows: list[dict[str, Any]],
-    ) -> list[PartRecord]:
+    async def add_many(self, document_id: UUID, parts: Sequence[PartDraft]) -> list[PartRecord]:
         created: list[PartRecord] = []
-        for row in rows:
+        for draft in parts:
             record = PartRecord(
                 id=uuid4(),
                 document_id=document_id,
-                index=int(cast(int, row["index"])),
-                title=str(row["title"]),
-                topic_ids=list(cast(list[str], row["topic_ids"])),
-                source_markdown=str(row["source_markdown"]),
-                token_count=int(cast(int, row["token_count"])),
-                profile=dict(cast(dict[str, Any], row["profile"])),
+                index=draft.index,
+                title=draft.title,
+                topic_ids=tuple(draft.topic_ids),
+                source_markdown=draft.source_markdown,
+                token_count=draft.token_count,
+                profile=dict(draft.profile or {}),
+                content=dict(draft.content) if draft.content is not None else None,
                 status=PartStatus.QUEUED,
-                content=None,
                 attempts=0,
                 stage_changed_at=now(),
                 error=None,
@@ -133,24 +144,23 @@ class FakeDocumentPartRepository:
         *,
         error: str | None = None,
         bump_attempts: bool = False,
-    ) -> PartRecord | None:
+    ) -> bool:
         row = self._parts.get(part_id)
         if row is None or row.status not in expected:
-            return None
-        updated = PartRecord(
-            **{
-                **{f: getattr(row, f) for f in row.__slots__},
-                "status": to,
-                "error": error,
-                "attempts": row.attempts + (1 if bump_attempts else 0),
-                "published_at": datetime.now(UTC) if to is PartStatus.PUBLISHED else row.published_at,
-            }
+            return False
+        updated = replace(
+            row,
+            status=to,
+            error=error,
+            stage_changed_at=now(),
+            attempts=row.attempts + (1 if bump_attempts else 0),
+            published_at=datetime.now(UTC) if to is PartStatus.PUBLISHED else row.published_at,
         )
         self._parts[part_id] = updated
-        return updated
+        return True
 
 
-class FakeImageRepository:
+class FakeImageRepository(ImageRepositoryProtocol):
     """Dict-backed stub mirroring ImageRepository API."""
 
     def __init__(self) -> None:
@@ -162,30 +172,26 @@ class FakeImageRepository:
     async def list_by_document(self, document_id: UUID) -> list[ImageRecord]:
         return [i for i in self._images.values() if i.document_id == document_id]
 
-    async def add_many(
-        self,
-        document_id: UUID,
-        rows: list[dict[str, Any]],
-    ) -> list[ImageRecord]:
+    async def add_many(self, document_id: UUID, images: Sequence[ImageDraft]) -> list[ImageRecord]:
         created: list[ImageRecord] = []
-        for row in rows:
+        for draft in images:
             record = ImageRecord(
                 id=uuid4(),
                 document_id=document_id,
-                object_key=str(row["object_key"]),
-                page=next((int(row[r]) for r in ("page",) if row.get(r) is not None), None),
-                width=int(cast(int, row["width"])),
-                height=int(cast(int, row["height"])),
-                caption=None,
-                description=None,
-                topic_id=None,
+                object_key=draft.object_key,
+                page=draft.page,
+                width=draft.width,
+                height=draft.height,
+                caption=draft.caption,
+                description=draft.description,
+                topic_id=draft.topic_id,
             )
             self._images[record.id] = record
             created.append(record)
         return created
 
 
-class FakeUserMaterialRepository:
+class FakeUserMaterialRepository(UserMaterialRepositoryProtocol):
     """Dict-backed stub mirroring UserMaterialRepository API."""
 
     def __init__(self) -> None:

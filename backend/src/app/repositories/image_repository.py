@@ -1,15 +1,18 @@
 """Repository of images."""
 
+from collections.abc import Sequence
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.app.contracts.documents.image_draft import ImageDraft
 from src.app.contracts.documents.image_record import ImageRecord
+from src.app.interfaces.repositories.documents import ImageRepositoryProtocol
 from src.app.models.image import Image
 
 
-class ImageRepository:
+class ImageRepository(ImageRepositoryProtocol):
     """CRUD-style access to the images table."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -37,12 +40,21 @@ class ImageRepository:
         rows = await self._session.scalars(select(Image).where(Image.document_id == document_id))
         return [self._to_record(row) for row in rows.all()]
 
-    async def add_many(
-        self,
-        document_id: UUID,
-        rows: list[dict[str, object]],
-    ) -> list[ImageRecord]:
-        created = [Image(document_id=document_id, **row) for row in rows]
+    async def add_many(self, document_id: UUID, images: Sequence[ImageDraft]) -> list[ImageRecord]:
+        """Insert new images; only flush, never commit."""
+        created = [
+            Image(
+                document_id=document_id,
+                object_key=draft.object_key,
+                page=draft.page,
+                width=draft.width,
+                height=draft.height,
+                caption=draft.caption,
+                description=draft.description,
+                topic_id=draft.topic_id,
+            )
+            for draft in images
+        ]
         self._session.add_all(created)
         await self._session.flush()
         return [self._to_record(row) for row in created]

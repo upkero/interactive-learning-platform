@@ -9,10 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.repositories.primitive_repository import PrimitiveRepository
 
+# backend/src/app/seed -> backend -> repo root; the published catalog of
+# the @grasp/primitives workspace lives next to the backend package.
+_REPO_ROOT: Path = Path(__file__).resolve().parents[4]
+
 # Candidate locations of the published primitives catalog, in order.
 DEFAULT_CATALOG_CANDIDATES: tuple[Path, ...] = (
+    # Volume mounted by the seed service in infra/compose.yml
     Path("/app/primitives-dist/catalog.json"),
-    Path("../primitives/dist/catalog.json"),
+    # Local run from any working directory
+    _REPO_ROOT / "primitives" / "dist" / "catalog.json",
 )
 
 

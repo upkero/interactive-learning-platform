@@ -3,13 +3,15 @@
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.widgets import ReportReason, ReportRecord
+from src.app.interfaces.repositories.widgets import ReportRepositoryProtocol
 from src.app.models.report import Report
 
 
-class ReportRepository:
+class ReportRepository(ReportRepositoryProtocol):
     """Access to the reports table."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -23,7 +25,6 @@ class ReportRepository:
             user_id=row.user_id,
             part_id=row.part_id,
             reason=ReportReason(row.reason),
-            comment=row.comment,
             created_at=row.created_at,
         )
 
@@ -40,19 +41,22 @@ class ReportRepository:
         user_id: UUID,
         reason: ReportReason,
         part_id: UUID | None = None,
-        comment: str | None = None,
     ) -> ReportRecord | None:
-        """Insert a report unless the same user already reported the widget."""
-        existing = await self.get_by_widget_and_user(widget_id, user_id)
-        if existing is not None:
-            return None
-        row = Report(
-            widget_id=widget_id,
-            user_id=user_id,
-            part_id=part_id,
-            reason=reason.value,
-            comment=comment,
+        """Insert a report unless the same user already reported the widget.
+
+        Uses ``INSERT ... ON CONFLICT DO NOTHING`` so two concurrent requests
+        cannot both pass a pre-check; the loser simply gets ``None``.
+        """
+        stmt = (
+            insert(Report)
+            .values(
+                widget_id=widget_id,
+                user_id=user_id,
+                part_id=part_id,
+                reason=reason.value,
+            )
+            .on_conflict_do_nothing(index_elements=[Report.widget_id, Report.user_id])
+            .returning(Report)
         )
-        self._session.add(row)
-        await self._session.flush()
-        return self._to_record(row)
+        row = (await self._session.scalars(stmt)).first()
+        return self._to_record(row) if row is not None else None

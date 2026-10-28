@@ -14,9 +14,13 @@ class PartRecord:
     document_id: UUID
     index: int
     title: str
-    topic_ids: list[str]
+    # tuple keeps the record deep-immutable; the ORM row's JSONB list is
+    # copied once in the repository `_to_record` mapping.
+    topic_ids: tuple[str, ...]
     source_markdown: str
     token_count: int
+    # dict is a defensive copy made in `_to_record`; the mapping is shared
+    # deliberately (the domain never mutates profiles in place).
     profile: dict[str, Any]
     status: PartStatus
     content: dict[str, Any] | None

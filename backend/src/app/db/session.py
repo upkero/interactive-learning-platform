@@ -9,7 +9,7 @@ def build_engine(
     max_overflow: int = 5,
     null_pool: bool = False,
 ) -> AsyncEngine:
-    """Create an async SQLAlchemy engine with NullPool and pre-ping support."""
+    """Create an async SQLAlchemy engine with pre-ping support."""
     if null_pool:
         return create_async_engine(
             url,

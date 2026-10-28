@@ -1,7 +1,7 @@
 """ORM model of widget text descriptions with pgvector embeddings."""
 
+import uuid
 from datetime import datetime
-from typing import Any
 from uuid import UUID
 
 from pgvector.sqlalchemy import Vector
@@ -29,9 +29,9 @@ class WidgetDescription(Base):
         ),
     )
 
-    id: Mapped[UUID] = mapped_column(primary_key=True)
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     widget_id: Mapped[UUID] = mapped_column(ForeignKey("widgets.id", ondelete="CASCADE"))
     text: Mapped[str] = mapped_column(Text)
     is_paraphrase: Mapped[bool] = mapped_column(Boolean, server_default=false())
-    embedding: Mapped[Any] = mapped_column(Vector(EMBEDDING_DIM))
+    embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

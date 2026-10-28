@@ -1,17 +1,5 @@
-"""Immutable contract for quiz attempts."""
+"""Immutable contracts of quiz attempts."""
 
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Any
-from uuid import UUID
+from src.app.contracts.quizzes.quiz_attempt_record import QuizAttemptRecord
 
-
-@dataclass(frozen=True, slots=True)
-class QuizAttemptRecord:
-    id: UUID
-    user_id: UUID
-    part_id: UUID
-    quiz_key: str
-    answer: dict[str, Any]
-    is_correct: bool
-    created_at: datetime
+__all__ = ["QuizAttemptRecord"]

@@ -3,13 +3,16 @@
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.widgets import WidgetKind, WidgetRecord, WidgetStatus
+from src.app.exceptions.widgets import WidgetConstraintError
+from src.app.interfaces.repositories.widgets import WidgetRepositoryProtocol
 from src.app.models.widget import Widget
 
 
-class WidgetRepository:
+class WidgetRepository(WidgetRepositoryProtocol):
     """Access to the widgets table."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -57,7 +60,10 @@ class WidgetRepository:
             created_from_part_id=created_from_part_id,
         )
         self._session.add(row)
-        await self._session.flush()
+        try:
+            await self._session.flush()
+        except IntegrityError as exc:
+            raise WidgetConstraintError from exc
         return self._to_record(row)
 
     async def set_status(self, widget_id: UUID, status: WidgetStatus) -> None:

@@ -4,17 +4,21 @@ from datetime import date
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.quota import LedgerEntry, LedgerOp
-from src.app.models.document import Document
-from src.app.models.document_part import DocumentPart
+from src.app.exceptions.quota import QuotaIntegrityError
+from src.app.interfaces.repositories.quota import GenerationLedgerRepositoryProtocol
 from src.app.models.generation_ledger import GenerationLedger
-from src.app.models.user import User
 
 
-class GenerationLedgerRepository:
-    """Append-only operations over the generation_ledger table."""
+class GenerationLedgerRepository(GenerationLedgerRepositoryProtocol):
+    """Append-only operations over the generation_ledger table.
+
+    Delta semantics follow the quota ADR (story 1.6); period computation
+    and business rules live in services, not here.
+    """
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -51,7 +55,10 @@ class GenerationLedgerRepository:
             period_start=period_start,
         )
         self._session.add(row)
-        await self._session.flush()
+        try:
+            await self._session.flush()
+        except IntegrityError as exc:
+            raise QuotaIntegrityError from exc
         return self._to_record(row)
 
     async def sum_delta(self, user_id: UUID, period_start: date) -> int:
@@ -61,22 +68,3 @@ class GenerationLedgerRepository:
             GenerationLedger.period_start >= period_start,
         )
         return int((await self._session.scalars(stmt)).one())
-
-    async def part_owner(self, part_id: UUID) -> UUID | None:
-        """Return the owner of the document that owns the part."""
-        stmt = (
-            select(Document.owner_id)
-            .join(DocumentPart, DocumentPart.document_id == Document.id)
-            .where(DocumentPart.id == part_id)
-        )
-        owner = (await self._session.scalars(stmt)).first()
-        return owner
-
-    async def reserve_period(self, user_id: UUID) -> date:
-        """Compute the period start for a new reserve operation."""
-        anchor = (await self._session.scalars(select(User.period_anchor).where(User.id == user_id))).first()
-        if anchor is not None:
-            return anchor
-        # Fallback: first day of the current month
-        today = date.today()
-        return today.replace(day=1)

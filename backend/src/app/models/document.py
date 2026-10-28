@@ -1,19 +1,11 @@
 """ORM model of documents."""
 
+import uuid
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import (
-    BigInteger,
-    CheckConstraint,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    Text,
-    func,
-)
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.app.models.base import Base
@@ -25,7 +17,7 @@ class Document(Base):
     __tablename__ = "documents"
     __table_args__ = (
         CheckConstraint(
-            "source_type IN ('pdf', 'docx', 'md', 'gdocs')",
+            "source_type IN ('upload', 'gdocs')",
             name="ck_documents_source_type",
         ),
         CheckConstraint(
@@ -35,7 +27,7 @@ class Document(Base):
         Index("ix_documents_owner_id", "owner_id"),
     )
 
-    id: Mapped[UUID] = mapped_column(primary_key=True)
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     owner_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     title: Mapped[str] = mapped_column(String(300))
     source_type: Mapped[str] = mapped_column(String(16))
@@ -43,10 +35,10 @@ class Document(Base):
     object_key: Mapped[str] = mapped_column(Text)
     mime_type: Mapped[str] = mapped_column(String(128))
     size_bytes: Mapped[int] = mapped_column(BigInteger)
-    page_count: Mapped[int | None] = mapped_column(Integer)
+    page_count: Mapped[int | None]
     checksum: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(16), server_default="uploaded")
-    topic_tree: Mapped[dict[str, object] | None] = mapped_column(JSONB)
+    topic_tree: Mapped[dict[str, Any] | None]
     error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())

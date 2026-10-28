@@ -5,8 +5,8 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
-        # --unsafe: разрешает кастомные теги Docker Compose (!reset / !override),
-        # но всё равно проверяет синтаксис YAML
+        # --unsafe: allows custom Docker Compose YAML tags (!reset / !override)
+        # while still validating the YAML syntax
         args: [--unsafe]
       - id: check-added-large-files
         args: ["--maxkb=2000"]

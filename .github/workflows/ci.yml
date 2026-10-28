@@ -7,7 +7,7 @@ on:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # 1. Проверка Python-бэкенда
+  # 1. Python backend checks
   # ---------------------------------------------------------------------------
   backend:
     runs-on: ubuntu-latest
@@ -34,29 +34,33 @@ jobs:
       DB_URL: postgresql+asyncpg://grasp:grasp@localhost:5432/grasp_test
       REDIS_URL: redis://localhost:6379/0
       AUTH_JWT_SECRET: ci-test-jwt-secret-must-be-at-least-32-characters-long
+      SEED_PASSWORD: ci-seed-password
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: astral-sh/setup-uv@v6
 
-      - name: Установка зависимостей
+      - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Проверка линтером Ruff
+      - name: Ruff lint and format check
         run: uv run ruff check . && uv run ruff format --check .
 
-      - name: Проверка типов Mypy
-        run: uv run mypy src
+      - name: Mypy type check
+        run: uv run mypy src tests
 
-      - name: Проверка миграций базы данных
+      - name: Database migrations check
         run: uv run alembic upgrade head && uv run alembic downgrade base && uv run alembic upgrade head
 
-      - name: Запуск тестов
+      - name: Model/schema consistency check (alembic check)
+        run: uv run alembic check
+
+      - name: Run tests
         run: uv run pytest -m "unit or integration" --maxfail=1
 
   # ---------------------------------------------------------------------------
-  # 2. Проверка веб-пакетов (фронтенд, песочница, примитивы)
+  # 2. Web package checks (frontend, sandbox, primitives)
   # ---------------------------------------------------------------------------
   web:
     runs-on: ubuntu-latest
@@ -72,17 +76,17 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Установка JS зависимостей
+      - name: Install JS dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Линтинг и тесты пакетов
+      - name: Lint and test packages
         run: pnpm -r lint && pnpm -r typecheck && pnpm -r test
 
-      - name: Сборка пакетов
+      - name: Build packages
         run: pnpm -r build
 
   # ---------------------------------------------------------------------------
-  # 3. Проверка Storybook (каталог визуализаций)
+  # 3. Storybook checks (visual catalogue)
   # ---------------------------------------------------------------------------
   storybook:
     runs-on: ubuntu-latest
@@ -98,19 +102,19 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Установка зависимостей
+      - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Сборка и прогон Storybook
+      - name: Build and run Storybook
         run: pnpm --filter @grasp/primitives build-storybook && pnpm --filter @grasp/primitives test-storybook
 
   # ---------------------------------------------------------------------------
-  # 4. Сборка Docker-образов
+  # 4. Docker image builds
   # ---------------------------------------------------------------------------
   images:
     needs: [backend, web]
     runs-on: ubuntu-latest
-    # Право публиковать образы в GHCR
+    # Permission to publish images to GHCR
     permissions:
       contents: read
       packages: write
@@ -122,7 +126,7 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Авторизация в GHCR
+      - name: Log in to GHCR
         if: github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
         with:
@@ -130,7 +134,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Сборка Docker-образа
+      - name: Build Docker image
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.service == 'backend' && 'backend' || '.' }}
@@ -139,12 +143,12 @@ jobs:
           tags: ghcr.io/${{ github.repository }}/${{ matrix.service }}:${{ github.sha }}
 
   # ---------------------------------------------------------------------------
-  # 5. Заготовка e2e (наполняется в задаче 4.4.3)
+  # 5. E2E placeholder (filled in by task 4.4.3)
   # ---------------------------------------------------------------------------
   e2e:
     needs: [images]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Заготовка сквозных тестов
-        run: echo "E2E pipeline placeholder (будет настроен в 4.4.3)"
+      - name: E2E pipeline placeholder
+        run: echo "E2E pipeline placeholder (configured in task 4.4.3)"

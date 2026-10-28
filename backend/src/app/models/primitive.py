@@ -3,8 +3,8 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, String, Text, func
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy import String, Text, func
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.app.models.base import Base
@@ -15,9 +15,9 @@ class Primitive(Base):
 
     __tablename__ = "primitives"
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
     version: Mapped[str] = mapped_column(String(32))
     description: Mapped[str] = mapped_column(Text)
     modes: Mapped[list[str]] = mapped_column(ARRAY(Text()))
-    params_schema: Mapped[dict[str, Any]] = mapped_column(JSONB)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    params_schema: Mapped[dict[str, Any]]
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now())

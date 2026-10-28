@@ -2,11 +2,12 @@
 
 from uuid import UUID, uuid4
 
-from src.app.contracts.users.user_record import UserRecord
+from src.app.contracts.users import UserRecord
+from src.app.interfaces.repositories.users import UserRepositoryProtocol
 from tests.support.time import now
 
 
-class FakeUserRepository:
+class FakeUserRepository(UserRepositoryProtocol):
     """Dict-backed stub mirroring UserRepository API."""
 
     def __init__(self) -> None:

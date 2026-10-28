@@ -20,11 +20,11 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # 0. Подключение расширений PostgreSQL
+    # 0. PostgreSQL extensions
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
     op.execute("CREATE EXTENSION IF NOT EXISTS citext")
 
-    # 1. Таблица пользователей
+    # 1. Users table
     op.create_table(
         "users",
         sa.Column("id", sa.UUID(), primary_key=True),
@@ -39,7 +39,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     )
 
-    # 2. Таблица документов
+    # 2. Documents table
     op.create_table(
         "documents",
         sa.Column("id", sa.UUID(), primary_key=True),
@@ -58,7 +58,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.CheckConstraint(
-            "source_type IN ('pdf', 'docx', 'md', 'gdocs')",
+            "source_type IN ('upload', 'gdocs')",
             name="ck_documents_source_type",
         ),
         sa.CheckConstraint(
@@ -68,7 +68,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_documents_owner_id", "documents", ["owner_id"])
 
-    # 3. Таблица частей документов
+    # 3. Document parts table
     op.create_table(
         "document_parts",
         sa.Column("id", sa.UUID(), primary_key=True),
@@ -96,9 +96,8 @@ def upgrade() -> None:
         "document_parts",
         ["status", "stage_changed_at"],
     )
-    op.create_index("ix_document_parts_document_id", "document_parts", ["document_id"])
 
-    # 4. Таблица картинок
+    # 4. Images table
     op.create_table(
         "images",
         sa.Column("id", sa.UUID(), primary_key=True),
@@ -113,7 +112,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_images_document_id", "images", ["document_id"])
 
-    # 5. Таблица прав доступа к материалам
+    # 5. User materials (access rights) table
     op.create_table(
         "user_materials",
         sa.Column("user_id", sa.UUID(), sa.ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
@@ -124,10 +123,10 @@ def upgrade() -> None:
         sa.CheckConstraint("role IN ('owner', 'shared')", name="ck_user_materials_role"),
     )
 
-    # 6. Таблица каталога примитивов
+    # 6. Primitives catalog table
     op.create_table(
         "primitives",
-        sa.Column("id", sa.String(64), primary_key=True),
+        sa.Column("id", sa.Text(), primary_key=True),
         sa.Column("version", sa.String(32), nullable=False),
         sa.Column("description", sa.Text(), nullable=False),
         sa.Column("modes", postgresql.ARRAY(sa.Text()), nullable=False),
@@ -135,12 +134,12 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     )
 
-    # 7. Таблица виджетов
+    # 7. Widgets table
     op.create_table(
         "widgets",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column("kind", sa.String(16), nullable=False),
-        sa.Column("primitive_id", sa.String(64), sa.ForeignKey("primitives.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("primitive_id", sa.Text(), sa.ForeignKey("primitives.id", ondelete="SET NULL"), nullable=True),
         sa.Column("mode", sa.String(32), nullable=True),
         sa.Column("params", postgresql.JSONB(), nullable=True),
         sa.Column("source_tsx", sa.Text(), nullable=True),
@@ -184,7 +183,7 @@ def upgrade() -> None:
         postgresql_ops={"embedding": "vector_cosine_ops"},
     )
 
-    # 9. Таблица использования виджетов на страницах
+    # 9. Widget usages table
     op.create_table(
         "widget_usages",
         sa.Column("id", sa.UUID(), primary_key=True),
@@ -199,7 +198,7 @@ def upgrade() -> None:
         sa.CheckConstraint("status IN ('ready', 'pending', 'fallback')", name="ck_widget_usages_status"),
     )
 
-    # 10. Таблица жалоб на виджеты
+    # 10. Widget reports table
     op.create_table(
         "reports",
         sa.Column("id", sa.UUID(), primary_key=True),
@@ -207,13 +206,12 @@ def upgrade() -> None:
         sa.Column("user_id", sa.UUID(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
         sa.Column("part_id", sa.UUID(), sa.ForeignKey("document_parts.id", ondelete="SET NULL"), nullable=True),
         sa.Column("reason", sa.String(16), nullable=False),
-        sa.Column("comment", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.UniqueConstraint("widget_id", "user_id", name="uq_reports_widget_id_user_id"),
-        sa.CheckConstraint("reason IN ('wrong', 'broken', 'ugly', 'other')", name="ck_reports_reason"),
+        sa.CheckConstraint("reason IN ('wrong', 'broken', 'other')", name="ck_reports_reason"),
     )
 
-    # 11. Таблица попыток прохождения квизов
+    # 11. Quiz attempts table
     op.create_table(
         "quiz_attempts",
         sa.Column("id", sa.UUID(), primary_key=True),
@@ -226,7 +224,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_quiz_attempts_user_id_part_id", "quiz_attempts", ["user_id", "part_id"])
 
-    # 12. Таблица журнала квот
+    # 12. Quota ledger table
     op.create_table(
         "generation_ledger",
         sa.Column("id", sa.BigInteger(), sa.Identity(), primary_key=True),
@@ -254,7 +252,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Удаление таблиц строго в обратном порядке зависимостей
+    # Tables are dropped strictly in reverse dependency order
     op.drop_table("generation_ledger")
     op.drop_table("quiz_attempts")
     op.drop_table("reports")
@@ -268,4 +266,5 @@ def downgrade() -> None:
     op.drop_table("document_parts")
     op.drop_table("documents")
     op.drop_table("users")
+    # Extensions are intentionally kept after downgrade.
     # Do not drop vector and citext extensions

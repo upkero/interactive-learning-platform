@@ -3,13 +3,16 @@
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.widgets import PrimitiveRecord
+from src.app.exceptions.widgets import WidgetsIntegrityError
+from src.app.interfaces.repositories.widgets import PrimitiveRepositoryProtocol
 from src.app.models.primitive import Primitive
 
 
-class PrimitiveRepository:
+class PrimitiveRepository(PrimitiveRepositoryProtocol):
     """Sync of the @grasp/primitives catalog."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -58,5 +61,8 @@ class PrimitiveRepository:
                 params_schema=params_schema,
             )
             self._session.add(row)
-        await self._session.flush()
+        try:
+            await self._session.flush()
+        except IntegrityError as exc:
+            raise WidgetsIntegrityError from exc
         return self._to_record(row)
