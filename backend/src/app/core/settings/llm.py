@@ -8,12 +8,12 @@ LLMProvider = Literal["anthropic", "openai", "openai_compatible", "ollama"]
 
 
 class LLMSettings(BaseSettings):
-    provider: LLMProvider = Field(default="ollama", description="Основной LLM провайдер.")
-    api_key: SecretStr | None = Field(default=None, description="API ключ провайдера.")
-    model: str = Field(default="llama3.2", description="Основная модель.")
+    provider: LLMProvider = Field(default="ollama", description="Primary LLM provider.")
+    api_key: SecretStr | None = Field(default=None, description="Provider API key.")
+    model: str = Field(default="llama3.2", description="Primary model.")
     base_url: str | None = Field(
         default="http://localhost:11434/v1",
-        description="Базовый URL для OpenAI-совместимого API (например, Ollama).",
+        description="Base URL for OpenAI-compatible APIs (e.g. Ollama).",
     )
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     timeout_seconds: float = Field(default=120.0, gt=0.0)
@@ -39,10 +39,10 @@ class LLMSettings(BaseSettings):
 
 
 class CheapLLMSettings(BaseSettings):
-    provider: LLMProvider = Field(default="ollama", description="Провайдер для легких задач.")
-    api_key: SecretStr | None = Field(default=None, description="API ключ для легкой модели.")
-    model: str = Field(default="llama3.2", description="Дешёвая vision модель.")
-    base_url: str | None = Field(default="http://localhost:11434/v1", description="Базовый URL.")
+    provider: LLMProvider = Field(default="ollama", description="Provider for light tasks.")
+    api_key: SecretStr | None = Field(default=None, description="API key for the cheap model.")
+    model: str = Field(default="llama3.2", description="Cheap vision model.")
+    base_url: str | None = Field(default="http://localhost:11434/v1", description="Base URL.")
     temperature: float = Field(default=0.1, ge=0.0, le=2.0)
     timeout_seconds: float = Field(default=60.0, gt=0.0)
     max_retries: int = Field(default=2, ge=0)

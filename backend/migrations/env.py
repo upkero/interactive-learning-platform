@@ -6,6 +6,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+import src.app.models  # noqa: F401  # import all models to fill Base.metadata
 from src.app.core.settings.app import get_app_settings
 from src.app.models.base import Base
 
@@ -18,7 +19,7 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
-    """Запуск миграций в оффлайн-режиме (генерация SQL-скрипта)."""
+    """Run migrations in offline mode (emit an SQL script)."""
     url = str(get_app_settings().db_url)
     context.configure(
         url=url,
@@ -43,7 +44,7 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
-    """Асинхронный запуск миграций через пул соединений NullPool."""
+    """Run migrations asynchronously over a NullPool engine."""
     configuration = config.get_section(config.config_ini_section, {})
     configuration["sqlalchemy.url"] = str(get_app_settings().db_url)
 
@@ -60,7 +61,7 @@ async def run_async_migrations() -> None:
 
 
 def run_migrations_online() -> None:
-    """Запуск миграций в онлайн-режиме."""
+    """Run migrations in online mode."""
     asyncio.run(run_async_migrations())
 
 

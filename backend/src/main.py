@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 def create_app() -> FastAPI:
     setup_logging(get_logging_settings())
 
-    # Валидация обязательных секретов при старте (DoD 1.1.4)
+    # Validate required secrets at startup (DoD 1.1.4)
     get_auth_settings()
 
     app = FastAPI(title="Grasp API", version="0.1.0", lifespan=lifespan)

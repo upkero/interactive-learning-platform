@@ -1,0 +1,31 @@
+{
+    "index": 0,
+    "title": "From neurons to layers",
+    "topic_ids": ["topic-neurons"],
+    "source_markdown": "## From neurons to layers\n\nA neuron computes a weighted sum of its inputs and applies a\nnon-linear activation. Layers stack neurons so that each one\ntransforms the representation of the previous layer.\n",
+    "token_count": 121,
+    "profile": { "difficulty": "beginner" },
+    "content": {
+        "markdown": "## From neurons to layers\n\nA neuron computes a weighted sum of its inputs and applies a\nnon-linear activation. Layers stack neurons so that each one\ntransforms the representation of the previous layer.\n",
+        "widgets": [
+            {
+                "directive_ref": "wdg-flash-card",
+                "position": 0,
+                "kind": "config",
+                "primitive_id": "flash-card",
+                "params": {
+                    "front": "What does a neuron compute?",
+                    "back": "A weighted sum of inputs followed by a non-linear activation."
+                }
+            }
+        ],
+        "quizzes": [
+            {
+                "quiz_key": "q_3f9a2b1c",
+                "question": "Which operation does a neuron apply after the weighted sum?",
+                "options": ["Activation", "Pooling", "Normalization"],
+                "correct_index": 0
+            }
+        ]
+    }
+}

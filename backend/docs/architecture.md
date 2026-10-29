@@ -4,7 +4,7 @@ Layered architecture with strict inward dependency rule: outer layers depend on 
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                    api/v1  (HTTP)                   │
+│         api/v1  (HTTP)      seed  (CLI demo data)   │
 ├─────────────────────────────────────────────────────┤
 │                    services  (business logic)       │
 ├─────────────────────────────────────────────────────┤
@@ -73,6 +73,25 @@ class LLMClient(ABC):
 ### `repositories/`
 
 All database I/O lives here. Repositories receive and return `contracts` objects (never ORM models or schemas). A repository knows about the DB session; services do not.
+
+Rules:
+- every repository conforms to a protocol from `interfaces/repositories/` — mypy strict verifies that real implementations and their test fakes never drift apart;
+- repositories never call `commit`/`rollback` (the caller owns the transaction); only `flush` when a generated id is required;
+- `IntegrityError` is translated into a domain exception from `exceptions/<area>.py`.
+
+---
+
+### `seed/`
+
+CLI entry points of `python -m src.cli` (see `src/cli.py`): idempotent demo seeding and primitives-catalog sync.
+
+| Module                  | Purpose                                                                       |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| `dev_seed.py`           | `seed-dev` — demo users, documents, parts and widgets (safe to run repeatedly) |
+| `primitives_seed.py`    | `seed-primitives` — upsert the catalog published by `@grasp/primitives`        |
+| `embeddings.py`         | Deterministic hash-based fake embeddings for `--fake-embeddings`              |
+
+JSON fixtures of the demo dataset live in `backend/tests/support/fixtures/seed/` (per the task spec). The `seed` profile in `infra/compose.yml` mounts that directory into the runtime image at the same path, so the containerised seed command finds them without shipping test assets inside `src/`.
 
 ---
 

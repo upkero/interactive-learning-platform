@@ -1,11 +1,12 @@
 """Liveness and readiness endpoints.
 
-Правила readiness (история 1.4.1, наблюдаемость платформы):
-- ``/health/live`` — процесс жив, проверки нет.
-- ``/health/ready`` — API готов принимать трафик: PostgreSQL (SELECT 1),
-  Redis (PING) и MinIO (health/live, если хранилище настроено).
-Внешняя LLM сознательно не проверяется: недоступность Anthropic/Ollama
-не делает API неготовым, генерацией занимаются Celery-воркеры.
+Readiness rules (story 1.4.1, platform observability):
+- ``/health/live`` — the process is alive, no checks.
+- ``/health/ready`` — the API can accept traffic: PostgreSQL (SELECT 1),
+  Redis (PING) and MinIO (health/live, when storage is configured).
+The external LLM is deliberately not checked: Anthropic/Ollama being
+unavailable does not make the API not ready; generation runs in Celery
+workers.
 """
 
 import asyncio
@@ -23,7 +24,7 @@ from src.app.core.settings.storage import get_storage_settings
 
 router = APIRouter(prefix="/health", tags=["infra"])
 
-# Readiness-проверки должны падать быстро, чтобы LB не ждал подвисший upstream
+# Readiness checks must fail fast so the LB does not wait on a stuck upstream
 _CHECK_TIMEOUT_SECONDS = 5.0
 
 ContainerDep = Annotated[ApplicationContainer, Depends(get_container)]
@@ -38,7 +39,7 @@ async def _check_db(session_factory: async_sessionmaker[AsyncSession]) -> str | 
     try:
         async with session_factory() as session:
             await asyncio.wait_for(session.execute(text("SELECT 1")), _CHECK_TIMEOUT_SECONDS)
-    except Exception:  # любая ошибка означает неготовность БД
+    except Exception:  # any error means the database is not ready
         return "PostgreSQL unavailable"
     return None
 
@@ -53,7 +54,7 @@ async def _check_redis(client: aioredis.Redis) -> str | None:
 
 async def _check_minio(endpoint_url: str) -> str | None:
     if not endpoint_url:
-        # Хранилище не настроено — не считаем API неготовым
+        # Storage is not configured — the API is still considered ready
         return None
     try:
         async with httpx.AsyncClient(timeout=_CHECK_TIMEOUT_SECONDS) as client:

@@ -10,7 +10,7 @@ pytestmark = pytest.mark.unit
 
 
 class FakeContainer:
-    """Подмена реального контейнера зависимостей в юнит-тестах (поля не вызываются)."""
+    """Stands in for the real DI container in unit tests (fields are never called)."""
 
     def __init__(self) -> None:
         self.session_factory = object()
@@ -19,7 +19,7 @@ class FakeContainer:
 
 
 class _BrokenLLM:
-    """Если /health/ready решит пинговать LLM — тест упадёт."""
+    """Fails the test if /health/ready decides to ping the LLM."""
 
     async def ping(self) -> bool:
         raise AssertionError("LLM must not be pinged by /health/ready")
@@ -30,7 +30,7 @@ async def _call_health_ready(
     container: object,
     overrides: dict[str, object] | None = None,
 ) -> httpx.Response:
-    # Readiness-проверки подменяем стабами: юнит-тесты не ходят в сеть
+    # Readiness checks are stubbed out: unit tests never touch the network
     async def ok_check(*args: object) -> str | None:
         return None
 
@@ -38,7 +38,7 @@ async def _call_health_ready(
     patches.update(overrides or {})
     for name, replacement in patches.items():
         monkeypatch.setattr(health_module, name, replacement)
-    app.dependency_overrides[get_container] = lambda: container  # type: ignore[arg-type,return-value]
+    app.dependency_overrides[get_container] = lambda: container
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -56,7 +56,7 @@ async def test_health_live() -> None:
 
 async def test_health_ready_ok(monkeypatch: pytest.MonkeyPatch) -> None:
     container = FakeContainer()
-    container.llm_client = _BrokenLLM()  # LLM недоступна, но в readiness не пингуется
+    container.llm_client = _BrokenLLM()  # LLM is down, but readiness never pings it
     response = await _call_health_ready(monkeypatch, container)
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}

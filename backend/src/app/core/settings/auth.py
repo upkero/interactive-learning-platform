@@ -8,20 +8,20 @@ class AuthSettings(BaseSettings):
     jwt_secret: SecretStr = Field(
         ...,
         min_length=32,
-        description="Секретный ключ для подписи токенов JWT (минимум 32 символа).",
+        description="Secret key used to sign JWT tokens (at least 32 characters).",
     )
     session_ttl_seconds: int = Field(
-        default=604_800,  # 7 дней
+        default=604_800,  # 7 days
         gt=0,
-        description="Срок жизни сессионной cookie в секундах (7 дней).",
+        description="Session cookie lifetime in seconds (7 days).",
     )
     cookie_secure: bool = Field(
         default=False,
-        description="Устанавливать ли флаг Secure для cookie (True для production по HTTPS).",
+        description="Set the Secure flag on the cookie (True for production over HTTPS).",
     )
     session_cookie_name: str = Field(
         default="grasp_session",
-        description="Имя httpOnly cookie для хранения сессии.",
+        description="Name of the httpOnly session cookie.",
     )
 
     model_config = SettingsConfigDict(

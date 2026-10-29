@@ -19,14 +19,19 @@ class ApplicationContainer:
 
     @cached_property
     def redis_client(self) -> aioredis.Redis:
-        # Асинхронный клиент Redis для readiness-проверок и стримов прогресса
+        # Async Redis client for readiness probes and progress streams.
         redis_client: aioredis.Redis = aioredis.Redis.from_url(get_celery_settings().broker_url)
         return redis_client
 
     @cached_property
     def _db_engine(self) -> AsyncEngine:
         settings = get_app_settings()
-        return build_engine(str(settings.db_url))
+        return build_engine(
+            str(settings.db_url),
+            pool_size=settings.db_pool_size,
+            max_overflow=settings.db_max_overflow,
+            null_pool=settings.db_use_null_pool,
+        )
 
     @cached_property
     def session_factory(self) -> async_sessionmaker[AsyncSession]:

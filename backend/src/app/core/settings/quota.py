@@ -8,7 +8,7 @@ class QuotaSettings(BaseSettings):
     default_monthly_limit: int = Field(
         default=20,
         ge=0,
-        description="Месячный лимит бесплатных генераций для нового пользователя.",
+        description="Monthly free generation limit for a new user.",
     )
 
     model_config = SettingsConfigDict(
