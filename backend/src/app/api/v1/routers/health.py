@@ -3,7 +3,9 @@
 Readiness rules (story 1.4.1, platform observability):
 - ``/health/live`` — the process is alive, no checks.
 - ``/health/ready`` — the API can accept traffic: PostgreSQL (SELECT 1),
-  Redis (PING) and MinIO (health/live, when storage is configured).
+  Redis (PING) and MinIO (head_bucket of both buckets through
+  ``ObjectStorageClient.ping()``: verifies reachability, credentials and
+  that the buckets exist).
 The external LLM is deliberately not checked: Anthropic/Ollama being
 unavailable does not make the API not ready; generation runs in Celery
 workers.
@@ -12,7 +14,6 @@ workers.
 import asyncio
 from typing import Annotated
 
-import httpx
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
@@ -20,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.api.v1.dependencies import get_container
 from src.app.bootstrap.container import ApplicationContainer
-from src.app.core.settings.storage import get_storage_settings
+from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 
 router = APIRouter(prefix="/health", tags=["infra"])
 
@@ -52,28 +53,23 @@ async def _check_redis(client: aioredis.Redis) -> str | None:
     return None
 
 
-async def _check_minio(endpoint_url: str) -> str | None:
-    if not endpoint_url:
-        # Storage is not configured — the API is still considered ready
-        return None
+async def _check_object_storage(storage: ObjectStorageClient) -> str | None:
+    """head_bucket of both buckets: reachability, credentials, bucket existence."""
     try:
-        async with httpx.AsyncClient(timeout=_CHECK_TIMEOUT_SECONDS) as client:
-            response = await client.get(f"{endpoint_url.rstrip('/')}/minio/health/live")
-            response.raise_for_status()
-    except (httpx.HTTPError, OSError):
+        await asyncio.wait_for(storage.ping(), _CHECK_TIMEOUT_SECONDS)
+    except Exception:  # any error means MinIO is not ready for traffic
         return "MinIO unavailable"
     return None
 
 
 @router.get("/ready")
 async def readiness(container: ContainerDep) -> dict[str, str]:
-    storage_settings = get_storage_settings()
     errors = [
         message
         for message in await asyncio.gather(
             _check_db(container.session_factory),
             _check_redis(container.redis_client),
-            _check_minio(storage_settings.endpoint_url),
+            _check_object_storage(container.object_storage),
         )
         if message
     ]

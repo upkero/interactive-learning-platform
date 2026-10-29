@@ -1,33 +1,17 @@
-from collections.abc import AsyncIterator
-from typing import Annotated
+"""FastAPI dependencies, split into files by domain (see the lead requirement)."""
 
-from fastapi import Depends, Request
-from sqlalchemy.ext.asyncio import AsyncSession
+from src.app.api.v1.dependencies.container import ContainerDep, get_container
+from src.app.api.v1.dependencies.db import DBSessionDep, get_db_session
+from src.app.api.v1.dependencies.llm import LLMClientDep, get_llm_client
+from src.app.api.v1.dependencies.storage import ObjectStorageClientDep, get_object_storage
 
-from src.app.bootstrap.container import ApplicationContainer
-from src.app.interfaces.llm.llm_client import LLMClient
-
-
-def get_container(request: Request) -> ApplicationContainer:
-    """Extract the DI container from the FastAPI application state."""
-    container: ApplicationContainer = request.app.state.container
-    return container
-
-
-ContainerDep = Annotated[ApplicationContainer, Depends(get_container)]
-
-
-def get_llm_client(container: ContainerDep) -> LLMClient:
-    return container.llm_client
-
-
-LLMClientDep = Annotated[LLMClient, Depends(get_llm_client)]
-
-
-async def get_db_session(container: ContainerDep) -> AsyncIterator[AsyncSession]:
-    """Database session generator for API endpoints."""
-    async with container.session_factory() as session:
-        yield session
-
-
-DBSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
+__all__ = [
+    "ContainerDep",
+    "DBSessionDep",
+    "LLMClientDep",
+    "ObjectStorageClientDep",
+    "get_container",
+    "get_db_session",
+    "get_llm_client",
+    "get_object_storage",
+]

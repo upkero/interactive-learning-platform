@@ -103,5 +103,5 @@ markers = [
 ]
 
 [[tool.mypy.overrides]]
-module = ["celery", "celery.*", "kombu", "kombu.*"]
+module = ["celery", "celery.*", "kombu", "kombu.*", "boto3", "boto3.*", "botocore", "botocore.*"]
 ignore_missing_imports = true

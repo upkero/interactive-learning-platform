@@ -16,6 +16,7 @@ class FakeContainer:
         self.session_factory = object()
         self.redis_client = object()
         self.llm_client = object()
+        self.object_storage = object()
 
 
 class _BrokenLLM:
@@ -34,7 +35,7 @@ async def _call_health_ready(
     async def ok_check(*args: object) -> str | None:
         return None
 
-    patches: dict[str, object] = {"_check_db": ok_check, "_check_redis": ok_check, "_check_minio": ok_check}
+    patches: dict[str, object] = {"_check_db": ok_check, "_check_redis": ok_check, "_check_object_storage": ok_check}
     patches.update(overrides or {})
     for name, replacement in patches.items():
         monkeypatch.setattr(health_module, name, replacement)
@@ -69,3 +70,14 @@ async def test_health_ready_reports_unhealthy_deps(monkeypatch: pytest.MonkeyPat
     response = await _call_health_ready(monkeypatch, FakeContainer(), overrides={"_check_db": fail_db})
     assert response.status_code == 503
     assert "PostgreSQL" in response.json()["detail"]
+
+
+async def test_health_ready_fails_when_minio_is_down(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stopped MinIO must turn /health/ready into 503 (ticket 1.3.1)."""
+
+    async def fail_storage(*args: object) -> str | None:
+        return "MinIO unavailable"
+
+    response = await _call_health_ready(monkeypatch, FakeContainer(), overrides={"_check_object_storage": fail_storage})
+    assert response.status_code == 503
+    assert "MinIO" in response.json()["detail"]
