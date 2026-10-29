@@ -40,13 +40,16 @@ services:
       retries: 10
 
   # 3. MinIO — S3-совместимое объектное хранилище
+  # AIStor-образ не стартует без лицензии: файл кладётся в infra/license/minio.license
+  # (не коммитится, см. .gitignore; reference — docker-compose.yml faq-assistant).
   minio:
     image: quay.io/minio/aistor/minio:${MINIO_IMAGE_TAG:-latest}
-    command: server /data --console-address ":9001"
+    command: server /data --console-address ":9001" --license /minio.license
     env_file: ../backend/.env
     ports: ["9000:9000", "9001:9001"]
     volumes:
       - miniodata:/data
+      - ./license/minio.license:/minio.license:ro
     healthcheck:
       # Современные образы MinIO не содержат curl; в них есть mc с алиасом local
       test:

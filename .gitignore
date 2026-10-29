@@ -5,3 +5,7 @@ node_modules/
 .venv/
 *.env
 !*.env.example
+
+# MinIO AIStor license (see infra/compose.yml minio service)
+infra/license/
+*.license
