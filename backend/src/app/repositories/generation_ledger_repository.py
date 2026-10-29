@@ -8,9 +8,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.quota import LedgerEntry, LedgerOp
-from src.app.exceptions.quota import QuotaIntegrityError
+from src.app.exceptions.quota import LedgerEntryDuplicateError, QuotaIntegrityError
 from src.app.interfaces.repositories.quota import GenerationLedgerRepositoryProtocol
 from src.app.models.generation_ledger import GenerationLedger
+from src.app.repositories._errors import constraint_name
+
+GENERATION_LEDGER_UNIQUE: str = "uq_generation_ledger_part_id_op"
 
 
 class GenerationLedgerRepository(GenerationLedgerRepositoryProtocol):
@@ -58,6 +61,11 @@ class GenerationLedgerRepository(GenerationLedgerRepositoryProtocol):
         try:
             await self._session.flush()
         except IntegrityError as exc:
+            # Only the (part_id, op) uniqueness is a benign duplicate (the
+            # watchdog racing the generation task); foreign keys must not
+            # be swallowed as "already done" or quota would leak.
+            if constraint_name(exc) == GENERATION_LEDGER_UNIQUE:
+                raise LedgerEntryDuplicateError from exc
             raise QuotaIntegrityError from exc
         return self._to_record(row)
 

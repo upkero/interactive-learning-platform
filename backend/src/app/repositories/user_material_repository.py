@@ -8,9 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.documents.material_record import MaterialRecord
 from src.app.contracts.documents.statuses import MaterialRole
-from src.app.exceptions.documents import DocumentsIntegrityError
+from src.app.exceptions.documents import DocumentsIntegrityError, MaterialAccessDuplicateError
 from src.app.interfaces.repositories.documents import UserMaterialRepositoryProtocol
 from src.app.models.user_material import UserMaterial
+from src.app.repositories._errors import constraint_name
+
+USER_MATERIAL_PRIMARY_KEY: str = "pk_user_materials"
 
 
 class UserMaterialRepository(UserMaterialRepositoryProtocol):
@@ -46,6 +49,8 @@ class UserMaterialRepository(UserMaterialRepositoryProtocol):
         try:
             await self._session.flush()
         except IntegrityError as exc:
+            if constraint_name(exc) == USER_MATERIAL_PRIMARY_KEY:
+                raise MaterialAccessDuplicateError from exc
             raise DocumentsIntegrityError from exc
         return self._to_record(row)
 

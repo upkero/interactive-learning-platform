@@ -16,3 +16,11 @@ class DocumentPartDuplicateError(DocumentsIntegrityError):
     status_code = 409
     error_code = "document_part_duplicate"
     default_detail = "A part with this index already exists in the document."
+
+
+class MaterialAccessDuplicateError(DocumentsIntegrityError):
+    """The user already has a material record for the document."""
+
+    status_code = 409
+    error_code = "material_access_duplicate"
+    default_detail = "The user already has access to this document."

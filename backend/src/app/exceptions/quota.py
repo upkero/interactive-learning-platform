@@ -4,8 +4,15 @@ from src.app.exceptions.base import BaseAppException
 
 
 class QuotaIntegrityError(BaseAppException):
-    """Quota ledger integrity violation, e.g. a duplicate refund for a part."""
+    """Base exception for quota ledger integrity violations."""
 
-    status_code = 409
     error_code = "quota_integrity_error"
     default_detail = "Quota ledger integrity constraint violated."
+
+
+class LedgerEntryDuplicateError(QuotaIntegrityError):
+    """The (part_id, op) ledger entry already exists (e.g. watchdog race)."""
+
+    status_code = 409
+    error_code = "ledger_entry_duplicate"
+    default_detail = "A ledger entry for this part and operation already exists."

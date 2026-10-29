@@ -21,9 +21,12 @@ class AppSettings(BaseSettings):
         description="Use NullPool (True for Celery workers, False for the API).",
     )
 
+    # The web client calls the API through the Next.js proxy, so browser
+    # CORS is not exercised by default; set CORS_ALLOW_ORIGINS only when a
+    # client talks to the backend cross-origin directly.
     cors_allow_origins: list[str] = Field(
-        default=["http://localhost:3000"],
-        description="List of allowed CORS origins (defaults to the dev frontend URL).",
+        default=[],
+        description="Allowed CORS origins (empty by default; the frontend goes through the Next.js proxy).",
     )
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
