@@ -13,10 +13,13 @@ from uuid import uuid4
 import httpx
 import pytest
 
+from src.app.contracts.documents.image_draft import ImageDraft
 from src.app.exceptions.storage import ObjectNotFoundError
 from src.app.interfaces.storage.object_storage_client import StorageBucket
-from src.app.storage.object_keys import source_key
+from src.app.services.documents.image_url_resolver import ImageUrlResolver
+from src.app.storage.object_keys import image_key, source_key
 from src.app.storage.s3_object_storage_client import S3ObjectStorageClient
+from tests.support.fakes.repositories.documents import FakeImageRepository
 
 pytestmark = pytest.mark.integration
 
@@ -76,3 +79,29 @@ async def test_presigned_url_expires_after_ttl(object_storage: S3ObjectStorageCl
         await asyncio.sleep(_AFTER_TTL_GRACE_SECONDS)
         expired = await client.get(url)
         assert expired.status_code == 403
+
+
+async def test_image_url_resolver_presigns_stored_image_end_to_end(
+    object_storage: S3ObjectStorageClient,
+) -> None:
+    """ImageUrlResolver over real storage: image_id -> 200-able browser link."""
+    document_id = uuid4()
+    key = image_key(document_id, 1)
+    # the resolver reads object_key from the repository: seed a fake repo
+    images = FakeImageRepository()
+    (record,) = await images.add_many(
+        document_id,
+        [ImageDraft(object_key=key, width=10, height=10, page=1)],
+    )
+    resolver = ImageUrlResolver(image_repository=images, object_storage=object_storage)
+
+    try:
+        await object_storage.put_object(bucket="images", key=key, data=b"image-bytes", content_type="image/png")
+        url = (await resolver.resolve([record.id]))[record.id]
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+        assert response.status_code == 200
+        assert response.content == b"image-bytes"
+    finally:
+        await object_storage.delete_object(bucket="images", key=key)

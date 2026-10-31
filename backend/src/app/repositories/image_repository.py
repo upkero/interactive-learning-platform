@@ -38,6 +38,20 @@ class ImageRepository(ImageRepositoryProtocol):
         row = await self._session.get(Image, image_id)
         return self._to_record(row) if row is not None else None
 
+    async def get_many(self, image_ids: Sequence[UUID]) -> list[ImageRecord]:
+        """Batch fetch preserving the order of the input ids (duplicates too).
+
+        PostgreSQL ``IN`` does not guarantee row order, so the records
+        are re-ordered per input; missing ids are skipped.
+        """
+        if not image_ids:
+            return []
+        rows = await self._session.scalars(
+            select(Image).where(Image.id.in_(image_ids)),
+        )
+        by_id = {row.id: self._to_record(row) for row in rows.all()}
+        return [record for image_id in image_ids if (record := by_id.get(image_id)) is not None]
+
     async def list_by_document(self, document_id: UUID) -> list[ImageRecord]:
         rows = await self._session.scalars(select(Image).where(Image.document_id == document_id))
         return [self._to_record(row) for row in rows.all()]
