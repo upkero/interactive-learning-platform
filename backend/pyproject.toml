@@ -56,6 +56,9 @@ dev = [
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+# Binary/text fixture files are not Python; the invalid-UTF-8 fixture
+# must survive ruff format untouched
+extend-exclude = ["tests/support/fixtures/files"]
 
 [tool.ruff.lint]
 # E, F - базовые ошибки Python
