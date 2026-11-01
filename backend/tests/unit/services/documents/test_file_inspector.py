@@ -1,6 +1,9 @@
 """Unit tests 1.3.3: content-based file inspection against fixture files."""
 
 import hashlib
+import struct
+import zipfile
+from io import BytesIO
 from pathlib import Path
 
 import pytest
@@ -128,6 +131,122 @@ async def test_markdown_name_with_pdf_magic_is_unsupported_type() -> None:
     with pytest.raises(UnsupportedFileTypeError) as exc_info:
         await inspector.inspect(_load("sample.pdf"), "report.md")
     assert exc_info.value.detail == "Unsupported file type."
+
+
+# --- DOCX archive builders (review V1/V2: zip bombs, header lies, CRC) ---
+
+_CONTENT_TYPES = (
+    b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    b'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>'
+)
+
+_APP_XML = (
+    b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    b'<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">'
+    b"<Pages>3</Pages></Properties>"
+)
+
+# local header: sig(4) version(2) flags(2) method(2) time(2) date(2) crc(4) csize(4) usize(4)
+_LOCAL_CRC, _LOCAL_UNPACKED_SIZE = 14, 22
+# central record: sig(4) vmade(2) vneed(2) flags(2) method(2) time(2) date(2) crc(4) csize(4) usize(4)
+_CENTRAL_CRC, _CENTRAL_UNPACKED_SIZE = 16, 24
+
+
+def _docx_archive(members: dict[str, bytes]) -> bytes:
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, payload in members.items():
+            archive.writestr(name, payload)
+    return buffer.getvalue()
+
+
+def _docx_bomb_bytes(target: int) -> bytes:
+    """DOCX that unpacks to ``target`` bytes; deflates far below the 50 MB wire limit.
+
+    Build is streamed through ``archive.open(..., "w")`` so the payload
+    never sits in memory as one large bytes object.
+    """
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", _CONTENT_TYPES)
+        with archive.open("word/document.xml", "w") as member:
+            chunk = b"\x00" * (1024 * 1024)
+            for _ in range(target // len(chunk)):
+                member.write(chunk)
+            member.write(b"\x00" * (target % len(chunk)))
+    return buffer.getvalue()
+
+
+def _header_offsets(archive_bytes: bytes, member: str) -> tuple[int, int]:
+    """Local header offset and central-record offset of one member."""
+    with zipfile.ZipFile(BytesIO(archive_bytes)) as archive:
+        infos = archive.infolist()
+        index = [info.filename for info in infos].index(member)
+        local_offset = infos[index].header_offset
+    central_positions: list[int] = []
+    cursor = -1
+    for _ in infos:  # central records appear in the same order as infolist()
+        cursor = archive_bytes.find(b"PK\x01\x02", cursor + 1)
+        central_positions.append(cursor)
+    return local_offset, central_positions[index]
+
+
+def _patch_file_size_to_one(archive_bytes: bytes, member: str) -> bytes:
+    """Declare ``file_size=1`` in both headers (review V2 fake-header bomb).
+
+    With the lie in place a naive ``sum(file_size)`` sees about nothing;
+    header-trusting streaming reads are the trap equally: zipfile clamps
+    reads by ``file_size``, so only a header-blind re-count can catch it.
+    """
+    data = bytearray(archive_bytes)
+    local, central = _header_offsets(archive_bytes, member)
+    struct.pack_into("<I", data, local + _LOCAL_UNPACKED_SIZE, 1)
+    struct.pack_into("<I", data, central + _CENTRAL_UNPACKED_SIZE, 1)
+    return bytes(data)
+
+
+def _flip_crc(archive_bytes: bytes, member: str) -> bytes:
+    """Corrupt the stored CRC of one member in both headers (review V1)."""
+    data = bytearray(archive_bytes)
+    local, central = _header_offsets(archive_bytes, member)
+    data[local + _LOCAL_CRC] ^= 0xFF
+    data[central + _CENTRAL_CRC] ^= 0xFF
+    return bytes(data)
+
+
+async def test_zip_bomb_with_honest_headers_is_413() -> None:
+    """An honest bomb unpacking to 200 MB + 1 must hit the unzipped limit."""
+    settings = UploadSettings()  # defaults: max_unzipped_bytes = 200 MB
+    bomb = _docx_bomb_bytes(settings.max_unzipped_bytes + 1)
+    assert len(bomb) < settings.max_bytes  # wire side is inside the 50 MB limit
+    with pytest.raises(FileTooLargeError) as exc_info:
+        await FileInspector(settings).inspect(bomb, "zip_bomb.docx")
+    assert exc_info.value.status_code == 413
+    assert exc_info.value.error_code == "file_too_large"
+
+
+async def test_zip_bomb_with_fake_headers_is_413() -> None:
+    """file_size=1 in local and central headers must not save the bomb (V2)."""
+    bomb = _patch_file_size_to_one(_docx_bomb_bytes(UploadSettings().max_unzipped_bytes + 1), "word/document.xml")
+    with pytest.raises(FileTooLargeError) as exc_info:
+        await FileInspector(UploadSettings()).inspect(bomb, "zip_bomb.docx")
+    assert exc_info.value.status_code == 413
+
+
+async def test_tampered_crc_is_broken_docx_415() -> None:
+    """A CRC mismatch during member reading is a 415, never a 500 (V1)."""
+    archive = _docx_archive(
+        {
+            "[Content_Types].xml": _CONTENT_TYPES,
+            "word/document.xml": b"<w:document/>",
+            "docProps/app.xml": _APP_XML,
+        }
+    )
+    tampered = _flip_crc(archive, "docProps/app.xml")
+    with pytest.raises(UnsupportedFileTypeError) as exc_info:
+        await FileInspector(UploadSettings()).inspect(tampered, "tampered.docx")
+    assert "Broken DOCX" in exc_info.value.detail
+    assert exc_info.value.status_code == 415
 
 
 async def test_docx_without_document_xml_is_rejected() -> None:

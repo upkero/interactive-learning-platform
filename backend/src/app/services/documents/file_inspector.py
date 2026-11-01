@@ -15,7 +15,9 @@ Heavy work (``pypdf``, ``zipfile``) runs in a worker thread via
 import asyncio
 import hashlib
 import re
+import struct
 import zipfile
+import zlib
 from dataclasses import dataclass
 from io import BytesIO
 from typing import Protocol
@@ -44,6 +46,20 @@ _CHUNK_SIZE = 1024 * 1024  # 1 MiB per read for streaming uploads
 _BROKEN_PDF_ERRORS = (PdfReadError, PyPdfError, ValueError, TypeError, KeyError, AttributeError, RecursionError)
 
 _DOCX_REQUIRED_MEMBERS = ("[Content_Types].xml", "word/document.xml")
+_MEMBER_CHUNK = 64 * 1024  # compressed slice per feed so the output cap bites early
+
+
+def _local_data_start(archive_bytes: bytes, info: zipfile.ZipInfo) -> int:
+    """Offset of a member's payload: local header plus its name/extra fields.
+
+    The central directory only places the member; the local header
+    carries its own (possibly different) name and extra field lengths,
+    so they are read from the raw bytes, never from declared sizes.
+    """
+    if archive_bytes[info.header_offset : info.header_offset + 4] != _ZIP_MAGIC:
+        raise UnsupportedFileTypeError("Broken DOCX archive.")
+    name_len, extra_len = struct.unpack_from("<HH", archive_bytes, info.header_offset + 26)
+    return info.header_offset + 30 + int(name_len) + int(extra_len)
 
 
 class UploadStream(Protocol):
@@ -138,20 +154,32 @@ class FileInspector:
         return InspectedFile(DOCX, "docx", len(data), pages, checksum)
 
     def _check_docx(self, data: bytes) -> int | None:
-        """Validate the archive: members, unzipped size, optional Pages."""
+        """Validate the archive: members, REAL unpacked size, optional Pages.
+
+        Declared sizes are not trusted (review V1/V2): a bomb may claim
+        ``file_size=1`` in its local and central headers and dodge naive
+        ``sum(file_size)`` checks — and even ``zipfile``'s own streaming
+        reads, which it clamps by ``file_size``. Members are instead
+        located by offset arithmetic on the raw bytes and their DEFLATE
+        streams are decompressed under a hard output cap, aborting the
+        moment the cumulative unpacked size passes the limit.
+        """
         try:
-            with zipfile.ZipFile(BytesIO(data)) as archive:
-                names = set(archive.namelist())
-                for member in _DOCX_REQUIRED_MEMBERS:
-                    if member not in names:
-                        raise UnsupportedFileTypeError(f"DOCX is missing {member}.")
-
-                unzipped_total = sum(info.file_size for info in archive.infolist())
-                self._check_size(unzipped_total, self._s.max_unzipped_bytes)
-
-                app_xml = archive.read("docProps/app.xml") if "docProps/app.xml" in names else b""
+            archive = zipfile.ZipFile(BytesIO(data))
         except zipfile.BadZipFile as exc:
             raise UnsupportedFileTypeError("Broken DOCX archive.") from exc
+        with archive:
+            names = set(archive.namelist())
+            for member in _DOCX_REQUIRED_MEMBERS:
+                if member not in names:
+                    raise UnsupportedFileTypeError(f"DOCX is missing {member}.")
+            self._check_unzipped_size(data, archive)
+            try:
+                # ordinary read: zipfile verifies the member CRC here,
+                # tampered archives surface as BadZipFile → 415
+                app_xml = archive.read("docProps/app.xml") if "docProps/app.xml" in names else b""
+            except zipfile.BadZipFile as exc:
+                raise UnsupportedFileTypeError("Broken DOCX archive.") from exc
 
         match = _APP_PAGES.search(app_xml)
         if match is None:
@@ -159,6 +187,50 @@ class FileInspector:
         pages = int(match.group(1))
         self._check_pages(pages)
         return pages
+
+    def _check_unzipped_size(self, data: bytes, archive: zipfile.ZipFile) -> None:
+        """Sum the real unpacked sizes across members, aborting after the limit.
+
+        A member's payload ends where the next member starts (or at the
+        central directory), independent of any declared size; DEFLATE
+        streams self-terminate so their true end is found by zlib.
+        """
+        infos = archive.infolist()
+        ends = [info.header_offset for info in infos[1:]] + [archive.start_dir]
+        total = 0
+        for info, data_end in zip(infos, ends, strict=True):
+            start = _local_data_start(data, info)
+            if info.compress_type == zipfile.ZIP_STORED:
+                total += data_end - start
+                self._check_size(total, self._s.max_unzipped_bytes)
+            elif info.compress_type == zipfile.ZIP_DEFLATED:
+                total += self._decompress_member(data, start, data_end, total)
+            else:
+                raise UnsupportedFileTypeError("Unsupported DOCX compression.")
+
+    def _decompress_member(self, data: bytes, start: int, end: int, already: int) -> int:
+        """Raw-deflate ``[start:end)``; returns its real uncompressed size.
+
+        ``already`` is the unpacked total of the earlier members, so the
+        cap cuts in as soon as the cumulative size breaks the limit —
+        the whole bomb is never even fully decompressed.
+        """
+        decompressor = zlib.decompressobj(-zlib.MAX_WBITS)
+        produced = 0
+        pos = start
+        try:
+            while not decompressor.eof:
+                piece = decompressor.unconsumed_tail or data[pos : min(pos + _MEMBER_CHUNK, end)]
+                if not decompressor.unconsumed_tail:
+                    pos += len(piece)
+                if not piece:
+                    # the zlib stream does not end inside the member slice
+                    raise UnsupportedFileTypeError("Broken DOCX archive.")
+                produced += len(decompressor.decompress(piece, self._s.max_unzipped_bytes - already - produced + 1))
+                self._check_size(already + produced, self._s.max_unzipped_bytes)
+        except zlib.error as exc:
+            raise UnsupportedFileTypeError("Broken DOCX archive.") from exc
+        return produced
 
     def _check_size(self, size_bytes: int, limit: int) -> None:
         if size_bytes > limit:
