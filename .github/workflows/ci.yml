@@ -35,9 +35,47 @@ jobs:
       REDIS_URL: redis://localhost:6379/0
       AUTH_JWT_SECRET: ci-test-jwt-secret-must-be-at-least-32-characters-long
       SEED_PASSWORD: ci-seed-password
+      # MinIO raised below, admin creds match the dev defaults in compose
+      S3_ENDPOINT_URL: http://localhost:9000
+      S3_PUBLIC_ENDPOINT_URL: http://localhost:9000
+      S3_ACCESS_KEY_ID: minioadmin
+      S3_SECRET_ACCESS_KEY: minioadmin
 
     steps:
       - uses: actions/checkout@v4
+
+      # MinIO is a docker-run step, not a `services:` entry: the AIStor image
+      # refuses to start without the license file, and service containers
+      # cannot mount one from a secret (review Б2: fail, never skip).
+      - name: Start MinIO (AIStor, license from the CI secret)
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/infra/license"
+          printf '%s' "${{ secrets.MINIO_LICENSE }}" > "${GITHUB_WORKSPACE}/infra/license/minio.license"
+          docker run -d --name minio \
+            -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            -v "${GITHUB_WORKSPACE}/infra/license/minio.license:/minio.license:ro" \
+            quay.io/minio/aistor/minio:latest \
+            server /data --console-address ":9001" --license /minio.license
+
+      - name: Wait for MinIO to go live
+        run: |
+          for _ in $(seq 1 30); do
+            if curl -sf http://localhost:9000/minio/health/live > /dev/null; then
+              echo "MinIO is live"
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs minio
+          exit 1
+
+      - name: Create documents and images buckets (as minio-init does)
+        run: >
+          docker run --rm --network host quay.io/minio/mc:latest /bin/sh -c
+          "mc alias set local http://localhost:9000 minioadmin minioadmin &&
+           mc mb --ignore-existing local/documents local/images"
 
       - uses: astral-sh/setup-uv@v6
 
