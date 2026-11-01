@@ -72,8 +72,11 @@ jobs:
           exit 1
 
       - name: Create documents and images buckets (as minio-init does)
+        # mc is bundled in the AIStor MinIO image itself (the compose
+        # healthcheck uses it) — no extra image, and quay.io/minio/mc is
+        # not pullable anonymously
         run: >
-          docker run --rm --network host quay.io/minio/mc:latest /bin/sh -c
+          docker exec minio /bin/sh -c
           "mc alias set local http://localhost:9000 minioadmin minioadmin &&
            mc mb --ignore-existing local/documents local/images"
 
