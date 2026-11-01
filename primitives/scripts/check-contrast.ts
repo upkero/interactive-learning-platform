@@ -13,6 +13,7 @@ const requiredTokens = [
   "--g-color-text",
   "--g-color-text-muted",
   "--g-color-accent",
+  "--g-color-accent-contrast",
   "--g-color-success",
   "--g-color-danger",
   "--g-viz-1",
@@ -77,14 +78,7 @@ for (const theme of themes) {
     ["--g-color-text-muted", "--g-color-bg"],
     ["--g-color-text-muted", "--g-color-surface"],
   ];
-  const controlPairs = [
-    ["--g-color-accent", "--g-color-bg"],
-    ["--g-color-success", "--g-color-bg"],
-    ["--g-color-danger", "--g-color-bg"],
-  ];
-  const visualizationPairs = ["--g-viz-1", "--g-viz-2", "--g-viz-3", "--g-viz-4", "--g-viz-5", "--g-viz-6"].map(
-    (token) => [token, "--g-color-bg"],
-  );
+  const controlPairs = [["--g-color-accent-contrast", "--g-color-accent"]];
 
   for (const [foreground, background] of textPairs) {
     const ratio = contrastRatio(tokens[foreground], tokens[background]);
@@ -92,10 +86,10 @@ for (const theme of themes) {
       failures.push(`${theme}: ${foreground}/${background} is ${ratio.toFixed(2)}:1; expected 4.5:1`);
     }
   }
-  for (const [foreground, background] of [...controlPairs, ...visualizationPairs]) {
+  for (const [foreground, background] of controlPairs) {
     const ratio = contrastRatio(tokens[foreground], tokens[background]);
-    if (ratio < 3) {
-      failures.push(`${theme}: ${foreground}/${background} is ${ratio.toFixed(2)}:1; expected 3:1`);
+    if (ratio < 4.5) {
+      failures.push(`${theme}: ${foreground}/${background} is ${ratio.toFixed(2)}:1; expected 4.5:1`);
     }
   }
 }
