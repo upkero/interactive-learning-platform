@@ -71,14 +71,22 @@ jobs:
           docker logs minio
           exit 1
 
+      - name: License diagnostics (fingerprint only, never contents)
+        run: |
+          echo "license file inside the container:"
+          docker exec minio sh -c "wc -c /minio.license && sha256sum /minio.license"
+          echo "MinIO logs (look for license parse/acceptance lines):"
+          docker logs minio 2>&1 | grep -i license || true
+
       - name: Create documents and images buckets (as minio-init does)
-        # mc is bundled in the AIStor MinIO image itself (the compose
-        # healthcheck uses it) — no extra image, and quay.io/minio/mc is
-        # not pullable anonymously
-        run: >
-          docker exec minio /bin/sh -c
-          "mc alias set local http://localhost:9000 minioadmin minioadmin &&
-           mc mb --ignore-existing local/documents local/images"
+        run: |
+          if ! docker exec minio /bin/sh -c \
+            "mc alias set local http://localhost:9000 minioadmin minioadmin &&
+             mc mb --ignore-existing local/documents local/images"; then
+            echo "mc mb failed; full MinIO logs:"
+            docker logs minio
+            exit 1
+          fi
 
       - uses: astral-sh/setup-uv@v6
 
