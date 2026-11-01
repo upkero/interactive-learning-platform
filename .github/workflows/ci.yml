@@ -80,12 +80,38 @@ jobs:
           docker logs minio
           exit 1
 
-      - name: License diagnostics (fingerprint only, never contents)
+      - name: License diagnostics, pass 1 (fingerprint only, never contents)
         run: |
           echo "license file inside the container:"
           docker exec minio sh -c "wc -c /minio.license && sha256sum /minio.license"
+          echo "--- mc license info ---"
           docker exec minio mc license info local || true
-          echo "MinIO logs (look for license parse/acceptance lines):"
+          echo "--- mc license update from the license file (richer validator error) ---"
+          docker exec minio mc license update local /minio.license || true
+          echo "--- MinIO log lines mentioning license ---"
+          docker logs minio 2>&1 | grep -i license || true
+
+      # SubNET-issued license files end with a newline; our copy does not.
+      # If the validator does not trim, that alone can produce "invalid JWT".
+      - name: Restart MinIO with the license file given a trailing newline
+        run: |
+          docker rm -f minio
+          printf '\n' >> "${GITHUB_WORKSPACE}/infra/license/minio.license"
+          docker run -d --name minio \
+            -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            -v "${GITHUB_WORKSPACE}/infra/license/minio.license:/minio.license:ro" \
+            quay.io/minio/aistor/minio:edge-daily \
+            server /data --console-address ":9001" --license /minio.license
+          for _ in $(seq 1 30); do
+            if curl -sf http://localhost:9000/minio/health/live > /dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          echo "--- verdict with trailing newline ---"
+          docker exec minio mc license info local || true
           docker logs minio 2>&1 | grep -i license || true
 
       - name: Create documents and images buckets (as minio-init does)
