@@ -12,7 +12,7 @@ from src.app.db.session import build_engine, build_session_factory
 from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.llm.factory import create_llm_client
-from src.app.storage.s3_object_storage_client import S3ObjectStorageClient, build_s3_client
+from src.app.storage.s3_object_storage_client import S3ObjectStorageClient, build_ping_client, build_s3_client
 
 
 class ApplicationContainer:
@@ -22,13 +22,19 @@ class ApplicationContainer:
 
     @cached_property
     def object_storage(self) -> ObjectStorageClient:
-        """S3 client over MinIO; boto3 stays hidden inside src/app/storage/."""
+        """S3 client over MinIO; boto3 stays hidden inside src/app/storage/.
+
+        Three boto3 clients (review V5): the working one on the internal
+        address, the signer on the public one, and a fail-fast client
+        for the readiness probe whose retries cannot outlive the 5 s
+        readiness budget.
+        """
         settings = get_storage_settings()
         return S3ObjectStorageClient(
             settings=settings,
-            # working client on the internal address, signer on the public one
             client=build_s3_client(settings, endpoint_url=settings.endpoint_url),
             presign_client=build_s3_client(settings, endpoint_url=settings.public_endpoint_url),
+            ping_client=build_ping_client(settings),
         )
 
     @cached_property

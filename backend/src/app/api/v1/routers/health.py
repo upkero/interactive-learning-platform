@@ -12,23 +12,19 @@ workers.
 """
 
 import asyncio
-from typing import Annotated
 
 import redis.asyncio as aioredis
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.app.api.v1.dependencies import get_container
-from src.app.bootstrap.container import ApplicationContainer
+from src.app.api.v1.dependencies import ContainerDep
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 
 router = APIRouter(prefix="/health", tags=["infra"])
 
 # Readiness checks must fail fast so the LB does not wait on a stuck upstream
 _CHECK_TIMEOUT_SECONDS = 5.0
-
-ContainerDep = Annotated[ApplicationContainer, Depends(get_container)]
 
 
 @router.get("/live")

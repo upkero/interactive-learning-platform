@@ -20,10 +20,12 @@ class FakeObjectStorageClient(ObjectStorageClient):
         objects: dict[RealBucket, bytes] | None = None,
         error: Exception | None = None,
         ping_result: bool = True,
+        presign_ttl_seconds: int = 3600,
     ) -> None:
         self._objects = dict(objects or {})
         self._error = error
         self._ping_result = ping_result
+        self._presign_ttl_seconds = presign_ttl_seconds
         self.put_object_calls: list[tuple[StorageBucket, str, bytes, str]] = []
         self.get_object_calls: list[tuple[StorageBucket, str]] = []
         self.delete_object_calls: list[tuple[StorageBucket, str]] = []
@@ -57,7 +59,7 @@ class FakeObjectStorageClient(ObjectStorageClient):
     ) -> str:
         self._raise_if_configured()
         self.presign_get_url_calls.append((bucket, key, expires_seconds))
-        ttl = expires_seconds if expires_seconds is not None else 3600
+        ttl = expires_seconds if expires_seconds is not None else self._presign_ttl_seconds
         return f"http://storage.local/{bucket}/{key}?expires={ttl}"
 
     async def ping(self) -> bool:

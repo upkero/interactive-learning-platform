@@ -3,8 +3,8 @@
 Neither the extension nor the client ``Content-Type`` is trusted: the
 ``Content-Type`` may only be logged, what counts is what the bytes are.
 PDF is recognized by the ``%PDF-`` signature, DOCX by the ``PK\x03\x04``
-zip signature plus required archive members, Markdown by a valid UTF-8
-silhouette without NUL bytes and a text extension.
+zip signature plus required archive members, Markdown by a valid UTF-8 plain text without NUL bytes and a text
+extension.
 
 Heavy work (``pypdf``, ``zipfile``) runs in a worker thread via
 ``asyncio.to_thread`` so the event loop never blocks. Errors surface as
@@ -94,7 +94,11 @@ class FileInspector:
 
         The rule from story 1.3: never buffer an oversized file in full —
         the stream stops after ``limit + 1`` bytes and raises 413 without
-        reading the remaining (possibly gigabytes of) upload.
+        reading the remaining (possibly gigabytes of) upload. Pass
+        ``max(settings.max_bytes, settings.max_markdown_bytes)``: the type
+        of the upload is only known after inspection, so the reader must
+        allow the largest limit first and let ``inspect()`` enforce the
+        final one.
         """
         chunks: list[bytes] = []
         total = 0

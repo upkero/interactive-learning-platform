@@ -8,12 +8,14 @@ Acceptance criteria covered here:
 """
 
 import asyncio
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 import httpx
 import pytest
 
 from src.app.contracts.documents.image_draft import ImageDraft
+from src.app.core.settings.storage import StorageSettings
 from src.app.exceptions.storage import ObjectNotFoundError
 from src.app.interfaces.storage.object_storage_client import StorageBucket
 from src.app.services.documents.image_url_resolver import ImageUrlResolver
@@ -47,15 +49,18 @@ async def test_missing_key_raises_object_not_found(object_storage: S3ObjectStora
 
 async def test_presigned_url_points_to_public_endpoint_and_opens(
     object_storage: S3ObjectStorageClient,
+    storage_settings: StorageSettings,
 ) -> None:
     key = source_key(uuid4(), uuid4(), "txt")
     try:
         await object_storage.put_object(bucket="documents", key=key, data=b"presigned", content_type="text/plain")
         url = object_storage.presign_get_url(bucket="documents", key=key, expires_seconds=120)
 
-        # SigV4 signs the host: the link must be usable from a browser,
-        # i.e. address the public endpoint, not the internal minio host.
-        assert ":9000" in url or "localhost" in url or "files." in url.split("/")[2]
+        # SigV4 signs the host (review V3): strict comparison, not a guess
+        # by ":9000" — the link must address the public endpoint exactly.
+        assert urlsplit(url).netloc == urlsplit(storage_settings.public_endpoint_url).netloc
+        if urlsplit(storage_settings.public_endpoint_url).netloc != urlsplit(storage_settings.endpoint_url).netloc:
+            assert urlsplit(url).netloc != urlsplit(storage_settings.endpoint_url).netloc
         async with httpx.AsyncClient() as client:
             response = await client.get(url)
         assert response.status_code == 200

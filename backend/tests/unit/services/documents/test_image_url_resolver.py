@@ -40,8 +40,8 @@ async def test_resolve_signs_every_image_key(
     records = await fake_images.add_many(
         document_id,
         [
-            ImageDraft(object_key=f"images/{document_id}/img_1.png", width=1, height=1, page=1),
-            ImageDraft(object_key=f"images/{document_id}/img_2.png", width=2, height=2, page=2),
+            ImageDraft(object_key=f"{document_id}/img_1.png", width=1, height=1, page=1),
+            ImageDraft(object_key=f"{document_id}/img_2.png", width=2, height=2, page=2),
         ],
     )
     urls = await resolver.resolve([record.id for record in records])
@@ -65,7 +65,7 @@ async def test_resolve_deduplicates_input_ids(
     document_id = uuid4()
     (record,) = await fake_images.add_many(
         document_id,
-        [ImageDraft(object_key=f"images/{document_id}/img_1.png", width=1, height=1, page=1)],
+        [ImageDraft(object_key=f"{document_id}/img_1.png", width=1, height=1, page=1)],
     )
     urls = await resolver.resolve([record.id, record.id])
 

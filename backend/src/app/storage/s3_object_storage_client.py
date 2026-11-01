@@ -5,10 +5,12 @@ boto3 blocks, so every network call is moved to a worker thread with
 loop must never wait on S3). ``generate_presigned_url`` is local signing
 without a network hop, so it stays on the loop.
 
-Two boto3 clients are used: the working one on ``S3_ENDPOINT_URL`` and
-the URL signer on ``S3_PUBLIC_ENDPOINT_URL`` — SigV4 signs the host, so
-browser links must point to the public address (in dev ``localhost:9000``,
-in prod ``https://files.<domain>``), never to the internal ``minio:9000``.
+Two boto3 clients are used for traffic: the working one on
+``S3_ENDPOINT_URL`` and the URL signer on ``S3_PUBLIC_ENDPOINT_URL`` —
+SigV4 signs the host, so browser links must point to the public address
+(in dev ``localhost:9000``, in prod ``https://files.<domain>``), never
+to the internal ``minio:9000``. A third, fail-fast client serves the
+``/health/ready`` probe (review V5).
 """
 
 import asyncio
@@ -48,6 +50,31 @@ def build_s3_client(settings: StorageSettings, *, endpoint_url: str) -> BaseClie
     )
 
 
+def build_ping_client(settings: StorageSettings) -> BaseClient:
+    """A third client dedicated to ``/health/ready`` probes (review V5).
+
+    Readiness is checked under ``asyncio.wait_for(..., 5 s)``: with the
+    working client's default 3 retry attempts and 5+30 s timeouts one
+    head_bucket could outlive the whole budget and burn the probe on
+    retries. The ping client fails fast instead — single attempt,
+    tight timeouts strictly below the readiness budget.
+    """
+    return boto3.client(
+        "s3",
+        endpoint_url=settings.endpoint_url,
+        aws_access_key_id=settings.access_key_id,
+        aws_secret_access_key=settings.secret_access_key.get_secret_value(),
+        region_name=settings.region_name,
+        config=Config(
+            signature_version="s3v4",
+            s3={"addressing_style": "path"},
+            retries={"max_attempts": 1, "mode": "standard"},
+            connect_timeout=2,
+            read_timeout=3,
+        ),
+    )
+
+
 class S3ObjectStorageClient(ObjectStorageClient):
     def __init__(
         self,
@@ -55,10 +82,12 @@ class S3ObjectStorageClient(ObjectStorageClient):
         settings: StorageSettings,
         client: BaseClient,
         presign_client: BaseClient,
+        ping_client: BaseClient,
     ) -> None:
         self._settings = settings
         self._client = client
         self._presign_client = presign_client
+        self._ping_client = ping_client
 
     def _bucket(self, bucket: StorageBucket) -> str:
         return self._settings.bucket_documents if bucket == "documents" else self._settings.bucket_images
@@ -109,20 +138,28 @@ class S3ObjectStorageClient(ObjectStorageClient):
         key: str,
         expires_seconds: int | None = None,
     ) -> str:
-        # local signing, no network call — therefore no to_thread
+        # local signing, no network call — therefore no to_thread.
+        # ``or`` would turn an explicit 0 into the default TTL (review 6);
+        # only an omitted argument falls back to the settings value.
+        ttl = expires_seconds if expires_seconds is not None else self._settings.presign_ttl_seconds
         url = self._presign_client.generate_presigned_url(
             "get_object",
             Params={"Bucket": self._bucket(bucket), "Key": key},
-            ExpiresIn=expires_seconds or self._settings.presign_ttl_seconds,
+            ExpiresIn=ttl,
         )
         return str(url)
 
     async def ping(self) -> bool:
-        """``head_bucket`` over both buckets; ``False`` on any S3 failure."""
+        """``head_bucket`` over both buckets on the dedicated ping client.
+
+        Fail fast (review V5): the readiness router waits at most 5 s,
+        so retries and long timeouts of the working client would defeat
+        the whole probe.
+        """
         try:
             await asyncio.gather(
-                asyncio.to_thread(self._client.head_bucket, Bucket=self._settings.bucket_documents),
-                asyncio.to_thread(self._client.head_bucket, Bucket=self._settings.bucket_images),
+                asyncio.to_thread(self._ping_client.head_bucket, Bucket=self._settings.bucket_documents),
+                asyncio.to_thread(self._ping_client.head_bucket, Bucket=self._settings.bucket_images),
             )
         except (BotoCoreError, ClientError):
             return False

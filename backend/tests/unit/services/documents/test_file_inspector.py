@@ -7,6 +7,7 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
+from pypdf import PdfWriter
 
 from src.app.core.settings.upload import UploadSettings
 from src.app.exceptions.documents import FileTooLargeError, TooManyPagesError, UnsupportedFileTypeError
@@ -288,11 +289,33 @@ async def test_docx_with_unzipped_over_limit_is_413() -> None:
     assert exc_info.value.error_code == "file_too_large"
 
 
-async def test_pdf_over_page_limit_is_422() -> None:
+@pytest.fixture
+def pages_301_pdf_bytes() -> bytes:
+    """301-page PDF built at test time (review 6): never sits in git."""
+    buffer = BytesIO()
+    writer = PdfWriter()
+    for _ in range(301):
+        writer.add_blank_page(width=612, height=792)
+    writer.write(buffer)
+    return buffer.getvalue()
+
+
+async def test_pdf_over_page_limit_is_422(pages_301_pdf_bytes: bytes) -> None:
     with pytest.raises(TooManyPagesError) as exc_info:
-        await inspect("pages_301.pdf")
+        await FileInspector(UploadSettings()).inspect(pages_301_pdf_bytes, "many_pages.pdf")
     assert exc_info.value.status_code == 422
     assert exc_info.value.error_code == "too_many_pages"
+
+
+async def test_pdf_exactly_at_page_limit_passes() -> None:
+    """The page limit is inclusive: 300 pages fit the default settings."""
+    buffer = BytesIO()
+    writer = PdfWriter()
+    for _ in range(300):
+        writer.add_blank_page(width=612, height=792)
+    writer.write(buffer)
+    result = await FileInspector(UploadSettings()).inspect(buffer.getvalue(), "pages_300.pdf")
+    assert result.page_count == 300
 
 
 async def test_stream_oversized_aborts_early_with_413() -> None:
