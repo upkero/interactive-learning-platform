@@ -49,6 +49,12 @@ jobs:
       # cannot mount one from a secret (review Б2: fail, never skip).
       - name: Start MinIO (AIStor, license from the CI secret)
         run: |
+          mkdir -p "${GITHUB_WORKSPACE}/infra/license"
+          # fail loudly before the server runs without a license
+          if [ -z "${{ secrets.MINIO_LICENSE_B64 }}" ]; then
+            echo "::error::Secret MINIO_LICENSE_B64 is empty. Set it to the base64 of infra/license/minio.license (single line)."
+            exit 1
+          fi
           printf '%s' "${{ secrets.MINIO_LICENSE_B64 }}" | base64 -d > "${GITHUB_WORKSPACE}/infra/license/minio.license"
           docker run -d --name minio \
             -p 9000:9000 \
