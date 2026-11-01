@@ -21,7 +21,7 @@ from io import BytesIO
 from typing import Protocol
 
 from pypdf import PdfReader
-from pypdf.errors import PdfReadError
+from pypdf.errors import PdfReadError, PyPdfError
 
 from src.app.core.settings.upload import UploadSettings
 from src.app.exceptions.documents import FileTooLargeError, TooManyPagesError, UnsupportedFileTypeError
@@ -36,6 +36,12 @@ _PDF_MAGIC = b"%PDF-"
 # pre-check evidence, the authoritative cut is token-based in 1.9
 _APP_PAGES = re.compile(rb"<Pages>(\d+)</Pages>")
 _CHUNK_SIZE = 1024 * 1024  # 1 MiB per read for streaming uploads
+
+# pypdf raises PdfReadError for classic corruption, but mutated xref tables
+# or content streams may also surface as bare ValueError/KeyError/etc. from
+# its internals (and runaway recursion from deeply nested structures), so
+# the net is intentionally wide: broken bytes are a client 415, never a 500.
+_BROKEN_PDF_ERRORS = (PdfReadError, PyPdfError, ValueError, TypeError, KeyError, AttributeError, RecursionError)
 
 _DOCX_REQUIRED_MEMBERS = ("[Content_Types].xml", "word/document.xml")
 
@@ -92,6 +98,10 @@ class FileInspector:
         checksum = hashlib.sha256(data).hexdigest()
 
         if data.startswith(_PDF_MAGIC):
+            if filename.endswith((".md", ".markdown")):
+                # a Markdown name around PDF bytes is a wrong-type upload,
+                # not a broken one: report the type, not "Broken PDF."
+                raise UnsupportedFileTypeError("Unsupported file type.")
             return self._inspect_pdf(data, checksum)
         if data.startswith(_ZIP_MAGIC):
             # a zip is only accepted when it really is a DOCX package:
@@ -115,7 +125,9 @@ class FileInspector:
             if reader.is_encrypted:
                 raise UnsupportedFileTypeError("Encrypted PDF is not supported.")
             pages = len(reader.pages)
-        except PdfReadError as exc:
+        except UnsupportedFileTypeError:
+            raise  # encrypted: its own message is precise, keep it
+        except _BROKEN_PDF_ERRORS as exc:
             raise UnsupportedFileTypeError("Broken PDF.") from exc
         self._check_pages(pages)
         return InspectedFile(PDF, "pdf", len(data), pages, checksum)

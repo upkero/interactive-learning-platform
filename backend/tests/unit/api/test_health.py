@@ -5,6 +5,7 @@ from httpx import ASGITransport, AsyncClient
 from src.app.api.v1.dependencies import get_container
 from src.app.api.v1.routers import health as health_module
 from src.main import app
+from tests.support.fakes.storage.object_storage_client import FakeObjectStorageClient
 
 pytestmark = pytest.mark.unit
 
@@ -81,3 +82,22 @@ async def test_health_ready_fails_when_minio_is_down(monkeypatch: pytest.MonkeyP
     response = await _call_health_ready(monkeypatch, FakeContainer(), overrides={"_check_object_storage": fail_storage})
     assert response.status_code == 503
     assert "MinIO" in response.json()["detail"]
+
+
+# The real _check_object_storage runs unpatched in these tests: the review B1
+# bug (False treated as healthy) is only visible in the unpatched function.
+# The storage fake speaks the same interface as the wired S3 client.
+async def test_check_object_storage_passes_on_true_ping() -> None:
+    fake = FakeObjectStorageClient(ping_result=True)
+    assert await health_module._check_object_storage(fake) is None
+
+
+async def test_check_object_storage_fails_on_false_ping() -> None:
+    """A reachable MinIO answering False must report unavailability (review B1)."""
+    fake = FakeObjectStorageClient(ping_result=False)
+    assert await health_module._check_object_storage(fake) == "MinIO unavailable"
+
+
+async def test_check_object_storage_fails_on_ping_error() -> None:
+    fake = FakeObjectStorageClient(error=OSError("connection refused"))
+    assert await health_module._check_object_storage(fake) == "MinIO unavailable"

@@ -54,9 +54,15 @@ async def _check_redis(client: aioredis.Redis) -> str | None:
 
 
 async def _check_object_storage(storage: ObjectStorageClient) -> str | None:
-    """head_bucket of both buckets: reachability, credentials, bucket existence."""
+    """``ping()`` verifies reachability, credentials and bucket existence.
+
+    A degraded MinIO signals through the boolean result, not through an
+    exception, so the result itself must be checked (review B1: a plain
+    ``False`` used to be silently treated as healthy).
+    """
     try:
-        await asyncio.wait_for(storage.ping(), _CHECK_TIMEOUT_SECONDS)
+        if not await asyncio.wait_for(storage.ping(), _CHECK_TIMEOUT_SECONDS):
+            return "MinIO unavailable"
     except Exception:  # any error means MinIO is not ready for traffic
         return "MinIO unavailable"
     return None

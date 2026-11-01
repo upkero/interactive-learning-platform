@@ -19,9 +19,11 @@ class FakeObjectStorageClient(ObjectStorageClient):
         *,
         objects: dict[RealBucket, bytes] | None = None,
         error: Exception | None = None,
+        ping_result: bool = True,
     ) -> None:
         self._objects = dict(objects or {})
         self._error = error
+        self._ping_result = ping_result
         self.put_object_calls: list[tuple[StorageBucket, str, bytes, str]] = []
         self.get_object_calls: list[tuple[StorageBucket, str]] = []
         self.delete_object_calls: list[tuple[StorageBucket, str]] = []
@@ -59,9 +61,10 @@ class FakeObjectStorageClient(ObjectStorageClient):
         return f"http://storage.local/{bucket}/{key}?expires={ttl}"
 
     async def ping(self) -> bool:
+        """Returns the configured result: a degraded MinIO pings ``False``."""
         self._raise_if_configured()
         self.ping_calls.append(1)
-        return True
+        return self._ping_result
 
     def _raise_if_configured(self) -> None:
         if self._error is not None:

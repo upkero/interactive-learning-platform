@@ -24,6 +24,26 @@ def _load(name: str) -> bytes:
     return (FILES_DIR / name).read_bytes()
 
 
+def _pdf_mutants() -> dict[str, bytes]:
+    """Corruptions of sample.pdf (review B3), deterministic by construction.
+
+    pypdf parses in lenient mode, so random byte mutations are tolerated
+    more often than not. The mutations below therefore land on structural
+    anchors of the committed file: the indirect-reference operand of the
+    ``/Pages 2 0 R`` catalog entry, the object dictionary opener, and the
+    trailing structure halved away. Every mutant self-verifies — the
+    parametrized test below fails if the parser still swallows it.
+    """
+    valid = _load("sample.pdf")
+    r_pos = valid.index(b"/Pages 2 0 R") + 10  # the "R" operand itself
+    dict_pos = valid.index(b"<<\n/Type")
+    return {
+        "flipped_byte.pdf": valid[:r_pos] + bytes([valid[r_pos] ^ 0xFF]) + valid[r_pos + 1 :],
+        "truncated.pdf": valid[: len(valid) // 2],
+        "junk_inserted.pdf": valid[:dict_pos] + b"\x00junk\x00" * 8 + valid[dict_pos:],
+    }
+
+
 async def inspect(name: str, settings: UploadSettings | None = None) -> InspectedFile:
     """Inspect the committed fixture through the public async API."""
     inspector = FileInspector(settings or UploadSettings())
@@ -85,6 +105,29 @@ async def test_broken_pdf_is_rejected() -> None:
     with pytest.raises(UnsupportedFileTypeError) as exc_info:
         await inspect("broken.pdf")
     assert "Broken PDF" in exc_info.value.detail
+
+
+@pytest.mark.parametrize("mutant_name", sorted(_pdf_mutants()))
+async def test_corrupted_pdf_mutation_is_415_not_500(mutant_name: str) -> None:
+    """Any parser exception on corrupted bytes is a 415 (review B3).
+
+    If a mutant's failure class escapes the handler net, the test itself
+    crashes instead of passing — the mutants self-verify the handling.
+    """
+    data = _pdf_mutants()[mutant_name]
+    inspector = FileInspector(UploadSettings())
+    with pytest.raises(UnsupportedFileTypeError) as exc_info:
+        await inspector.inspect(data, mutant_name)
+    assert exc_info.value.status_code == 415
+    assert exc_info.value.detail == "Broken PDF."
+
+
+async def test_markdown_name_with_pdf_magic_is_unsupported_type() -> None:
+    """PDF bytes under a .md name: wrong type, not "Broken PDF." (review 6)."""
+    inspector = FileInspector(UploadSettings())
+    with pytest.raises(UnsupportedFileTypeError) as exc_info:
+        await inspector.inspect(_load("sample.pdf"), "report.md")
+    assert exc_info.value.detail == "Unsupported file type."
 
 
 async def test_docx_without_document_xml_is_rejected() -> None:
