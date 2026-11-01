@@ -49,8 +49,7 @@ jobs:
       # cannot mount one from a secret (review Б2: fail, never skip).
       - name: Start MinIO (AIStor, license from the CI secret)
         run: |
-          mkdir -p "${GITHUB_WORKSPACE}/infra/license"
-          printf '%s' "${{ secrets.MINIO_LICENSE }}" > "${GITHUB_WORKSPACE}/infra/license/minio.license"
+          printf '%s' "${{ secrets.MINIO_LICENSE_B64 }}" | base64 -d > "${GITHUB_WORKSPACE}/infra/license/minio.license"
           docker run -d --name minio \
             -p 9000:9000 \
             -e MINIO_ROOT_USER=minioadmin \
