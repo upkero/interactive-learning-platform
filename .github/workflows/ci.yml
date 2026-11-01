@@ -47,6 +47,10 @@ jobs:
       # MinIO is a docker-run step, not a `services:` entry: the AIStor image
       # refuses to start without the license file, and service containers
       # cannot mount one from a secret (review Б2: fail, never skip).
+      # The image is the pinned hotfix release: plain `latest`
+      # (RELEASE.2026-09-19, published 2026-09-20) predates the FREE license
+      # issued 2026-10-29 and rejects it with "invalid JWT"; this hotfix
+      # appeared the same day as the license was issued.
       - name: Start MinIO (AIStor, license from the CI secret)
         run: |
           mkdir -p "${GITHUB_WORKSPACE}/infra/license"
@@ -61,7 +65,7 @@ jobs:
             -e MINIO_ROOT_USER=minioadmin \
             -e MINIO_ROOT_PASSWORD=minioadmin \
             -v "${GITHUB_WORKSPACE}/infra/license/minio.license:/minio.license:ro" \
-            quay.io/minio/aistor/minio:latest \
+            quay.io/minio/aistor/minio:RELEASE.2026-09-19T17-05-25Z.hotfix.ce9b31adaa8e \
             server /data --console-address ":9001" --license /minio.license
 
       - name: Wait for MinIO to go live
@@ -80,6 +84,7 @@ jobs:
         run: |
           echo "license file inside the container:"
           docker exec minio sh -c "wc -c /minio.license && sha256sum /minio.license"
+          docker exec minio mc license info local || true
           echo "MinIO logs (look for license parse/acceptance lines):"
           docker logs minio 2>&1 | grep -i license || true
 
