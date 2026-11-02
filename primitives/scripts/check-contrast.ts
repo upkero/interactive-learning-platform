@@ -24,12 +24,15 @@ const requiredTokens = [
   "--g-viz-6",
 ];
 
-function relativeLuminance(hex) {
-  const channels = hex
-    .slice(1)
-    .match(/.{2}/g)
-    .map((part) => Number.parseInt(part, 16) / 255)
-    .map((channel) =>
+function relativeLuminance(hex: string): number {
+  const parts = hex.slice(1).match(/.{2}/g);
+  if (!parts || parts.length !== 3) {
+    throw new Error(`Expected a six-digit hex color, received: ${hex}`);
+  }
+
+  const channels = parts
+    .map((part: string) => Number.parseInt(part, 16) / 255)
+    .map((channel: number) =>
       channel <= 0.04045
         ? channel / 12.92
         : ((channel + 0.055) / 1.055) ** 2.4,
@@ -40,7 +43,7 @@ function relativeLuminance(hex) {
   );
 }
 
-function contrastRatio(foreground, background) {
+function contrastRatio(foreground: string, background: string): number {
   const [lighter, darker] = [
     relativeLuminance(foreground),
     relativeLuminance(background),
@@ -48,7 +51,7 @@ function contrastRatio(foreground, background) {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-function tokensFor(theme) {
+function tokensFor(theme: string): Record<string, string> {
   const selector = theme === "light" ? ":root," : '[data-theme="dark"]';
   const start = css.indexOf(selector);
   const end = css.indexOf("}\n", start);

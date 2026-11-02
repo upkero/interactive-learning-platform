@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { findObviousDesignIssues } from "./code-check";
 import { designChecklist } from "./checklist";
+import { getPrimitives } from "../registry";
 
 const root = process.cwd();
 const catalogPath = `${root}/dist/catalog.json`;
@@ -49,10 +50,13 @@ describe("design checklist", () => {
       cwd: root,
     });
     const catalog = JSON.parse(readFileSync(catalogPath, "utf8")) as {
+      catalogVersion: number;
       design: { checklist: unknown[]; tokens: string[]; uiExports: string[] };
+      primitives: { id: string }[];
     };
 
     expect(readFileSync(catalogPath, "utf8")).toBe(first);
+    expect(catalog.catalogVersion).toBe(1);
     expect(catalog.design.checklist).toHaveLength(10);
     expect(catalog.design.tokens).toContain("--g-color-accent");
     expect(catalog.design.uiExports).toEqual([
@@ -62,5 +66,8 @@ describe("design checklist", () => {
       "StepControls",
       "Toggle",
     ]);
+    expect(catalog.primitives.map((primitive) => primitive.id)).toEqual(
+      getPrimitives().map((primitive) => primitive.id),
+    );
   });
 });

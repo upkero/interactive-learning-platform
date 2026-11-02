@@ -80,6 +80,12 @@ jobs:
       - name: Линтинг и тесты пакетов
         run: pnpm -r lint && pnpm -r typecheck && pnpm -r test
 
+      - name: Проверка опубликованного каталога примитивов
+        run: |
+          pnpm --filter @grasp/primitives catalog
+          cp primitives/dist/catalog.json backend/resources/catalog.json
+          git diff --exit-code -- primitives/dist/catalog.json backend/resources/catalog.json
+
       - name: Сборка пакетов
         run: pnpm -r build
 
