@@ -88,7 +88,8 @@ jobs:
       - name: Check generated design catalog
         run: |
           pnpm --filter @grasp/primitives catalog
-          git diff --exit-code -- primitives/dist/catalog.json
+          cp primitives/dist/catalog.json backend/resources/catalog.json
+          git diff --exit-code -- primitives/dist/catalog.json backend/resources/catalog.json
 
       - name: Build packages
         run: pnpm -r build

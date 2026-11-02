@@ -23,6 +23,9 @@ importers:
       '@storybook/addon-a11y':
         specifier: ^8.6.14
         version: 8.6.19(storybook@8.6.19)
+      '@storybook/addon-actions':
+        specifier: ^8.6.14
+        version: 8.6.19(storybook@8.6.19)
       '@storybook/addon-controls':
         specifier: ^8.6.14
         version: 8.6.19(storybook@8.6.19)
@@ -56,6 +59,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.0.4
         version: 19.3.0(@types/react@19.3.0)
+      ajv:
+        specifier: ^8.17.1
+        version: 8.20.0
       jsdom:
         specifier: ^26.0.0
         version: 26.1.0
@@ -591,6 +597,11 @@ packages:
     peerDependencies:
       storybook: ^8.6.19
 
+  '@storybook/addon-actions@8.6.19':
+    resolution: {integrity: sha512-+Xl7wUTeZST3xZMZzHxYbJXuNe/l4hmMHBWZAdjwCeuz1/ABizHx7jzIv5jq2lyVfDNaRSrcGSajMTKcw8r3Ww==}
+    peerDependencies:
+      storybook: ^8.6.19
+
   '@storybook/addon-controls@8.6.19':
     resolution: {integrity: sha512-/KZkoYar2hrWAN5DtvXEN4sijacfJ0YulKGqRTP55XuZuuE0jbqpgGWWsc0TB1DmgG91hZgGE6oBpSpFw33jPw==}
     peerDependencies:
@@ -775,6 +786,9 @@ packages:
 
   '@types/resolve@1.20.6':
     resolution: {integrity: sha512-A4STmOXPhMUtHH+S6ymgE2GiBSMqf4oTvcQZMcHzokuTLVYzXTB8ttjcgxOVaAp2lGwEdzZ0J+cRbbeevQj1UQ==}
+
+  '@types/uuid@9.0.8':
+    resolution: {integrity: sha512-jg+97EGIcY9AGHJJRaaPVgetKDsrTgbRjQ5Msgjh/DQKEFl0DtyRr/VCOyD1T2R1MNeWPK/u7JoGhlDZnKBAfA==}
 
   '@vitest/expect@2.0.5':
     resolution: {integrity: sha512-yHZtwuP7JZivj65Gxoi8upUN2OzHTi3zVfjwdpu2WrvCZPLwsJ2Ey5ILIPccoW23dd/zQBlJ4/dhi7DWNyXCpA==}
@@ -1585,6 +1599,10 @@ packages:
     engines: {node: '>=20'}
     hasBin: true
 
+  polished@4.3.1:
+    resolution: {integrity: sha512-OBatVyC/N7SCW/FaDHrSd+vn0o5cS855TOmYi4OkdWUMSJCET/xip//ch8xGUvtr3i44X9LVyWwQlRMTN3pwSA==}
+    engines: {node: '>=10'}
+
   possible-typed-array-names@1.1.0:
     resolution: {integrity: sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg==}
     engines: {node: '>= 0.4'}
@@ -1906,6 +1924,11 @@ packages:
 
   util@0.12.5:
     resolution: {integrity: sha512-kZf/K6hEIrWHI6XqOFUiiMa+79wE/D8Q+NCNAWclkyg3b4d2k7s0QGepNjiABc+aR3N1PAyHL7p6UcLY6LmrnA==}
+
+  uuid@9.0.1:
+    resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
+    hasBin: true
 
   vite-node@3.2.4:
     resolution: {integrity: sha512-EbKSKh+bh1E1IFxeO0pg1n4dvoOTt0UDiXMd/qn++r98+jPO1xtJilvXldeuQ8giIB5IkpjCgMleHMNEsGH6pg==}
@@ -2465,6 +2488,15 @@ snapshots:
       axe-core: 4.14.0
       storybook: 8.6.19
 
+  '@storybook/addon-actions@8.6.19(storybook@8.6.19)':
+    dependencies:
+      '@storybook/global': 5.0.0
+      '@types/uuid': 9.0.8
+      dequal: 2.0.3
+      polished: 4.3.1
+      storybook: 8.6.19
+      uuid: 9.0.1
+
   '@storybook/addon-controls@8.6.19(storybook@8.6.19)':
     dependencies:
       '@storybook/global': 5.0.0
@@ -2687,6 +2719,8 @@ snapshots:
       csstype: 3.2.3
 
   '@types/resolve@1.20.6': {}
+
+  '@types/uuid@9.0.8': {}
 
   '@vitest/expect@2.0.5':
     dependencies:
@@ -3464,6 +3498,10 @@ snapshots:
     dependencies:
       playwright-core: 1.65.0
 
+  polished@4.3.1:
+    dependencies:
+      '@babel/runtime': 7.29.10
+
   possible-typed-array-names@1.1.0: {}
 
   postcss-resolve-nested-selector@0.1.7: {}
@@ -3829,6 +3867,8 @@ snapshots:
       is-generator-function: 1.1.2
       is-typed-array: 1.1.15
       which-typed-array: 1.1.24
+
+  uuid@9.0.1: {}
 
   vite-node@3.2.4(@types/node@22.20.5):
     dependencies:

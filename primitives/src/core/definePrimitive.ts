@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { MODES, type PrimitiveDefinition } from "./types";
+import { MODES, MVP_MODES, type PrimitiveDefinition } from "./types";
 
 const KEBAB_CASE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
@@ -16,13 +16,15 @@ export function assertCatalogSafeSchema(schema: z.ZodType): void {
     if (typeof value !== "object" || value === null || visited.has(value)) return;
     visited.add(value);
 
-    const definition = (value as { _zod?: { def?: { type?: string } } })._zod?.def;
-    if (definition?.type && forbidden.has(definition.type)) {
+    const definition = (value as { _zod?: { def?: { type?: string; check?: string } } })._zod?.def;
+    if (definition?.check === "custom" || (definition?.type && forbidden.has(definition.type))) {
       throw new Error(
-        `Schema contains unsupported Zod ${definition.type}; use a JSON Schema-compatible structure instead.`,
+        `Schema contains unsupported Zod ${definition.type ?? definition.check}; use a JSON Schema-compatible structure instead.`,
       );
     }
 
+    // superRefine checks live inside the non-enumerable _zod.def.
+    if (definition) visit(definition);
     for (const child of Object.values(value)) visit(child);
   }
 
@@ -46,6 +48,15 @@ export function definePrimitive<Params>(
   }
   if (definition.examples.length < 2 || definition.examples.length > 4) {
     throw new Error("Primitive must provide two to four resolver examples.");
+  }
+  if (!definition.modes.some((mode) => MVP_MODES.includes(mode))) {
+    throw new Error("Primitive must support at least one MVP mode.");
+  }
+  if (new Set(definition.modes).size !== definition.modes.length) {
+    throw new Error("Primitive modes must be unique.");
+  }
+  if (new Set(definition.examples.map((example) => example.name)).size !== definition.examples.length) {
+    throw new Error("Primitive example names must be unique.");
   }
   if (new Set(definition.labelKeys).size !== definition.labelKeys.length) {
     throw new Error("Primitive labelKeys must not contain duplicates.");

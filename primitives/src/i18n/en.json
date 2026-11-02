@@ -12,5 +12,14 @@
   "common.correct": "Correct",
   "common.incorrect": "Incorrect",
   "common.yes": "Yes",
-  "common.no": "No"
+  "common.no": "No",
+  "three-frame.start": "Start with {left} counters.",
+  "three-frame.predict": "We are about to add {right} counters.",
+  "three-frame.question": "Will the quantity increase when we add {right}?",
+  "three-frame.explanation": "Adding {right} to {left} gives {sum}. Adding zero leaves the quantity unchanged.",
+  "three-frame.result": "Result: {left} + {right} = {sum}.",
+  "three-frame.initial": "Initial quantity: {left}",
+  "three-frame.scene": "{left} plus {right} equals {result}",
+  "common.invalidParams": "Invalid primitive parameters",
+  "common.unknownExample": "Unknown primitive example"
 }

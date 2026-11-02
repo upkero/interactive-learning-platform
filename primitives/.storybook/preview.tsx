@@ -4,21 +4,10 @@ import "./preview.css";
 
 const preview: Preview = {
   globalTypes: {
-    theme: {
-      description: "Color theme",
-      toolbar: { icon: "paintbrush", items: ["light", "dark"] },
-    },
+    locale: { description: "Widget locale", toolbar: { icon: "globe", items: ["en", "ru"] } },
+    theme: { description: "Color theme", toolbar: { icon: "paintbrush", items: ["light", "dark"] } },
   },
-  initialGlobals: { theme: "light" },
-  decorators: [
-    (Story, context) => (
-      <div
-        className="design-preview"
-        data-theme={context.globals.theme === "dark" ? "dark" : "light"}
-      >
-        <Story />
-      </div>
-    ),
-  ],
+  initialGlobals: { locale: "en", theme: "light" },
+  decorators: [(Story, context) => <div className="design-preview primitive-preview" lang={context.globals.locale === "ru" ? "ru" : "en"} data-theme={context.globals.theme === "dark" ? "dark" : "light"}><Story args={{ ...context.args, locale: context.globals.locale === "ru" ? "ru" : "en" }} /></div>],
 };
 export default preview;

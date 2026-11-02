@@ -1,36 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
-
-interface PlaybackStepper {
-  index: number;
-  isLast: boolean;
-  next: () => void;
-}
+import type { Stepper } from "./useStepper";
 
 export function usePlayback(
-  stepper: PlaybackStepper,
+  { index, atEnd, next }: Pick<Stepper, "index" | "atEnd" | "next">,
   isQuestionFrame: boolean,
   intervalMs = 1200,
 ) {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const pause = useCallback(() => setIsPlaying(false), []);
-  const play = useCallback(() => {
-    if (!stepper.isLast && !isQuestionFrame) setIsPlaying(true);
-  }, [isQuestionFrame, stepper.isLast]);
-  const toggle = useCallback(() => (isPlaying ? pause() : play()), [isPlaying, pause, play]);
-
+  const [requested, setRequested] = useState(false);
+  const blocked = atEnd || isQuestionFrame;
+  const isPlaying = requested && !blocked;
+  const pause = useCallback(() => setRequested(false), []);
+  const play = useCallback(() => { if (!blocked) setRequested(true); }, [blocked]);
+  const toggle = useCallback(() => { if (isPlaying) pause(); else play(); }, [isPlaying, pause, play]);
+  useEffect(() => { if (blocked) pause(); }, [blocked, pause]);
   useEffect(() => {
     if (!isPlaying) return;
-    if (stepper.isLast || isQuestionFrame) {
-      pause();
-      return;
-    }
-    const timer = window.setTimeout(stepper.next, intervalMs);
+    const timer = window.setTimeout(next, intervalMs);
     return () => window.clearTimeout(timer);
-  }, [intervalMs, isPlaying, isQuestionFrame, pause, stepper]);
-
-  useEffect(() => {
-    if (stepper.isLast || isQuestionFrame) pause();
-  }, [isQuestionFrame, pause, stepper.isLast]);
-
+  }, [index, intervalMs, isPlaying, next]);
   return { isPlaying, pause, play, toggle };
 }

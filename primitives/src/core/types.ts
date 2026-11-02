@@ -69,3 +69,7 @@ export interface PrimitiveDefinition<Params> {
   /** Translation keys required by this primitive in both locale dictionaries. */
   labelKeys: readonly string[];
 }
+
+/** Heterogeneous registry boundary; params must be safeParse'd before rendering. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AnyPrimitiveDefinition = PrimitiveDefinition<any>;

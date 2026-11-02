@@ -29,6 +29,15 @@ const validDefinition: PrimitiveDefinition<ExampleParams> = {
 };
 
 describe("catalog schema guard", () => {
+  it.each([
+    ["superRefine", z.number().superRefine((value, ctx) => { if (value < 0) ctx.addIssue({ code: "custom", message: "Positive only" }); })],
+    ["nested superRefine", z.object({ values: z.array(z.number().superRefine((_value, ctx) => ctx.addIssue({ code: "custom", message: "Rejected" }))) })],
+    ["custom", z.custom<number>((value) => typeof value === "number")],
+    ["pipe", z.string().pipe(z.string().min(2))],
+    ["date", z.date()],
+  ])("rejects %s", (_name, schema) => {
+    expect(() => assertCatalogSafeSchema(schema)).toThrow();
+  });
   it("accepts a JSON Schema-compatible Zod schema", () => {
     expect(() => definePrimitive(validDefinition)).not.toThrow();
   });
