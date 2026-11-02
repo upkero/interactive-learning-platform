@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import en from "../i18n/en.json";
 import ru from "../i18n/ru.json";
@@ -18,7 +18,10 @@ describe("primitive labels", () => {
   });
 
   it("keeps missing keys and variables visible to authors", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     expect(t(en, "common.unknown")).toBe("common.unknown");
     expect(t({ greeting: "Hello, {name}!" }, "greeting")).toBe("Hello, {name}!");
+    expect(warn).toHaveBeenCalledWith("Missing translation: common.unknown");
+    warn.mockRestore();
   });
 });

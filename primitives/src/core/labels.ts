@@ -11,10 +11,12 @@ export type LabelVariables = Readonly<Record<string, string | number>>;
  * during development instead of silently rendering an empty control.
  */
 export function t(labels: Labels, key: string, vars: LabelVariables = {}): string {
-  const template = labels[key] ?? key;
+  const found = Object.hasOwn(labels, key);
+  if (!found && import.meta.env?.DEV) console.warn(`Missing translation: ${key}`);
+  const template = found ? labels[key] : key;
 
   return template.replace(/\{([A-Za-z][A-Za-z0-9_]*)\}/g, (placeholder, name: string) => {
-    const value = vars[name];
+    const value = Object.hasOwn(vars, name) ? vars[name] : undefined;
     return value === undefined ? placeholder : String(value);
   });
 }

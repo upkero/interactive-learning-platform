@@ -17,6 +17,9 @@ export interface StepControlsProps {
   onPrevious: () => void;
   onNext: () => void;
   onTogglePlayback: () => void;
+  canAdvance?: boolean;
+  showPlayback?: boolean;
+  playbackDisabled?: boolean;
 }
 
 export function StepControls({
@@ -27,6 +30,9 @@ export function StepControls({
   onPrevious,
   onNext,
   onTogglePlayback,
+  canAdvance = true,
+  showPlayback = true,
+  playbackDisabled = false,
 }: StepControlsProps) {
   return (
     <div className={styles.controls}>
@@ -36,12 +42,13 @@ export function StepControls({
         onClick={onPrevious}
         variant="secondary"
       />
-      <Button
+      {showPlayback && <Button
         label={isPlaying ? labels.pause : labels.play}
         onClick={onTogglePlayback}
-      />
+        disabled={playbackDisabled || currentStep >= totalSteps}
+      />}
       <Button
-        disabled={currentStep >= totalSteps}
+        disabled={currentStep >= totalSteps || !canAdvance}
         label={labels.next}
         onClick={onNext}
         variant="secondary"

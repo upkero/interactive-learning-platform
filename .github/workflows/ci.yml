@@ -109,7 +109,10 @@ jobs:
       - name: Установка зависимостей
         run: pnpm install --no-frozen-lockfile
 
-      - name: Сборка и прогон Storybook
+      - name: Установка Chromium для проверок витрины
+        run: pnpm --filter @grasp/primitives exec playwright install --with-deps chromium
+
+      - name: Сборка и проверка Storybook в браузере
         run: pnpm --filter @grasp/primitives build-storybook && pnpm --filter @grasp/primitives test-storybook
 
       - name: Сохранить витрину примитивов
@@ -117,6 +120,7 @@ jobs:
         with:
           name: primitives-storybook
           path: primitives/storybook-static
+          if-no-files-found: error
 
   # ---------------------------------------------------------------------------
   # 4. Сборка Docker-образов

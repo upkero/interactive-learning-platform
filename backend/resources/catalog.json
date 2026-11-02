@@ -4,53 +4,53 @@
     "checklist": [
       {
         "id": "DS-01",
-        "severity": "blocker",
-        "rule": "Colors, spacing, radii and durations use only var(--g-*) tokens; no hex, rgb(), or hardcoded layout values."
+        "rule": "Colors, spacing, radii and durations use only var(--g-*) tokens; no hex, rgb(), or hardcoded layout values.",
+        "severity": "blocker"
       },
       {
         "id": "DS-02",
-        "severity": "blocker",
-        "rule": "The widget is readable in both light and dark themes; screenshots for both themes are provided."
+        "rule": "The widget is readable in both light and dark themes; screenshots for both themes are provided.",
+        "severity": "blocker"
       },
       {
         "id": "DS-03",
-        "severity": "blocker",
-        "rule": "All visible UI text comes from labels or params; no hardcoded user-facing strings are present."
+        "rule": "All visible UI text comes from labels or params; no hardcoded user-facing strings are present.",
+        "severity": "blocker"
       },
       {
         "id": "DS-04",
-        "severity": "major",
-        "rule": "Interactive controls use @grasp/primitives/ui (Button, Slider, Toggle, ModeTabs, StepControls) instead of local equivalents."
+        "rule": "Interactive controls use @grasp/primitives/ui (Button, Slider, Toggle, ModeTabs, StepControls) instead of local equivalents.",
+        "severity": "major"
       },
       {
         "id": "DS-05",
-        "severity": "major",
-        "rule": "The widget fits a 320–800 px container without horizontal scrolling or clipped labels."
+        "rule": "The widget fits a 320–800 px container without horizontal scrolling or clipped labels.",
+        "severity": "major"
       },
       {
         "id": "DS-06",
-        "severity": "major",
-        "rule": "Text is at least var(--g-text-sm); elements and labels do not overlap."
+        "rule": "Text is at least var(--g-text-sm); elements and labels do not overlap.",
+        "severity": "major"
       },
       {
         "id": "DS-07",
-        "severity": "major",
-        "rule": "Active or compared elements use --g-viz-active and a second non-color cue such as an outline or label."
+        "rule": "Active or compared elements use --g-viz-active and a second non-color cue such as an outline or label.",
+        "severity": "major"
       },
       {
         "id": "DS-08",
-        "severity": "minor",
-        "rule": "Animations use var(--g-duration-*) and stop when reduced-motion durations are 0."
+        "rule": "Animations use var(--g-duration-*) and stop when reduced-motion durations are 0.",
+        "severity": "minor"
       },
       {
         "id": "DS-09",
-        "severity": "major",
-        "rule": "Every SVG root has role=\"img\" and an aria-label; step captions are announced in an aria-live region."
+        "rule": "Every SVG root has role=\"img\" and an aria-label; step captions are announced in an aria-live region.",
+        "severity": "major"
       },
       {
         "id": "DS-10",
-        "severity": "blocker",
-        "rule": "The widget renders without console errors for every provided parameter set."
+        "rule": "The widget renders without console errors for every provided parameter set.",
+        "severity": "blocker"
       }
     ],
     "tokens": [
@@ -98,5 +98,79 @@
       "Toggle"
     ]
   },
-  "primitives": []
+  "primitives": [
+    {
+      "description": "Framework demonstration of adding two non-negative integers from zero to ten. Shows an initial quantity, a prediction about whether it increases, and the resulting sum. Not for negative numbers, fractions, subtraction or general algorithms.",
+      "examples": [
+        {
+          "intent": "Show how adding two counters changes a group of three.",
+          "mode": "watch",
+          "name": "add-two",
+          "params": {
+            "left": 3,
+            "right": 2
+          }
+        },
+        {
+          "intent": "Ask whether adding zero changes a group of four counters.",
+          "mode": "predict",
+          "name": "add-zero",
+          "params": {
+            "left": 4,
+            "right": 0
+          }
+        },
+        {
+          "intent": "Explain adding one to two in separate steps.",
+          "mode": "steps",
+          "name": "add-one",
+          "params": {
+            "left": 2,
+            "right": 1
+          }
+        }
+      ],
+      "id": "three-frame",
+      "label_keys": [
+        "common.yes",
+        "common.no",
+        "three-frame.start",
+        "three-frame.predict",
+        "three-frame.question",
+        "three-frame.explanation",
+        "three-frame.result",
+        "three-frame.scene",
+        "three-frame.initial"
+      ],
+      "modes": [
+        "watch",
+        "steps",
+        "predict"
+      ],
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "left": {
+            "description": "Initial number of counters, from zero to ten.",
+            "maximum": 10,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "right": {
+            "default": 1,
+            "description": "Number of counters added, from zero to ten. Zero leaves the quantity unchanged.",
+            "maximum": 10,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "left"
+        ],
+        "type": "object"
+      },
+      "title": "Three-frame addition demo",
+      "version": "1.0.0"
+    }
+  ]
 }

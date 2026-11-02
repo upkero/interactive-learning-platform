@@ -12,5 +12,14 @@
   "common.correct": "Верно",
   "common.incorrect": "Неверно",
   "common.yes": "Да",
-  "common.no": "Нет"
+  "common.no": "Нет",
+  "three-frame.start": "Начинаем с {left} фишек.",
+  "three-frame.predict": "Сейчас добавим {right} фишек.",
+  "three-frame.question": "Увеличится ли количество, если добавить {right}?",
+  "three-frame.explanation": "Если к {left} прибавить {right}, получится {sum}. Прибавление нуля не меняет количество.",
+  "three-frame.result": "Результат: {left} + {right} = {sum}.",
+  "three-frame.initial": "Начальное количество: {left}",
+  "three-frame.scene": "{left} плюс {right} равно {result}",
+  "common.invalidParams": "Неверные параметры примитива",
+  "common.unknownExample": "Неизвестный пример примитива"
 }

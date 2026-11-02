@@ -1,4 +1,4 @@
-import { useRef, type KeyboardEvent } from "react";
+import { useId, useRef, type KeyboardEvent } from "react";
 
 import styles from "./ModeTabs.module.css";
 
@@ -12,6 +12,8 @@ export interface ModeTabsProps<Id extends string> {
   value: Id;
   ariaLabel: string;
   onChange: (value: Id) => void;
+  idPrefix?: string;
+  panelId?: string;
 }
 
 export function ModeTabs<Id extends string>({
@@ -19,7 +21,11 @@ export function ModeTabs<Id extends string>({
   value,
   ariaLabel,
   onChange,
+  idPrefix,
+  panelId,
 }: ModeTabsProps<Id>) {
+  const generatedId = useId();
+  const prefix = idPrefix ?? generatedId;
   const refs = useRef<Array<HTMLButtonElement | null>>([]);
 
   function moveFocus(event: KeyboardEvent<HTMLButtonElement>, index: number) {
@@ -50,7 +56,8 @@ export function ModeTabs<Id extends string>({
           <button
             aria-selected={selected}
             className={styles.tab}
-            id={`mode-tab-${tab.id}`}
+            id={`${prefix}-${tab.id}`}
+            aria-controls={panelId}
             key={tab.id}
             onClick={() => onChange(tab.id)}
             onKeyDown={(event) => moveFocus(event, index)}
