@@ -1,0 +1,58 @@
+{
+  "name": "@grasp/primitives",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tokens.css": "./src/tokens/tokens.css",
+    "./ui": "./src/ui/index.ts",
+    "./core": "./src/core/index.ts",
+    "./registry": "./src/registry.ts",
+    "./core/labels": "./src/core/labels.ts",
+    "./i18n/en.json": "./src/i18n/en.json",
+    "./i18n/ru.json": "./src/i18n/ru.json"
+  },
+  "scripts": {
+    "lint": "stylelint \"src/**/*.css\"",
+    "lint:styles": "stylelint \"src/**/*.css\"",
+    "check:contrast": "node --experimental-strip-types scripts/check-contrast.ts",
+    "catalog": "node --experimental-strip-types scripts/export-catalog.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "pnpm catalog",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build -o storybook-static",
+    "test-storybook": "playwright test"
+  },
+  "devDependencies": {
+    "@storybook/react-vite": "^8.6.14",
+    "@storybook/react": "^8.6.14",
+    "@storybook/addon-a11y": "^8.6.14",
+    "@storybook/addon-actions": "^8.6.14",
+    "@storybook/addon-controls": "^8.6.14",
+    "@storybook/addon-toolbars": "^8.6.14",
+    "@playwright/test": "^1.51.1",
+    "ajv": "^8.17.1",
+    "storybook": "^8.6.14",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.2.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@types/node": "^22.13.10",
+    "jsdom": "^26.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "stylelint": "^16.19.1",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.2",
+    "vitest": "^3.0.9"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "dependencies": {
+    "zod": "^4.1.12"
+  }
+}

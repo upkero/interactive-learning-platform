@@ -1,0 +1,37 @@
+.shell, .panel {
+  display: grid;
+  gap: var(--g-space-3);
+  min-width: 0;
+  font-family: var(--g-font-sans);
+  font-size: var(--g-text-md);
+  color: var(--g-color-text);
+}
+
+.scene {
+  background: var(--g-color-surface);
+  border: 1px solid var(--g-color-border);
+  border-radius: var(--g-radius-md);
+  padding: var(--g-space-4);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.caption { color: var(--g-color-text-muted); margin: 0; }
+
+/* Question stays in normal flow between the scene and navigation, including at 320px. */
+.question {
+  box-sizing: border-box;
+  min-width: 0;
+  margin: 0;
+  background: var(--g-color-bg);
+  border: 1px solid var(--g-color-border);
+  border-radius: var(--g-radius-md);
+  padding: var(--g-space-3);
+  overflow-wrap: anywhere;
+}
+
+.options { display: flex; flex-wrap: wrap; gap: var(--g-space-2); }
+
+@media (max-width: 480px) {
+  .options { flex-direction: column; }
+}
