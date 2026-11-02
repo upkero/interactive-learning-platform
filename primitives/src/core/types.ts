@@ -1,14 +1,15 @@
 import type { ComponentType } from "react";
 import type { z } from "zod";
 
+import type { Labels, LabelVariables } from "./labels";
+
 export const MODES = ["watch", "steps", "tweak", "predict", "break"] as const;
 export type Mode = (typeof MODES)[number];
 
 export const MVP_MODES: readonly Mode[] = ["watch", "steps", "predict"];
 export const MAX_FRAMES = 200;
 
-export type Labels = Readonly<Record<string, string>>;
-export type LabelVariables = Readonly<Record<string, string | number>>;
+export type { Labels, LabelVariables } from "./labels";
 
 export type PrimitiveEvent =
   | { type: "step"; index: number; total: number }
