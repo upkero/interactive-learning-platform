@@ -5,7 +5,10 @@
   "type": "module",
   "exports": {
     "./tokens.css": "./src/tokens/tokens.css",
-    "./ui": "./src/ui/index.ts"
+    "./ui": "./src/ui/index.ts",
+    "./core/labels": "./src/core/labels.ts",
+    "./i18n/en.json": "./src/i18n/en.json",
+    "./i18n/ru.json": "./src/i18n/ru.json"
   },
   "scripts": {
     "lint": "stylelint \"src/**/*.css\"",
