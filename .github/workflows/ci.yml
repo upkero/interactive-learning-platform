@@ -112,6 +112,12 @@ jobs:
       - name: Сборка и прогон Storybook
         run: pnpm --filter @grasp/primitives build-storybook && pnpm --filter @grasp/primitives test-storybook
 
+      - name: Сохранить витрину примитивов
+        uses: actions/upload-artifact@v4
+        with:
+          name: primitives-storybook
+          path: primitives/storybook-static
+
   # ---------------------------------------------------------------------------
   # 4. Сборка Docker-образов
   # ---------------------------------------------------------------------------

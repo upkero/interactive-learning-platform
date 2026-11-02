@@ -1,4 +1,5 @@
 node_modules/
+primitives/storybook-static/
 .pnpm-store/
 .ruff_cache/
 .mypy_cache/
