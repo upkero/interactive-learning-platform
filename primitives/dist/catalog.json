@@ -1,4 +1,5 @@
 {
+  "catalogVersion": 1,
   "design": {
     "checklist": [
       {
@@ -100,5 +101,6 @@
       "StepControls",
       "Toggle"
     ]
-  }
+  },
+  "primitives": []
 }
