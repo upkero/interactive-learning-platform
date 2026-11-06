@@ -7,7 +7,8 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from pypdf import PdfWriter
+from pypdf import PdfReader, PdfWriter
+from pypdf.errors import LimitReachedError, PdfReadError
 
 from src.app.core.settings.upload import UploadSettings
 from src.app.exceptions.documents import FileTooLargeError, TooManyPagesError, UnsupportedFileTypeError
@@ -28,6 +29,30 @@ def _load(name: str) -> bytes:
     return (FILES_DIR / name).read_bytes()
 
 
+_WIDE_CATCH_FIXTURES = (
+    # (fixture file, exception pypdf raises for it) — review round 2, H4.
+    # Each fixture makes pypdf raise a class NOT covered by a bare
+    # ``except PdfReadError`` where the exception escapes during the exact
+    # the setup call (``PdfReader(BytesIO(...))`` plus ``len(reader.pages)``)
+    # that ``FileInspector._inspect_pdf`` performs:
+    #
+    # - limit_reached: no /Root and no /Catalog-typed object left in the
+    #   file, so the recovery scan runs out of its default 10_000-object
+    #   cap (pypdf raises LimitReachedError, a sibling of PdfReadError
+    #   under PyPdfError that the old narrow catch did not keep);
+    # - type_error / attribute_error: one structural byte replaced with
+    #   '/' or '%', surfacing those builtins un-wrapped from the parser;
+    # - value_error: pypdf int()-parses the startxref offset and the
+    #   malformed token raises a plain ValueError from inside its core.
+    #
+    # So a narrowed ``except PdfReadError`` net fails every fixture below.
+    ("broken_pdf_limit_reached.pdf", LimitReachedError),
+    ("broken_pdf_value_error.pdf", ValueError),
+    ("broken_pdf_type_error.pdf", TypeError),
+    ("broken_pdf_attribute_error.pdf", AttributeError),
+)
+
+
 def _pdf_mutants() -> dict[str, bytes]:
     """Corruptions of sample.pdf (review B3), deterministic by construction.
 
@@ -37,6 +62,12 @@ def _pdf_mutants() -> dict[str, bytes]:
     ``/Pages 2 0 R`` catalog entry, the object dictionary opener, and the
     trailing structure halved away. Every mutant self-verifies — the
     parametrized test below fails if the parser still swallows it.
+
+    The four ``broken_pdf_*.pdf`` fixtures pin the exception CLASSES the
+    wide catch must survive (review round 2, H4); they are committed as
+    binary files because the triggering bytes are too weak to find again
+    by generation alone. ``_WIDE_CATCH_FIXTURES`` keeps their class map
+    and gives every class its own failing test case.
     """
     valid = _load("sample.pdf")
     r_pos = valid.index(b"/Pages 2 0 R") + 10  # the "R" operand itself
@@ -45,6 +76,10 @@ def _pdf_mutants() -> dict[str, bytes]:
         "flipped_byte.pdf": valid[:r_pos] + bytes([valid[r_pos] ^ 0xFF]) + valid[r_pos + 1 :],
         "truncated.pdf": valid[: len(valid) // 2],
         "junk_inserted.pdf": valid[:dict_pos] + b"\x00junk\x00" * 8 + valid[dict_pos:],
+        "limit_reached.pdf": _load("broken_pdf_limit_reached.pdf"),
+        "value_error.pdf": _load("broken_pdf_value_error.pdf"),
+        "type_error.pdf": _load("broken_pdf_type_error.pdf"),
+        "attribute_error.pdf": _load("broken_pdf_attribute_error.pdf"),
     }
 
 
@@ -122,6 +157,29 @@ async def test_corrupted_pdf_mutation_is_415_not_500(mutant_name: str) -> None:
     inspector = FileInspector(UploadSettings())
     with pytest.raises(UnsupportedFileTypeError) as exc_info:
         await inspector.inspect(data, mutant_name)
+    assert exc_info.value.status_code == 415
+    assert exc_info.value.detail == "Broken PDF."
+
+
+@pytest.mark.parametrize(("fixture", "exception_class"), _WIDE_CATCH_FIXTURES)
+async def test_wide_pdf_catch_survives_classes_outside_pypdf_family(fixture: str, exception_class: type) -> None:
+    """Each wide-catch class is pinned by a fixture pypdf rejects with it (H4).
+
+    The first assertion runs against pypdf directly: if a fixture ever
+    stops raising its designated class (parser update, fixture rot), the
+    test fails here instead of silently passing a widened handler.
+    The second assertion is the actual fix: without the wide catch the
+    class would escape the inspector as a 500.
+    """
+    data = _load(fixture)
+    with pytest.raises(exception_class) as probe:
+        reader = PdfReader(BytesIO(data))
+        _ = len(reader.pages)  # lazy page-tree load: the read path _inspect_pdf uses
+    assert not isinstance(probe.value, PdfReadError) or exception_class is PdfReadError
+
+    inspector = FileInspector(UploadSettings())
+    with pytest.raises(UnsupportedFileTypeError) as exc_info:
+        await inspector.inspect(data, fixture)
     assert exc_info.value.status_code == 415
     assert exc_info.value.detail == "Broken PDF."
 
