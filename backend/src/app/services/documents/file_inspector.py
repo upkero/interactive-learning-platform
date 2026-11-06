@@ -198,8 +198,15 @@ class FileInspector:
         A member's payload ends where the next member starts (or at the
         central directory), independent of any declared size; DEFLATE
         streams self-terminate so their true end is found by zlib.
+
+        Members are ordered by file offset, not by central-directory
+        order: the ZIP spec does not require the two to match, and a
+        valid archive whose central-directory records are shuffled must
+        not be rejected (lead review round 2). Overlap abuse is kept:
+        records sharing one offset yield an empty payload slice and fail
+        with 415.
         """
-        infos = archive.infolist()
+        infos = sorted(archive.infolist(), key=lambda info: info.header_offset)
         ends = [info.header_offset for info in infos[1:]] + [archive.start_dir]
         total = 0
         for info, data_end in zip(infos, ends, strict=True):

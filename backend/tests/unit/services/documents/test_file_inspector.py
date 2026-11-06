@@ -215,6 +215,32 @@ def _flip_crc(archive_bytes: bytes, member: str) -> bytes:
     return bytes(data)
 
 
+def _reversed_central_directory(archive_bytes: bytes) -> bytes:
+    """Reverse the order of central-directory records of a valid ZIP.
+
+    The ZIP spec does not require central-directory records to follow the
+    order of the file's local headers, so a shuffled archive stays valid;
+    zipfile writes records in member order, and shuffling them here
+    reproduces what third-party generators may emit (lead review round 2).
+    Records are contiguous between the first ``PK\\x01\\x02`` and the
+    end-of-central-directory marker, each ``46 + name + extra + comment``
+    bytes long, and their embedded local-header offsets are left intact —
+    only the record order changes.
+    """
+    first = archive_bytes.index(b"PK\x01\x02")
+    eocd = archive_bytes.index(b"PK\x05\x06")
+    records: list[tuple[int, int]] = []
+    cursor = first
+    while cursor < eocd:
+        name_len, extra_len, comment_len = struct.unpack_from("<HHH", archive_bytes, cursor + 28)
+        length = 46 + name_len + extra_len + comment_len
+        records.append((cursor, length))
+        cursor += length
+    assert cursor == eocd  # records are contiguous; nothing sits between them
+    replaced = b"".join(archive_bytes[start : start + length] for start, length in reversed(records))
+    return archive_bytes[:first] + replaced + archive_bytes[first + len(replaced) :]
+
+
 async def test_zip_bomb_with_honest_headers_is_413() -> None:
     """An honest bomb unpacking to 200 MB + 1 must hit the unzipped limit."""
     settings = UploadSettings()  # defaults: max_unzipped_bytes = 200 MB
@@ -248,6 +274,41 @@ async def test_tampered_crc_is_broken_docx_415() -> None:
         await FileInspector(UploadSettings()).inspect(tampered, "tampered.docx")
     assert "Broken DOCX" in exc_info.value.detail
     assert exc_info.value.status_code == 415
+
+
+async def test_valid_docx_with_shuffled_central_directory_passes() -> None:
+    """A valid DOCX whose central-directory records are shuffled must load.
+
+    Review round 2: ZIP does not order central-directory records by
+    file offset, so a shuffled-but-valid archive must be accepted.
+
+    zipfile writes the records in member order, and shuffling them keeps
+    the archive valid (``zipfile.testzip()`` and ``unzip -t`` accept it);
+    the inspector must order members by file offset, not record order.
+    """
+    valid = _docx_archive(
+        {
+            "[Content_Types].xml": _CONTENT_TYPES,
+            "word/document.xml": b"<w:document/>",
+            "docProps/app.xml": _APP_XML,
+        }
+    )
+    shuffled = _reversed_central_directory(valid)
+    with zipfile.ZipFile(BytesIO(shuffled)) as archive:
+        names = [info.filename for info in archive.infolist()]
+        assert names == ["docProps/app.xml", "word/document.xml", "[Content_Types].xml"]
+        assert archive.testzip() is None
+
+    result = await FileInspector(UploadSettings()).inspect(shuffled, "shuffled.docx")
+    assert result.page_count == 3
+
+
+async def test_zip_bomb_with_shuffled_central_directory_is_rejected() -> None:
+    """Shuffling the catalog must not help a bomb (413/415 still)."""
+    bomb = _reversed_central_directory(_docx_bomb_bytes(UploadSettings().max_unzipped_bytes + 1))
+    with pytest.raises((FileTooLargeError, UnsupportedFileTypeError)) as exc_info:
+        await FileInspector(UploadSettings()).inspect(bomb, "zip_bomb.docx")
+    assert exc_info.value.status_code in (413, 415)
 
 
 async def test_docx_without_document_xml_is_rejected() -> None:
