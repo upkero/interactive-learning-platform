@@ -47,25 +47,29 @@ jobs:
       # MinIO is a docker-run step, not a `services:` entry: the AIStor image
       # refuses to start without the license file, and service containers
       # cannot mount one from a secret (review Б2: fail, never skip).
-      # `edge-daily` is the only image published after the FREE license was
-      # issued (2026-10-29): older tags reject it with "invalid JWT" because
-      # they predate the license's ES384 signing key. Pin by digest once this
-      # is green so the daily rebuild cannot break the workflow silently.
+      # The image is the `edge-daily` manifest pinned by digest: the FREE
+      # license is only accepted by builds after it was issued (2026-10-29),
+      # and this exact manifest is the one the license was validated against
+      # (green backend job, review round 2 fixes). Update the digest together
+      # with the license if the pin ever drifts.
       - name: Start MinIO (AIStor, license from the CI secret)
+        env:
+          # keep the secret out of the command text (GitHub recommends env)
+          MINIO_LICENSE_B64: ${{ secrets.MINIO_LICENSE_B64 }}
         run: |
           mkdir -p "${GITHUB_WORKSPACE}/infra/license"
           # fail loudly before the server runs without a license
-          if [ -z "${{ secrets.MINIO_LICENSE_B64 }}" ]; then
+          if [ -z "$MINIO_LICENSE_B64" ]; then
             echo "::error::Secret MINIO_LICENSE_B64 is empty. Set it to the base64 of infra/license/minio.license (single line)."
             exit 1
           fi
-          printf '%s' "${{ secrets.MINIO_LICENSE_B64 }}" | base64 -d > "${GITHUB_WORKSPACE}/infra/license/minio.license"
+          printf '%s' "$MINIO_LICENSE_B64" | base64 -d > "${GITHUB_WORKSPACE}/infra/license/minio.license"
           docker run -d --name minio \
             -p 9000:9000 \
             -e MINIO_ROOT_USER=minioadmin \
             -e MINIO_ROOT_PASSWORD=minioadmin \
             -v "${GITHUB_WORKSPACE}/infra/license/minio.license:/minio.license:ro" \
-            quay.io/minio/aistor/minio:edge-daily \
+            quay.io/minio/aistor/minio@sha256:1e6364c49e2fd3178ff0a8718789b5e2914f55747e84a04e45225a7f443cf413 \
             server /data --console-address ":9001" --license /minio.license
 
       - name: Wait for MinIO to go live
@@ -79,40 +83,6 @@ jobs:
           done
           docker logs minio
           exit 1
-
-      - name: License diagnostics, pass 1 (fingerprint only, never contents)
-        run: |
-          echo "license file inside the container:"
-          docker exec minio sh -c "wc -c /minio.license && sha256sum /minio.license"
-          echo "--- mc license info ---"
-          docker exec minio mc license info local || true
-          echo "--- mc license update from the license file (richer validator error) ---"
-          docker exec minio mc license update local /minio.license || true
-          echo "--- MinIO log lines mentioning license ---"
-          docker logs minio 2>&1 | grep -i license || true
-
-      # SubNET-issued license files end with a newline; our copy does not.
-      # If the validator does not trim, that alone can produce "invalid JWT".
-      - name: Restart MinIO with the license file given a trailing newline
-        run: |
-          docker rm -f minio
-          printf '\n' >> "${GITHUB_WORKSPACE}/infra/license/minio.license"
-          docker run -d --name minio \
-            -p 9000:9000 \
-            -e MINIO_ROOT_USER=minioadmin \
-            -e MINIO_ROOT_PASSWORD=minioadmin \
-            -v "${GITHUB_WORKSPACE}/infra/license/minio.license:/minio.license:ro" \
-            quay.io/minio/aistor/minio:edge-daily \
-            server /data --console-address ":9001" --license /minio.license
-          for _ in $(seq 1 30); do
-            if curl -sf http://localhost:9000/minio/health/live > /dev/null; then
-              break
-            fi
-            sleep 1
-          done
-          echo "--- verdict with trailing newline ---"
-          docker exec minio mc license info local || true
-          docker logs minio 2>&1 | grep -i license || true
 
       - name: Create documents and images buckets (as minio-init does)
         run: |

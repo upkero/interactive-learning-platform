@@ -36,7 +36,7 @@ def _minio_reachable(settings: StorageSettings) -> bool:
 async def object_storage(storage_settings: StorageSettings) -> S3ObjectStorageClient:
     """Client over the real MinIO; skips locally when MinIO is not up."""
     if not _minio_reachable(storage_settings):
-        if os.environ.get("CI") == "1":
+        if os.environ.get("CI"):
             # CI explicitly raises MinIO for this job (as it does for
             # Postgres): a green suite must never mean "storage skipped".
             pytest.fail(f"MinIO must be up on CI, but nothing answered at {storage_settings.endpoint_url}")
