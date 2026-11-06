@@ -3,8 +3,8 @@
 Neither the extension nor the client ``Content-Type`` is trusted: the
 ``Content-Type`` may only be logged, what counts is what the bytes are.
 PDF is recognized by the ``%PDF-`` signature, DOCX by the ``PK\x03\x04``
-zip signature plus required archive members, Markdown by a valid UTF-8 plain text without NUL bytes and a text
-extension.
+zip signature plus required archive members, Markdown by valid UTF-8
+text without NUL bytes carrying a text extension.
 
 Heavy work (``pypdf``, ``zipfile``) runs in a worker thread via
 ``asyncio.to_thread`` so the event loop never blocks. Errors surface as

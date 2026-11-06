@@ -28,11 +28,20 @@ from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 _NOT_FOUND_CODES = frozenset({"NoSuchKey", "NoSuchBucket", "NotFound", "404"})
 
 
-def build_s3_client(settings: StorageSettings, *, endpoint_url: str) -> BaseClient:
-    """Build one boto3 S3 client against ``endpoint_url``.
+def _build_s3_client(
+    settings: StorageSettings,
+    *,
+    endpoint_url: str,
+    max_attempts: int,
+    connect_timeout: float,
+    read_timeout: float,
+) -> BaseClient:
+    """One boto3 S3 client factory for all profiles (review round 2).
 
-    botocore clients are thread-safe and boto3 sessions are not, so the
-    client is created once per container and shared between threads.
+    botocore clients are thread-safe and boto3 sessions are not, so each
+    built client is created once per container and shared between threads.
+    Retry/timeout knobs are parameters because callers run very different
+    budgets: the working clients retry, the readiness probe fails fast.
     """
     return boto3.client(
         "s3",
@@ -43,10 +52,21 @@ def build_s3_client(settings: StorageSettings, *, endpoint_url: str) -> BaseClie
         config=Config(
             signature_version="s3v4",
             s3={"addressing_style": "path"},  # MinIO works with path-style keys
-            retries={"max_attempts": 3, "mode": "standard"},
-            connect_timeout=5,
-            read_timeout=30,
+            retries={"max_attempts": max_attempts, "mode": "standard"},
+            connect_timeout=connect_timeout,
+            read_timeout=read_timeout,
         ),
+    )
+
+
+def build_s3_client(settings: StorageSettings, *, endpoint_url: str) -> BaseClient:
+    """The main working client against ``endpoint_url``."""
+    return _build_s3_client(
+        settings,
+        endpoint_url=endpoint_url,
+        max_attempts=3,
+        connect_timeout=5,
+        read_timeout=30,
     )
 
 
@@ -59,19 +79,12 @@ def build_ping_client(settings: StorageSettings) -> BaseClient:
     retries. The ping client fails fast instead — single attempt,
     tight timeouts strictly below the readiness budget.
     """
-    return boto3.client(
-        "s3",
+    return _build_s3_client(
+        settings,
         endpoint_url=settings.endpoint_url,
-        aws_access_key_id=settings.access_key_id,
-        aws_secret_access_key=settings.secret_access_key.get_secret_value(),
-        region_name=settings.region_name,
-        config=Config(
-            signature_version="s3v4",
-            s3={"addressing_style": "path"},
-            retries={"max_attempts": 1, "mode": "standard"},
-            connect_timeout=2,
-            read_timeout=3,
-        ),
+        max_attempts=1,
+        connect_timeout=2,
+        read_timeout=3,
     )
 
 
