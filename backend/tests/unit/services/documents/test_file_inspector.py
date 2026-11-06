@@ -32,8 +32,8 @@ def _load(name: str) -> bytes:
 _WIDE_CATCH_FIXTURES = (
     # (fixture file, exception pypdf raises for it) — review round 2, H4.
     # Each fixture makes pypdf raise a class NOT covered by a bare
-    # ``except PdfReadError`` where the exception escapes during the exact
-    # the setup call (``PdfReader(BytesIO(...))`` plus ``len(reader.pages)``)
+    # ``except PdfReadError`` on the same setup calls
+    # (``PdfReader(BytesIO(...))`` plus ``len(reader.pages)``)
     # that ``FileInspector._inspect_pdf`` performs:
     #
     # - limit_reached: no /Root and no /Catalog-typed object left in the
@@ -60,14 +60,17 @@ def _pdf_mutants() -> dict[str, bytes]:
     more often than not. The mutations below therefore land on structural
     anchors of the committed file: the indirect-reference operand of the
     ``/Pages 2 0 R`` catalog entry, the object dictionary opener, and the
-    trailing structure halved away. Every mutant self-verifies — the
-    parametrized test below fails if the parser still swallows it.
+    trailing structure halved away.
 
-    The four ``broken_pdf_*.pdf`` fixtures pin the exception CLASSES the
-    wide catch must survive (review round 2, H4); they are committed as
-    binary files because the triggering bytes are too weak to find again
-    by generation alone. ``_WIDE_CATCH_FIXTURES`` keeps their class map
-    and gives every class its own failing test case.
+    Coverage follows the review round 2 honesty bar: the three generated
+    mutants only exercise the 415 mapping (pypdf rejects each with a
+    plain ``PdfReadError``, so they would also pass on the old narrow
+    catch); the wide handler is proven by the four ``broken_pdf_*.pdf``
+    fixtures in ``_WIDE_CATCH_FIXTURES``, each raising a class a bare
+    ``except PdfReadError`` would let escape as a 500. The fixtures are
+    committed as binary files because the triggering bytes are too weak
+    to find again by generation alone; the class map keeps their
+    exception classes pinned per test case.
     """
     valid = _load("sample.pdf")
     r_pos = valid.index(b"/Pages 2 0 R") + 10  # the "R" operand itself
@@ -362,11 +365,18 @@ async def test_valid_docx_with_shuffled_central_directory_passes() -> None:
 
 
 async def test_zip_bomb_with_shuffled_central_directory_is_rejected() -> None:
-    """Shuffling the catalog must not help a bomb (413/415 still)."""
+    """Member ordering must still route the shuffled bomb to 413.
+
+    Head review round 3: after ordering members by ``header_offset`` the
+    bomb deterministically hits its size cap (413). Accepting 415 here in
+    addition would let a broken ordering slip back — the members would
+    overlap into empty payload slices and surface as "Broken DOCX" —
+    without this test noticing, so the wider status is gone on purpose.
+    """
     bomb = _reversed_central_directory(_docx_bomb_bytes(UploadSettings().max_unzipped_bytes + 1))
-    with pytest.raises((FileTooLargeError, UnsupportedFileTypeError)) as exc_info:
+    with pytest.raises(FileTooLargeError) as exc_info:
         await FileInspector(UploadSettings()).inspect(bomb, "zip_bomb.docx")
-    assert exc_info.value.status_code in (413, 415)
+    assert exc_info.value.status_code == 413
 
 
 async def test_docx_without_document_xml_is_rejected() -> None:
