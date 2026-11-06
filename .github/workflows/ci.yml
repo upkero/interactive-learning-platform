@@ -78,11 +78,19 @@ jobs:
             quay.io/minio/aistor/minio@sha256:464cfaaf54a04ab048f5f4dfc1ac465e63d49109987614d445374b613a649d41 \
             server /data --console-address ":9001" --license /minio.license
 
-      - name: Wait for MinIO to go live
+      - name: Wait for MinIO to become ready (live, then readable)
         run: |
-          for _ in $(seq 1 30); do
-            if curl -sf http://localhost:9000/minio/health/live > /dev/null; then
-              echo "MinIO is live"
+          # /minio/health/live is process-alive only: the current daily
+          # build finishes formatting its pool AFTER the live endpoint
+          # answers and early `mc` traffic fails with "drives-online: 0".
+          # Wait for /health/ready (read quorum established) instead.
+          for _ in $(seq 1 60); do
+            if ! curl -sf http://localhost:9000/minio/health/live > /dev/null; then
+              sleep 1
+              continue
+            fi
+            if curl -sf http://localhost:9000/minio/health/ready > /dev/null; then
+              echo "MinIO is live and ready"
               exit 0
             fi
             sleep 1
@@ -92,10 +100,21 @@ jobs:
 
       - name: Create documents and images buckets (as minio-init does)
         run: |
-          if ! docker exec minio /bin/sh -c \
-            "mc alias set local http://localhost:9000 minioadmin minioadmin &&
-             mc mb --ignore-existing local/documents local/images"; then
-            echo "mc mb failed; full MinIO logs:"
+          # Retry a few times: right after formatting, a first mb call can
+          # still land inside the pool's quorum-emergence window.
+          ok=""
+          for _ in $(seq 1 15); do
+            if docker exec minio /bin/sh -c \
+              "mc alias set local http://localhost:9000 minioadmin minioadmin &&
+               mc mb --ignore-existing local/documents local/images"; then
+              ok=1
+              break
+            fi
+            echo "mc mb attempt failed; retrying."
+            sleep 2
+          done
+          if [ -z "$ok" ]; then
+            echo "mc mb failed after retries; full MinIO logs:"
             docker logs minio
             exit 1
           fi
