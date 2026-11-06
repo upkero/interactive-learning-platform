@@ -56,6 +56,9 @@ dev = [
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+# Binary/text fixture files are not Python; the invalid-UTF-8 fixture
+# must survive ruff format untouched
+extend-exclude = ["tests/support/fixtures/files"]
 
 [tool.ruff.lint]
 # E, F - базовые ошибки Python
@@ -71,6 +74,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC", "TID", "RUF"]
 "anthropic".msg = "Import provider SDKs only in src/app/llm/."
 "openai".msg = "Import provider SDKs only in src/app/llm/."
 "boto3".msg = "Import boto3 only in src/app/storage/ and bootstrap/."
+"botocore".msg = "Import botocore only in src/app/storage/."
 "requests".msg = "Use httpx.AsyncClient."
 
 [tool.ruff.lint.per-file-ignores]
@@ -78,6 +82,8 @@ select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC", "TID", "RUF"]
 "src/app/llm/**" = ["TID251"]
 "src/app/storage/**" = ["TID251"]
 "src/app/bootstrap/**" = ["TID251"]
+# Юнит-тесты S3-фасада сами собирают duck-typed botocore-клиент (пинг-тест V5)
+"tests/unit/storage/**" = ["TID251"]
 
 # -----------------------------------------------------------------------------
 # Проверка типов Mypy
@@ -103,5 +109,5 @@ markers = [
 ]
 
 [[tool.mypy.overrides]]
-module = ["celery", "celery.*", "kombu", "kombu.*"]
+module = ["celery", "celery.*", "kombu", "kombu.*", "boto3", "boto3.*", "botocore", "botocore.*"]
 ignore_missing_imports = true
