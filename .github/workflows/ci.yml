@@ -47,11 +47,17 @@ jobs:
       # MinIO is a docker-run step, not a `services:` entry: the AIStor image
       # refuses to start without the license file, and service containers
       # cannot mount one from a secret (review Б2: fail, never skip).
-      # The image is the `edge-daily` manifest pinned by digest: the FREE
-      # license is only accepted by builds after it was issued (2026-10-29),
-      # and this exact manifest is the one the license was validated against
-      # (green backend job, review round 2 fixes). Update the digest together
-      # with the license if the pin ever drifts.
+      # The image is pinned by digest because the FREE license (issued
+      # 2026-10-29) is only accepted by `edge-daily` builds published after
+      # it: every static RELEASE/EDGE tag predates the license's ES384 key
+      # and rejects it with "invalid JWT". Two caveats of that pin:
+      # - quay purges superseded daily manifests, so when the tag rolls the
+      #   previous digest dies with "manifest unknown" (observed: the
+      #   2026-10-31 build sha256:1e6364c4... was removed on 2026-11-06).
+      #   Re-pin to the current `edge-daily` manifest digest when that
+      #   happens (docker manifest inspect quay.io/minio/aistor/minio:edge-daily).
+      # - the pinned build below is the 2026-11-06 edge-daily manifest,
+      #   resolved and license-tested against the configured secret.
       - name: Start MinIO (AIStor, license from the CI secret)
         env:
           # keep the secret out of the command text (GitHub recommends env)
@@ -69,7 +75,7 @@ jobs:
             -e MINIO_ROOT_USER=minioadmin \
             -e MINIO_ROOT_PASSWORD=minioadmin \
             -v "${GITHUB_WORKSPACE}/infra/license/minio.license:/minio.license:ro" \
-            quay.io/minio/aistor/minio@sha256:1e6364c49e2fd3178ff0a8718789b5e2914f55747e84a04e45225a7f443cf413 \
+            quay.io/minio/aistor/minio@sha256:464cfaaf54a04ab048f5f4dfc1ac465e63d49109987614d445374b613a649d41 \
             server /data --console-address ":9001" --license /minio.license
 
       - name: Wait for MinIO to go live
