@@ -1,0 +1,42 @@
+# One-off tool: copies the license-validated MinIO (AIStor) image from quay
+# into our private GHCR namespace, where nothing garbage-collects it.
+# Run it by hand once per image update: Actions → publish-minio-copy → Run.
+# The pushed digest (printed in the log) goes into ci.yml and infra/compose.yml.
+name: publish-minio-copy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Get crane (registry copy tool)
+        run: |
+          version=0.22.1
+          curl -sfL "https://github.com/google/go-containerregistry/releases/download/v${version}/go-containerregistry_Linux_x86_64.tar.gz" -o crane.tar.gz
+          tar -xzf crane.tar.gz crane
+          ./crane version
+
+      # Path-style names (OWNER/REPO/IMAGE) are created only through the
+      # Actions GITHUB_TOKEN — a personal access token is denied
+      # (create_package), which is why this runs here.
+      - name: Log in to GHCR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GITHUB_TOKEN" | ./crane auth login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Copy the validated build from quay
+        run: |
+          set -o pipefail
+          ./crane copy --platform linux/amd64 \
+            "quay.io/minio/aistor/minio@sha256:1579a5a26d4dd55223728c595e548ae6de0283c52b175fc831a64270e2f18c6f" \
+            "ghcr.io/${{ github.repository }}/aistor-minio:2026-11-06"
+
+      - name: Report the GHCR digest to pin
+        run: |
+          digest=$(./crane digest "ghcr.io/${{ github.repository }}/aistor-minio:2026-11-06")
+          echo "PIN THIS DIGEST in ci.yml and infra/compose.yml: ${digest}"
