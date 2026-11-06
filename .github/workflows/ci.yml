@@ -52,12 +52,16 @@ jobs:
       # it: every static RELEASE/EDGE tag predates the license's ES384 key
       # and rejects it with "invalid JWT". Two caveats of that pin:
       # - quay purges superseded daily manifests, so when the tag rolls the
-      #   previous digest dies with "manifest unknown" (observed: the
-      #   2026-10-31 build sha256:1e6364c4... was removed on 2026-11-06).
-      #   Re-pin to the current `edge-daily` manifest digest when that
-      #   happens (docker manifest inspect quay.io/minio/aistor/minio:edge-daily).
-      # - the pinned build below is the 2026-11-06 edge-daily manifest,
-      #   resolved and license-tested against the configured secret.
+      #   previous digest dies with "manifest unknown" (observed twice on
+      #   2026-11-06: the 10-31 build was removed, then the 05:54 11-06
+      #   build was purged the same day). Re-pin to the current
+      #   `edge-daily` manifest digest when that happens
+      #   (docker manifest inspect quay.io/minio/aistor/minio:edge-daily).
+      # - the pinned build below is the latest edge-daily manifest
+      #   (published 2026-11-06 10:27), resolved right after the last purge.
+      # - TEMPORARY: once our own copy of the image lives in GHCR
+      #   (ghcr.io/upkero/interactive-learning-platform/aistor-minio),
+      #   this pin moves there for good and the quay churn stops.
       - name: Start MinIO (AIStor, license from the CI secret)
         env:
           # keep the secret out of the command text (GitHub recommends env)
@@ -75,7 +79,7 @@ jobs:
             -e MINIO_ROOT_USER=minioadmin \
             -e MINIO_ROOT_PASSWORD=minioadmin \
             -v "${GITHUB_WORKSPACE}/infra/license/minio.license:/minio.license:ro" \
-            quay.io/minio/aistor/minio@sha256:464cfaaf54a04ab048f5f4dfc1ac465e63d49109987614d445374b613a649d41 \
+            quay.io/minio/aistor/minio@sha256:1579a5a26d4dd55223728c595e548ae6de0283c52b175fc831a64270e2f18c6f \
             server /data --console-address ":9001" --license /minio.license
 
       - name: Wait for MinIO to become ready (live, then readable)
