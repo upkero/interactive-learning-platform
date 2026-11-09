@@ -1,0 +1,14 @@
+{
+  "common.back": "Назад",
+  "common.check": "Проверить",
+  "common.correct": "Верно",
+  "common.incorrect": "Неверно",
+  "common.invalidFrames": "Не удалось показать визуализацию.",
+  "common.invalidMode": "Визуализация не поддерживает заданный режим.",
+  "common.next": "Далее",
+  "common.no": "Нет",
+  "common.pause": "Пауза",
+  "common.play": "Воспроизвести",
+  "common.step": "Шаг {current} из {total}",
+  "common.yes": "Да"
+}

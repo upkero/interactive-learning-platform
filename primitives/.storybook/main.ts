@@ -3,6 +3,7 @@ const config: StorybookConfig = {
   stories: ["../src/**/*.stories.@(ts|tsx)"],
   addons: [
     "@storybook/addon-controls",
+    "@storybook/addon-actions",
     "@storybook/addon-toolbars",
     "@storybook/addon-a11y",
   ],

@@ -1,0 +1,14 @@
+{
+  "common.back": "Back",
+  "common.check": "Check",
+  "common.correct": "Correct",
+  "common.incorrect": "Incorrect",
+  "common.invalidFrames": "Unable to display this visualization.",
+  "common.invalidMode": "This visualization does not support the requested mode.",
+  "common.next": "Next",
+  "common.no": "No",
+  "common.pause": "Pause",
+  "common.play": "Play",
+  "common.step": "Step {current} of {total}",
+  "common.yes": "Yes"
+}

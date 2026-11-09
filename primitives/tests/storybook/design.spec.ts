@@ -4,15 +4,12 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 for (const theme of ["light", "dark"] as const) {
-  test(`all UI stories pass axe in ${theme} theme`, async ({
-    page,
-    request,
-  }) => {
+  test(`all stories pass axe in ${theme} theme`, async ({ page, request }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     const index = await (await request.get("/index.json")).json();
     const stories = (
       Object.values(index.entries) as { id: string; type: string }[]
-    ).filter((entry) => entry.type === "story" && entry.id.startsWith("ui-"));
+    ).filter((entry) => entry.type === "story");
     expect(stories.length).toBeGreaterThanOrEqual(5);
     const screenshots = join(process.cwd(), "test-results", "screenshots");
     mkdirSync(screenshots, { recursive: true });
@@ -51,6 +48,7 @@ for (const theme of ["light", "dark"] as const) {
     );
     const preview = page.locator(".design-preview");
     await expect(preview).toHaveAttribute("data-theme", theme);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     expect(
       await preview.evaluate((el) =>
         getComputedStyle(el).getPropertyValue("--g-duration-fast").trim()

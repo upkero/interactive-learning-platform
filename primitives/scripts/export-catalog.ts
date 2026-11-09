@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { designChecklist } from "../src/design/checklist.ts";
+import { stableStringify } from "../src/core/serialization.ts";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const output = process.argv[2]
@@ -21,15 +22,24 @@ const server = await createServer({
 });
 try {
   const ui = await server.ssrLoadModule("/src/ui/index.ts");
+  const { getPrimitives } = (await server.ssrLoadModule(
+    "/src/registry.ts"
+  )) as typeof import("../src/registry.ts");
+  const { serializePrimitives } = (await server.ssrLoadModule(
+    "/src/core/catalog.ts"
+  )) as typeof import("../src/core/catalog.ts");
+  const primitives = serializePrimitives(getPrimitives());
   const catalog = {
+    catalogVersion: 1,
     design: {
       checklist: designChecklist,
       tokens,
       uiExports: Object.keys(ui).sort(),
     },
+    primitives,
   };
   mkdirSync(dirname(output), { recursive: true });
-  writeFileSync(output, `${JSON.stringify(catalog, null, 2)}\n`);
+  writeFileSync(output, `${stableStringify(catalog)}\n`);
 } finally {
   await server.close();
 }

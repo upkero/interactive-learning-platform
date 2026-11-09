@@ -27,6 +27,7 @@ COPY --from=builder --chown=appuser:appgroup /app/.venv .venv
 COPY --chown=appuser:appgroup alembic.ini ./
 COPY --chown=appuser:appgroup migrations/ migrations/
 COPY --chown=appuser:appgroup src/ src/
+COPY --chown=appuser:appgroup resources/ resources/
 
 USER appuser
 

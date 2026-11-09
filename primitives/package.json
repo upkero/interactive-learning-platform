@@ -5,11 +5,18 @@
   "type": "module",
   "exports": {
     "./tokens.css": "./src/tokens/tokens.css",
-    "./ui": "./src/ui/index.ts"
+    "./ui": "./src/ui/index.ts",
+    "./core": "./src/core/index.ts",
+    "./registry": "./src/registry.ts",
+    "./core/labels": "./src/core/labels.ts",
+    "./i18n/en.json": "./src/i18n/en.json",
+    "./i18n/ru.json": "./src/i18n/ru.json"
   },
   "scripts": {
-    "lint": "stylelint \"src/**/*.css\"",
+    "lint": "pnpm lint:styles && pnpm lint:code && pnpm format:check",
     "lint:styles": "stylelint \"src/**/*.css\"",
+    "lint:code": "eslint src scripts .storybook tests playwright.config.ts vitest.config.ts",
+    "format:check": "prettier --check \"{src,scripts,.storybook,tests}/**/*.{ts,tsx}\" \"*.{ts,tsx}\"",
     "check:contrast": "node --experimental-strip-types scripts/check-contrast.ts",
     "catalog": "node --experimental-strip-types scripts/export-catalog.ts",
     "typecheck": "tsc --noEmit",
@@ -23,11 +30,16 @@
     "@storybook/react-vite": "^8.6.14",
     "@storybook/react": "^8.6.14",
     "@storybook/addon-a11y": "^8.6.14",
+    "@storybook/addon-actions": "^8.6.14",
     "@storybook/addon-controls": "^8.6.14",
     "@storybook/addon-toolbars": "^8.6.14",
     "@storybook/preview-api": "^8.6.14",
     "@playwright/test": "^1.51.1",
     "@axe-core/playwright": "^4.10.2",
+    "eslint": "^9.39.0",
+    "typescript-eslint": "^8.50.0",
+    "prettier": "^3.6.2",
+    "ajv": "^8.17.1",
     "postcss": "^8.5.6",
     "storybook": "^8.6.14",
     "@testing-library/jest-dom": "^6.6.3",
@@ -47,5 +59,8 @@
   "peerDependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
+  },
+  "dependencies": {
+    "zod": "^4.1.12"
   }
 }
