@@ -62,6 +62,7 @@
       "--g-color-surface",
       "--g-color-text",
       "--g-color-text-muted",
+      "--g-control-min-height",
       "--g-duration-base",
       "--g-duration-fast",
       "--g-easing",
@@ -79,6 +80,10 @@
       "--g-text-lg",
       "--g-text-md",
       "--g-text-sm",
+      "--g-toggle-height",
+      "--g-toggle-thumb-size",
+      "--g-toggle-thumb-travel",
+      "--g-toggle-width",
       "--g-viz-1",
       "--g-viz-2",
       "--g-viz-3",
@@ -89,7 +94,7 @@
       "--g-viz-done",
       "--g-viz-muted"
     ],
-    "uiExports": [
+    "ui_exports": [
       "Button",
       "ModeTabs",
       "Slider",

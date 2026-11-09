@@ -1,34 +1,18 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-
+import { createServer } from "vite";
 import { designChecklist } from "../src/design/checklist.ts";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const tokensPath = `${root}/src/tokens/tokens.css`;
-const uiIndexPath = `${root}/src/ui/index.ts`;
-const catalogPath = `${root}/dist/catalog.json`;
-
-function sortedUnique(values: Iterable<string>) {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
-}
-
-function collectTokens(css: string) {
-  return sortedUnique([...css.matchAll(/(--g-[\w-]+)\s*:/g)].map(([, name]) => name));
-}
-
-function collectUiExports(index: string) {
-  return sortedUnique(
-    [...index.matchAll(/export\s*{\s*([A-Za-z][\w]*)/g)].map(([, name]) => name),
-  );
-}
-
-const catalog = {
-  design: {
-    checklist: designChecklist,
-    tokens: collectTokens(readFileSync(tokensPath, "utf8")),
-    uiExports: collectUiExports(readFileSync(uiIndexPath, "utf8")),
-  },
-};
-
-mkdirSync(fileURLToPath(new URL("../dist", import.meta.url)), { recursive: true });
-writeFileSync(catalogPath, `${JSON.stringify(catalog, null, 2)}\n`);
+const output = process.argv[2] ? resolve(process.argv[2]) : resolve(root, "dist/catalog.json");
+const css = readFileSync(resolve(root, "src/tokens/tokens.css"), "utf8");
+const tokens = [...new Set([...css.matchAll(/(--g-[\w-]+)\s*:/g)].map(([, name]) => name))].sort();
+// Vite resolves the actual runtime TSX exports and their CSS modules; types are erased.
+const server = await createServer({ root, configFile: false, server: { middlewareMode: true, hmr: false, ws: false }, appType: "custom" });
+try {
+  const ui = await server.ssrLoadModule("/src/ui/index.ts");
+  const catalog = { design: { checklist: designChecklist, tokens, ui_exports: Object.keys(ui).sort() } };
+  mkdirSync(dirname(output), { recursive: true });
+  writeFileSync(output, `${JSON.stringify(catalog, null, 2)}\n`);
+} finally { await server.close(); }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useArgs } from "@storybook/preview-api";
 import type { Meta, StoryObj } from "@storybook/react";
 
 import { ModeTabs } from "./ModeTabs";
@@ -15,8 +15,8 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   args: { ariaLabel: "Learning mode", onChange: () => undefined, tabs: modes, value: "watch" },
-  render: () => {
-    const [value, setValue] = useState<(typeof modes)[number]["id"]>("watch");
-    return <ModeTabs ariaLabel="Learning mode" onChange={setValue} tabs={modes} value={value} />;
+  render: function Render(args) {
+    const [, updateArgs] = useArgs();
+    return <ModeTabs {...args} onChange={(value) => { args.onChange(value); updateArgs({ value }); }} />;
   },
 };

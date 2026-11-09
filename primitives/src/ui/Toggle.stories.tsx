@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useArgs } from "@storybook/preview-api";
 import type { Meta, StoryObj } from "@storybook/react";
 
 import { Toggle } from "./Toggle";
@@ -9,8 +9,8 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   args: { checked: false, id: "autoplay", label: "Autoplay", onChange: () => undefined },
-  render: () => {
-    const [checked, setChecked] = useState(false);
-    return <Toggle checked={checked} id="autoplay" label="Autoplay" onChange={setChecked} />;
+  render: function Render(args) {
+    const [, updateArgs] = useArgs();
+    return <Toggle {...args} onChange={(checked) => { args.onChange(checked); updateArgs({ checked }); }} />;
   },
 };

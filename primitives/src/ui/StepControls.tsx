@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from "react";
 import { Button } from "./Button";
 import styles from "./StepControls.module.css";
 
@@ -28,9 +29,17 @@ export function StepControls({
   onNext,
   onTogglePlayback,
 }: StepControlsProps) {
+  const previousRef = useRef<HTMLButtonElement>(null);
+  const nextRef = useRef<HTMLButtonElement>(null);
+  const nextHadFocus = useRef(false);
+  useLayoutEffect(() => {
+    if (currentStep >= totalSteps && nextHadFocus.current) previousRef.current?.focus();
+    nextHadFocus.current = false;
+  }, [currentStep, totalSteps]);
   return (
     <div className={styles.controls}>
       <Button
+        ref={previousRef}
         disabled={currentStep <= 1}
         label={labels.previous}
         onClick={onPrevious}
@@ -42,8 +51,12 @@ export function StepControls({
       />
       <Button
         disabled={currentStep >= totalSteps}
+        ref={nextRef}
         label={labels.next}
-        onClick={onNext}
+        onClick={() => {
+          nextHadFocus.current = document.activeElement === nextRef.current;
+          onNext();
+        }}
         variant="secondary"
       />
       <output aria-live="polite" className={styles.counter}>

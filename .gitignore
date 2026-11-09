@@ -1,4 +1,7 @@
 node_modules/
+primitives/storybook-static/
+primitives/test-results/
+primitives/playwright-report/
 .pnpm-store/
 .ruff_cache/
 .mypy_cache/

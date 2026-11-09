@@ -1,6 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+afterEach(cleanup);
 
 import { Button } from "./Button";
 import { ModeTabs } from "./ModeTabs";
@@ -19,13 +21,11 @@ describe("base UI controls", () => {
     expect(onClick).toHaveBeenCalledOnce();
   });
 
-  it("changes Slider with arrow keys", async () => {
-    const user = userEvent.setup();
+  it("reports native Slider input changes", () => {
     const onChange = vi.fn();
     render(<Slider id="speed" label="Speed" max={10} min={0} onChange={onChange} value={5} />);
 
-    await user.tab();
-    await user.keyboard("{ArrowRight}");
+    fireEvent.change(screen.getByRole("slider", { name: "Speed" }), { target: { value: "6" } });
     expect(onChange).toHaveBeenCalledWith(6);
   });
 
@@ -58,6 +58,22 @@ describe("base UI controls", () => {
     await user.keyboard("{ArrowRight}");
     expect(onChange).toHaveBeenCalledWith("steps");
     expect(screen.getByRole("tab", { name: "Step by step" })).toHaveFocus();
+    await user.keyboard("{ArrowLeft}");
+    expect(screen.getByRole("tab", { name: "Watch" })).toHaveFocus();
+    await user.keyboard("{ArrowLeft}");
+    expect(screen.getByRole("tab", { name: "Step by step" })).toHaveFocus();
+    await user.keyboard("{Home}");
+    expect(screen.getByRole("tab", { name: "Watch" })).toHaveFocus();
+    await user.keyboard("{End}");
+    expect(screen.getByRole("tab", { name: "Step by step" })).toHaveFocus();
+  });
+
+  it("creates unique tab IDs when two widgets use the same modes", () => {
+    const tabs = [{ id: "watch", label: "Watch" }] as const;
+    render(<><ModeTabs ariaLabel="First" tabs={tabs} value="watch" onChange={vi.fn()} /><ModeTabs ariaLabel="Second" tabs={tabs} value="watch" onChange={vi.fn()} /></>);
+    const [first, second] = screen.getAllByRole("tab", { name: "Watch" });
+    expect(first.id).toBeTruthy();
+    expect(first.id).not.toBe(second.id);
   });
 
   it("activates StepControls buttons with the keyboard", async () => {

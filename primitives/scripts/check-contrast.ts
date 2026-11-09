@@ -1,102 +1,52 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import postcss from "postcss";
 
-const tokensPath = fileURLToPath(
-  new URL("../src/tokens/tokens.css", import.meta.url),
-);
-const css = readFileSync(tokensPath, "utf8");
+const tokensPath = process.argv[2] ?? fileURLToPath(new URL("../src/tokens/tokens.css", import.meta.url));
+const css = postcss.parse(readFileSync(tokensPath, "utf8"), { from: tokensPath });
+const themes: Record<string, Record<string, string>> = { light: {}, dark: {} };
 
-const themes = ["light", "dark"];
-const requiredTokens = [
-  "--g-color-bg",
-  "--g-color-surface",
-  "--g-color-text",
-  "--g-color-text-muted",
-  "--g-color-accent",
-  "--g-color-accent-contrast",
-  "--g-color-success",
-  "--g-color-danger",
-  "--g-viz-1",
-  "--g-viz-2",
-  "--g-viz-3",
-  "--g-viz-4",
-  "--g-viz-5",
-  "--g-viz-6",
+css.walkRules((rule) => {
+  // Reduced-motion overrides are not theme color declarations.
+  if (rule.parent?.type !== "root") return;
+  const selectors = rule.selectors.map((selector) => selector.trim());
+  for (const theme of ["light", "dark"] as const) {
+    if (!selectors.includes(`[data-theme="${theme}"]`) && !(theme === "light" && selectors.includes(":root"))) continue;
+    rule.walkDecls(/^--g-/, (decl) => { themes[theme][decl.prop] = decl.value.trim(); });
+  }
+});
+
+function luminance(hex: string): number {
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) throw new Error(`Expected a six-digit hex color: ${hex}`);
+  const channels = hex.slice(1).match(/.{2}/g)!.map((part) => parseInt(part, 16) / 255).map((c) => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+}
+function ratio(a: string, b: string): number {
+  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (light + 0.05) / (dark + 0.05);
+}
+
+const pairs: [string, string, number][] = [
+  ["--g-color-text", "--g-color-bg", 4.5], ["--g-color-text", "--g-color-surface", 4.5],
+  ["--g-color-text-muted", "--g-color-bg", 4.5], ["--g-color-text-muted", "--g-color-surface", 4.5],
+  ["--g-color-accent", "--g-color-bg", 4.5], ["--g-color-accent", "--g-color-surface", 4.5],
+  ["--g-color-accent-contrast", "--g-color-accent", 4.5],
+  ["--g-color-border", "--g-color-bg", 3], ["--g-color-border", "--g-color-surface", 3],
+  ["--g-color-success", "--g-color-bg", 4.5], ["--g-color-danger", "--g-color-bg", 4.5],
+  ...Array.from({ length: 6 }, (_, index): [string, string, number] => [`--g-viz-${index + 1}`, "--g-color-bg", 3]),
 ];
-
-function relativeLuminance(hex) {
-  const channels = hex
-    .slice(1)
-    .match(/.{2}/g)
-    .map((part) => Number.parseInt(part, 16) / 255)
-    .map((channel) =>
-      channel <= 0.04045
-        ? channel / 12.92
-        : ((channel + 0.055) / 1.055) ** 2.4,
-    );
-
-  return (
-    0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
-  );
-}
-
-function contrastRatio(foreground, background) {
-  const [lighter, darker] = [
-    relativeLuminance(foreground),
-    relativeLuminance(background),
-  ].sort((a, b) => b - a);
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
-function tokensFor(theme) {
-  const selector = theme === "light" ? ":root," : '[data-theme="dark"]';
-  const start = css.indexOf(selector);
-  const end = css.indexOf("}\n", start);
-  if (start === -1 || end === -1) {
-    throw new Error(`Could not find ${theme} theme in ${tokensPath}`);
+const failures: string[] = [];
+for (const [theme, values] of Object.entries(themes)) for (const [foreground, background, minimum] of pairs) {
+  if (!values[foreground] || !values[background]) {
+    failures.push(`${theme}: missing ${!values[foreground] ? foreground : background}`);
+    continue;
   }
-
-  const declarations = css.slice(start, end);
-  return Object.fromEntries(
-    [...declarations.matchAll(/(--g-[\w-]+):\s*(#[\da-fA-F]{6})/g)].map(
-      ([, name, value]) => [name, value],
-    ),
-  );
+  try {
+    const value = ratio(values[foreground], values[background]);
+    if (value < minimum) failures.push(`${theme}: ${foreground}/${background} = ${value.toFixed(2)}:1; expected ${minimum}:1`);
+  } catch (error) { failures.push(`${theme}: ${String(error)}`); }
 }
-
-const failures = [];
-
-for (const theme of themes) {
-  const tokens = tokensFor(theme);
-  for (const token of requiredTokens) {
-    if (!tokens[token]) failures.push(`${theme}: missing ${token}`);
-  }
-
-  const textPairs = [
-    ["--g-color-text", "--g-color-bg"],
-    ["--g-color-text", "--g-color-surface"],
-    ["--g-color-text-muted", "--g-color-bg"],
-    ["--g-color-text-muted", "--g-color-surface"],
-  ];
-  const controlPairs = [["--g-color-accent-contrast", "--g-color-accent"]];
-
-  for (const [foreground, background] of textPairs) {
-    const ratio = contrastRatio(tokens[foreground], tokens[background]);
-    if (ratio < 4.5) {
-      failures.push(`${theme}: ${foreground}/${background} is ${ratio.toFixed(2)}:1; expected 4.5:1`);
-    }
-  }
-  for (const [foreground, background] of controlPairs) {
-    const ratio = contrastRatio(tokens[foreground], tokens[background]);
-    if (ratio < 4.5) {
-      failures.push(`${theme}: ${foreground}/${background} is ${ratio.toFixed(2)}:1; expected 4.5:1`);
-    }
-  }
-}
-
-if (failures.length > 0) {
-  console.error("Contrast check failed:\n- " + failures.join("\n- "));
+if (failures.length) {
+  console.error(`Contrast check failed:\n- ${failures.join("\n- ")}`);
   process.exitCode = 1;
-} else {
-  console.log("Contrast check passed for light and dark themes.");
-}
+} else console.log("Contrast check passed for light and dark themes.");

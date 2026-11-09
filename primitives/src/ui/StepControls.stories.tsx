@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useArgs } from "@storybook/preview-api";
 import type { Meta, StoryObj } from "@storybook/react";
 
 import { StepControls } from "./StepControls";
@@ -23,25 +23,14 @@ export const Default: Story = {
     onTogglePlayback: () => undefined,
     totalSteps: 4,
   },
-  render: () => {
-    const [currentStep, setCurrentStep] = useState(1);
-    const [isPlaying, setIsPlaying] = useState(false);
-    const totalSteps = 4;
+  render: function Render(args) {
+    const [, updateArgs] = useArgs();
     return (
       <StepControls
-        currentStep={currentStep}
-        isPlaying={isPlaying}
-        labels={{
-          next: "Next",
-          pause: "Pause",
-          play: "Play",
-          previous: "Previous",
-          step: (current, total) => `Step ${current} of ${total}`,
-        }}
-        onNext={() => setCurrentStep((step) => Math.min(step + 1, totalSteps))}
-        onPrevious={() => setCurrentStep((step) => Math.max(step - 1, 1))}
-        onTogglePlayback={() => setIsPlaying((playing) => !playing)}
-        totalSteps={totalSteps}
+        {...args}
+        onNext={() => { args.onNext(); updateArgs({ currentStep: Math.min(args.currentStep + 1, args.totalSteps) }); }}
+        onPrevious={() => { args.onPrevious(); updateArgs({ currentStep: Math.max(args.currentStep - 1, 1) }); }}
+        onTogglePlayback={() => { args.onTogglePlayback(); updateArgs({ isPlaying: !args.isPlaying }); }}
       />
     );
   },

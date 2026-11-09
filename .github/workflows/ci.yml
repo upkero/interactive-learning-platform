@@ -82,6 +82,14 @@ jobs:
       - name: Lint and test packages
         run: pnpm -r lint && pnpm -r typecheck && pnpm -r test
 
+      - name: Check design token contrast
+        run: pnpm --filter @grasp/primitives check:contrast
+
+      - name: Check generated design catalog
+        run: |
+          pnpm --filter @grasp/primitives catalog
+          git diff --exit-code -- primitives/dist/catalog.json
+
       - name: Build packages
         run: pnpm -r build
 
@@ -105,8 +113,23 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Build and run Storybook
+      - name: Install Chromium
+        run: pnpm --filter @grasp/primitives exec playwright install --with-deps chromium
+
+      - name: Build and test Storybook with axe
         run: pnpm --filter @grasp/primitives build-storybook && pnpm --filter @grasp/primitives test-storybook
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: design-system-storybook
+          path: primitives/storybook-static
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: design-system-screenshots
+          path: primitives/test-results/screenshots
+          if-no-files-found: error
 
   # ---------------------------------------------------------------------------
   # 4. Docker image builds

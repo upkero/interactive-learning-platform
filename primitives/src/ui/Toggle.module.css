@@ -10,10 +10,9 @@
 
 .input {
   block-size: 1px;
-  clip: rect(0 0 0 0);
   clip-path: inset(50%);
   inline-size: 1px;
-  margin: -1px;
+  margin: 0;
   overflow: hidden;
   position: absolute;
   white-space: nowrap;
@@ -24,8 +23,8 @@
   border-radius: var(--g-radius-lg);
   box-sizing: border-box;
   display: inline-block;
-  inline-size: 2.75rem;
-  min-block-size: 1.5rem;
+  inline-size: var(--g-toggle-width);
+  min-block-size: var(--g-toggle-height);
   padding: var(--g-space-1);
   transition: background-color var(--g-duration-fast) var(--g-easing);
 }
@@ -35,8 +34,8 @@
   border-radius: var(--g-radius-lg);
   content: "";
   display: block;
-  inline-size: 1rem;
-  min-block-size: 1rem;
+  inline-size: var(--g-toggle-thumb-size);
+  min-block-size: var(--g-toggle-thumb-size);
   transition: transform var(--g-duration-fast) var(--g-easing);
 }
 
@@ -45,7 +44,7 @@
 }
 
 .input:checked + .track::after {
-  transform: translateX(1.25rem);
+  transform: translateX(var(--g-toggle-thumb-travel));
 }
 
 .input:focus-visible + .track {

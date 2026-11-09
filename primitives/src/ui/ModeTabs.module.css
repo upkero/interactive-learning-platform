@@ -6,6 +6,7 @@
 }
 
 .tab {
+  background: transparent;
   border: 0;
   border-bottom: 3px solid transparent;
   color: var(--g-color-text-muted);
@@ -14,6 +15,8 @@
   font-size: var(--g-text-md);
   padding: var(--g-space-2) var(--g-space-3);
 }
+
+.tab:hover { background: var(--g-color-surface); }
 
 .tab[aria-selected="true"] {
   border-bottom-color: var(--g-color-accent);

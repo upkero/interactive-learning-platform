@@ -2,10 +2,9 @@
   border: 1px solid transparent;
   border-radius: var(--g-radius-md);
   cursor: pointer;
-  font: inherit;
   font-family: var(--g-font-sans);
   font-size: var(--g-text-md);
-  min-height: 2.5rem;
+  min-height: var(--g-control-min-height);
   padding: var(--g-space-2) var(--g-space-3);
   transition: background-color var(--g-duration-fast) var(--g-easing),
     border-color var(--g-duration-fast) var(--g-easing),
@@ -34,5 +33,10 @@
 }
 
 .ghost {
+  background: transparent;
   color: var(--g-color-accent);
 }
+
+.ghost:hover { background: var(--g-color-surface); }
+.secondary:hover { background: var(--g-color-bg); }
+.primary:hover { filter: brightness(0.9); }
