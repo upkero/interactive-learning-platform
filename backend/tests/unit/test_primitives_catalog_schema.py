@@ -90,3 +90,13 @@ async def test_development_seed_fixture_uses_catalog_format() -> None:
         repository.return_value.upsert = AsyncMock()
         assert await seed_primitives_from_catalog(session, fixture) == 5
         assert repository.return_value.upsert.await_count == 5
+
+
+@pytest.mark.unit
+async def test_invalid_entry_reports_field_location(tmp_path: Path) -> None:
+    fixture = json.loads(CATALOGS[1].read_text(encoding="utf-8"))
+    del fixture["primitives"][0]["paramsSchema"]
+    path = tmp_path / "catalog.json"
+    path.write_text(json.dumps(fixture), encoding="utf-8")
+    with pytest.raises(ValueError, match=r"primitives\.0\.paramsSchema"):
+        await seed_primitives_from_catalog(AsyncMock(spec=AsyncSession), path)
