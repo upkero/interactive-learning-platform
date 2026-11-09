@@ -2,8 +2,10 @@ import type { ButtonHTMLAttributes, Ref } from "react";
 
 import styles from "./Button.module.css";
 
-export interface ButtonProps
-  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
+export interface ButtonProps extends Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  "children"
+> {
   label: string;
   variant?: "primary" | "secondary" | "ghost";
   ref?: Ref<HTMLButtonElement>;

@@ -33,7 +33,8 @@ export function StepControls({
   const nextRef = useRef<HTMLButtonElement>(null);
   const nextHadFocus = useRef(false);
   useLayoutEffect(() => {
-    if (currentStep >= totalSteps && nextHadFocus.current) previousRef.current?.focus();
+    if (currentStep >= totalSteps && nextHadFocus.current)
+      previousRef.current?.focus();
     nextHadFocus.current = false;
   }, [currentStep, totalSteps]);
   return (

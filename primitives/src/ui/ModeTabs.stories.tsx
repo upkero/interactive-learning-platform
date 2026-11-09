@@ -9,15 +9,30 @@ const modes = [
   { id: "predict", label: "Predict" },
 ] as const;
 
-const meta = { component: ModeTabs, title: "UI/ModeTabs" } satisfies Meta<typeof ModeTabs>;
+const meta = { component: ModeTabs, title: "UI/ModeTabs" } satisfies Meta<
+  typeof ModeTabs
+>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
-  args: { ariaLabel: "Learning mode", onChange: () => undefined, tabs: modes, value: "watch" },
+  args: {
+    ariaLabel: "Learning mode",
+    onChange: () => undefined,
+    tabs: modes,
+    value: "watch",
+  },
   render: function Render(args) {
     const [, updateArgs] = useArgs();
-    return <ModeTabs {...args} onChange={(value) => { args.onChange(value); updateArgs({ value }); }} />;
+    return (
+      <ModeTabs
+        {...args}
+        onChange={(value) => {
+          args.onChange(value);
+          updateArgs({ value });
+        }}
+      />
+    );
   },
 };
 

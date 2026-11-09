@@ -23,16 +23,34 @@ describe("base UI controls", () => {
 
   it("reports native Slider input changes", () => {
     const onChange = vi.fn();
-    render(<Slider id="speed" label="Speed" max={10} min={0} onChange={onChange} value={5} />);
+    render(
+      <Slider
+        id="speed"
+        label="Speed"
+        max={10}
+        min={0}
+        onChange={onChange}
+        value={5}
+      />
+    );
 
-    fireEvent.change(screen.getByRole("slider", { name: "Speed" }), { target: { value: "6" } });
+    fireEvent.change(screen.getByRole("slider", { name: "Speed" }), {
+      target: { value: "6" },
+    });
     expect(onChange).toHaveBeenCalledWith(6);
   });
 
   it("changes Toggle with the Space key", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    render(<Toggle checked={false} id="autoplay" label="Autoplay" onChange={onChange} />);
+    render(
+      <Toggle
+        checked={false}
+        id="autoplay"
+        label="Autoplay"
+        onChange={onChange}
+      />
+    );
 
     await user.tab();
     await user.keyboard(" ");
@@ -51,7 +69,7 @@ describe("base UI controls", () => {
           { id: "steps", label: "Step by step" },
         ]}
         value="watch"
-      />,
+      />
     );
 
     await user.tab();
@@ -70,7 +88,22 @@ describe("base UI controls", () => {
 
   it("creates unique tab IDs when two widgets use the same modes", () => {
     const tabs = [{ id: "watch", label: "Watch" }] as const;
-    render(<><ModeTabs ariaLabel="First" tabs={tabs} value="watch" onChange={vi.fn()} /><ModeTabs ariaLabel="Second" tabs={tabs} value="watch" onChange={vi.fn()} /></>);
+    render(
+      <>
+        <ModeTabs
+          ariaLabel="First"
+          tabs={tabs}
+          value="watch"
+          onChange={vi.fn()}
+        />
+        <ModeTabs
+          ariaLabel="Second"
+          tabs={tabs}
+          value="watch"
+          onChange={vi.fn()}
+        />
+      </>
+    );
     const [first, second] = screen.getAllByRole("tab", { name: "Watch" });
     expect(first.id).toBeTruthy();
     expect(first.id).not.toBe(second.id);
@@ -94,7 +127,7 @@ describe("base UI controls", () => {
         onPrevious={vi.fn()}
         onTogglePlayback={vi.fn()}
         totalSteps={2}
-      />,
+      />
     );
 
     await user.tab();

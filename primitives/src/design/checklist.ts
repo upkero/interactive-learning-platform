@@ -56,7 +56,7 @@ export const designChecklist: readonly ChecklistRule[] = [
   {
     id: "DS-09",
     severity: "major",
-    rule: "Every SVG root has role=\"img\" and an aria-label; step captions are announced in an aria-live region.",
+    rule: 'Every SVG root has role="img" and an aria-label; step captions are announced in an aria-live region.',
   },
   {
     id: "DS-10",
