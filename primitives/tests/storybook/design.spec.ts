@@ -67,3 +67,10 @@ test("Storybook Controls update the rendered component", async ({ page }) => {
   await page.locator("#control-label").fill("Playback speed");
   await expect(canvas.getByRole("slider", { name: "Playback speed" })).toBeVisible();
 });
+
+test("long mode labels wrap within a 320px viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto("/iframe.html?id=ui-modetabs--long-labels&viewMode=story");
+  await expect(page.getByRole("tab", { name: "Предсказать результат" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});

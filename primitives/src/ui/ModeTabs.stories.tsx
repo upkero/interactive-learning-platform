@@ -20,3 +20,17 @@ export const Default: Story = {
     return <ModeTabs {...args} onChange={(value) => { args.onChange(value); updateArgs({ value }); }} />;
   },
 };
+
+export const LongLabels: Story = {
+  args: {
+    ariaLabel: "Режим обучения",
+    value: "watch",
+    onChange: () => undefined,
+    tabs: [
+      { id: "watch", label: "Просмотр" },
+      { id: "steps", label: "Пошаговое объяснение" },
+      { id: "predict", label: "Предсказать результат" },
+    ],
+  },
+  render: Default.render,
+};

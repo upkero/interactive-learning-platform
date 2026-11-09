@@ -1,6 +1,7 @@
 .list {
   border-bottom: 1px solid var(--g-color-border);
   display: flex;
+  flex-wrap: wrap;
   font-family: var(--g-font-sans);
   gap: var(--g-space-1);
 }
@@ -13,6 +14,8 @@
   cursor: pointer;
   font: inherit;
   font-size: var(--g-text-md);
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding: var(--g-space-2) var(--g-space-3);
 }
 
