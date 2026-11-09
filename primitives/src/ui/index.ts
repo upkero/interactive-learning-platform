@@ -1,5 +1,4 @@
 export { Button, type ButtonProps } from "./Button";
-export { ModeTabs, type ModeTab, type ModeTabsProps } from "./ModeTabs";
 export { Slider, type SliderProps } from "./Slider";
 export {
   StepControls,

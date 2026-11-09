@@ -36,7 +36,6 @@ describe("design catalog", () => {
     expect(catalog.design.tokens).toContain("--g-color-accent");
     expect(catalog.design.uiExports).toEqual([
       "Button",
-      "ModeTabs",
       "Slider",
       "StepControls",
       "Toggle",

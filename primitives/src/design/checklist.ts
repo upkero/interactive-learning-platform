@@ -31,7 +31,7 @@ export const designChecklist: readonly ChecklistRule[] = [
   {
     id: "DS-04",
     severity: "major",
-    rule: "Interactive controls use @grasp/primitives/ui (Button, Slider, Toggle, ModeTabs, StepControls) instead of local equivalents.",
+    rule: "Interactive controls use @grasp/primitives/ui (Button, Slider, Toggle, StepControls) instead of local equivalents.",
   },
   {
     id: "DS-05",
