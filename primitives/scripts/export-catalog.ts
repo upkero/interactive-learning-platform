@@ -25,7 +25,7 @@ try {
     design: {
       checklist: designChecklist,
       tokens,
-      ui_exports: Object.keys(ui).sort(),
+      uiExports: Object.keys(ui).sort(),
     },
   };
   mkdirSync(dirname(output), { recursive: true });
