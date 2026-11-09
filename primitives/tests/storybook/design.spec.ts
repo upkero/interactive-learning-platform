@@ -8,6 +8,7 @@ for (const theme of ["light", "dark"] as const) {
     page,
     request,
   }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
     const index = await (await request.get("/index.json")).json();
     const stories = (
       Object.values(index.entries) as { id: string; type: string }[]
@@ -24,6 +25,12 @@ for (const theme of ["light", "dark"] as const) {
         theme
       );
       await expect(page.locator("#storybook-root")).not.toBeEmpty();
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth
+        ),
+        `${story.id} ${theme}: horizontal overflow at 320px`
+      ).toBe(true);
       const results = await new AxeBuilder({ page })
         .include("#storybook-root")
         .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
