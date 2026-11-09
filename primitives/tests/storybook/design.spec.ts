@@ -58,3 +58,12 @@ test("Storybook toolbar changes the component theme", async ({ page }) => {
   await page.getByText("dark", { exact: true }).click();
   await expect(canvas.locator(".design-preview")).toHaveAttribute("data-theme", "dark");
 });
+
+test("Storybook Controls update the rendered component", async ({ page }) => {
+  await page.goto("/?path=/story/ui-slider--default");
+  const canvas = page.frameLocator("#storybook-preview-iframe");
+  await expect(canvas.getByRole("slider", { name: "Speed" })).toBeVisible();
+  await page.getByRole("tab", { name: /Controls/ }).click();
+  await page.locator("#control-label").fill("Playback speed");
+  await expect(canvas.getByRole("slider", { name: "Playback speed" })).toBeVisible();
+});
