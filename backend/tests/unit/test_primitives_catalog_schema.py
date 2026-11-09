@@ -9,7 +9,7 @@ import pytest
 from jsonschema import Draft202012Validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.app.seed.primitives_seed import seed_primitives_from_catalog
+from src.app.seed.primitives_seed import load_catalog, seed_primitives_from_catalog
 
 BACKEND = Path(__file__).resolve().parents[2]
 CATALOGS = (
@@ -100,3 +100,19 @@ async def test_invalid_entry_reports_field_location(tmp_path: Path) -> None:
     path.write_text(json.dumps(fixture), encoding="utf-8")
     with pytest.raises(ValueError, match=r"primitives\.0\.paramsSchema"):
         await seed_primitives_from_catalog(AsyncMock(spec=AsyncSession), path)
+
+
+@pytest.mark.unit
+async def test_load_catalog_reports_all_errors_on_one_line(tmp_path: Path) -> None:
+    fixture = json.loads(CATALOGS[1].read_text(encoding="utf-8"))
+    fixture["catalogVersion"] = 2
+    del fixture["primitives"][0]["paramsSchema"]
+    path = tmp_path / "catalog.json"
+    path.write_text(json.dumps(fixture), encoding="utf-8")
+    with pytest.raises(ValueError) as error:
+        await load_catalog(path)
+    message = str(error.value)
+    assert "\n" not in message
+    assert message.startswith("Invalid primitives catalog: ")
+    assert "catalogVersion: Value error, only catalogVersion 1 is supported" in message
+    assert "primitives.0.paramsSchema: Field required" in message

@@ -43,20 +43,37 @@ class CatalogFile(BaseModel):
 
 def resolve_catalog_path(explicit: Path | str | None) -> Path:
     """Return an explicit path or the catalog included in backend resources."""
-    if explicit is not None:
-        return Path(explicit)
-    if not DEFAULT_CATALOG_PATH.is_file():
-        raise FileNotFoundError(f"Primitives catalog not found: {DEFAULT_CATALOG_PATH}")
-    return DEFAULT_CATALOG_PATH
+    path = Path(explicit) if explicit is not None else DEFAULT_CATALOG_PATH
+    if not path.is_file():
+        raise FileNotFoundError(f"Primitives catalog not found: {path}")
+    return path
+
+
+def _describe_validation_error(exc: ValidationError) -> str:
+    """Collapse pydantic errors into one line: ``loc: msg; loc: msg``."""
+    details = []
+    for error in exc.errors():
+        location = ".".join(str(part) for part in error["loc"])
+        details.append(f"{location}: {error['msg']}" if location else error["msg"])
+    return "; ".join(details)
+
+
+async def load_catalog(catalog_path: Path) -> CatalogFile:
+    """Read and validate the catalog file; raise ValueError with a one-line message."""
+    payload = await asyncio.to_thread(catalog_path.read_text, encoding="utf-8")
+    try:
+        return CatalogFile.model_validate_json(payload)
+    except ValidationError as exc:
+        raise ValueError(f"Invalid primitives catalog: {_describe_validation_error(exc)}") from exc
 
 
 async def seed_primitives_from_catalog(session: AsyncSession, catalog_path: Path) -> int:
-    """Upsert every primitive from the catalog file; return items count."""
-    payload = await asyncio.to_thread(catalog_path.read_text, encoding="utf-8")
-    try:
-        catalog = CatalogFile.model_validate_json(payload)
-    except ValidationError as exc:
-        raise ValueError(f"Invalid primitives catalog: {exc}") from exc
+    """Load the catalog file and upsert its primitives; return items count."""
+    return await seed_primitives(session, await load_catalog(catalog_path))
+
+
+async def seed_primitives(session: AsyncSession, catalog: CatalogFile) -> int:
+    """Upsert every primitive from a validated catalog; return items count."""
     repository = PrimitiveRepository(session)
     for item in catalog.primitives:
         await repository.upsert(

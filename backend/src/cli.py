@@ -17,7 +17,7 @@ from src.app.core.settings.app import get_app_settings
 from src.app.core.settings.seed import get_seed_settings
 from src.app.db.session import build_engine, build_session_factory
 from src.app.seed.dev_seed import seed_dev
-from src.app.seed.primitives_seed import resolve_catalog_path, seed_primitives_from_catalog
+from src.app.seed.primitives_seed import load_catalog, resolve_catalog_path, seed_primitives
 
 
 async def _run_seed_dev(fake_embeddings: bool) -> int:
@@ -35,14 +35,24 @@ async def _run_seed_dev(fake_embeddings: bool) -> int:
 
 
 async def _run_seed_primitives(catalog: Path | None) -> int:
-    """Open a dedicated engine for the CLI process and sync the catalog."""
+    """Validate the catalog, then open a dedicated engine and sync it.
+
+    A missing or invalid catalog is a user error: it is reported as one line
+    on stderr with exit code 1, before any database connection. Settings and
+    database errors are not caught and keep their traceback.
+    """
+    try:
+        catalog_path = resolve_catalog_path(catalog)
+        catalog_file = await load_catalog(catalog_path)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"seed-primitives: {exc}", file=sys.stderr)
+        return 1
     settings = get_app_settings()
-    catalog_path = resolve_catalog_path(catalog)
     engine = build_engine(str(settings.db_url), null_pool=True)
     try:
         session_factory = build_session_factory(engine)
         async with session_factory() as session, session.begin():
-            count = await seed_primitives_from_catalog(session, catalog_path)
+            count = await seed_primitives(session, catalog_file)
         print(f"seed-primitives: upserted {count} primitives from {catalog_path}")
     finally:
         await engine.dispose()
