@@ -1,0 +1,80 @@
+/* Shared by the application, primitives, widget host, and Storybook. */
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  --g-color-bg: #fcf7f9;
+  --g-color-surface: #f7eef2;
+  --g-color-border: #8d737f;
+  --g-color-text: #2b2127;
+  --g-color-text-muted: #66565f;
+  --g-color-accent: #a43260;
+  --g-color-accent-contrast: #ffffff;
+  --g-color-success: #277044;
+  --g-color-danger: #ae284b;
+
+  --g-viz-1: #a43260;
+  --g-viz-2: #965d20;
+  --g-viz-3: #337352;
+  --g-viz-4: #765094;
+  --g-viz-5: #a93972;
+  --g-viz-6: #745b67;
+  --g-viz-active: #f3c98c;
+  --g-viz-done: #c7e0cf;
+  --g-viz-muted: #f0e3e9;
+
+  --g-font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --g-font-mono: ui-monospace, "SF Mono", Consolas, monospace;
+  --g-text-sm: 0.8125rem;
+  --g-text-md: 0.9375rem;
+  --g-text-lg: 1.125rem;
+  --g-space-1: 4px;
+  --g-space-2: 8px;
+  --g-space-3: 12px;
+  --g-space-4: 16px;
+  --g-space-5: 24px;
+  --g-space-6: 32px;
+  --g-radius-sm: 4px;
+  --g-radius-md: 8px;
+  --g-radius-lg: 12px;
+  --g-control-min-height: 2.5rem;
+  --g-toggle-width: 2.75rem;
+  --g-toggle-height: 1.5rem;
+  --g-toggle-thumb-size: 1rem;
+  --g-toggle-thumb-travel: 1.25rem;
+  --g-duration-fast: 120ms;
+  --g-duration-base: 280ms;
+  --g-easing: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --g-color-bg: #191418;
+  --g-color-surface: #241d22;
+  --g-color-border: #82717c;
+  --g-color-text: #f5e9ef;
+  --g-color-text-muted: #b9aab3;
+  --g-color-accent: #f0b8cb;
+  --g-color-accent-contrast: #402633;
+  --g-color-success: #75c39b;
+  --g-color-danger: #f28fa5;
+
+  --g-viz-1: #f0b8cb;
+  --g-viz-2: #f4c18e;
+  --g-viz-3: #8fcaae;
+  --g-viz-4: #d6b7f3;
+  --g-viz-5: #f1a8c2;
+  --g-viz-6: #bfa7b1;
+  --g-viz-active: #f7d29c;
+  --g-viz-done: #507960;
+  --g-viz-muted: #30272c;
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root, [data-theme] {
+    --g-duration-fast: 0ms;
+    --g-duration-base: 0ms;
+  }
+}

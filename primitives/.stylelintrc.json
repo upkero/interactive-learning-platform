@@ -1,0 +1,20 @@
+{
+  "rules": {
+    "color-no-hex": true,
+    "color-named": "never",
+    "function-disallowed-list": ["rgb", "rgba", "hsl", "hsla"],
+    "declaration-property-value-disallowed-list": {
+      "/^(margin|padding)(-|$)|^(gap|row-gap|column-gap)$|^border(-.*)?-radius$/": ["/(^|[\\s,])-?\\d*\\.?\\d+(px|rem|em)(?=$|[\\s,])/"],
+      "/^(transition|animation)(-|$)/": ["/(^|[\\s,])\\d*\\.?\\d+(ms|s)(?=$|[\\s,])/i"]
+    }
+  },
+  "overrides": [
+    {
+      "files": ["src/tokens/tokens.css"],
+      "rules": {
+        "color-no-hex": null,
+        "function-disallowed-list": null
+      }
+    }
+  ]
+}

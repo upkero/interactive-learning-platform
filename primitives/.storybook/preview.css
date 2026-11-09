@@ -1,0 +1,10 @@
+body { margin: 0; }
+.design-preview {
+  box-sizing: border-box;
+  background: var(--g-color-bg);
+  color: var(--g-color-text);
+  min-height: 100vh;
+  padding: var(--g-space-4);
+  font-family: var(--g-font-sans);
+}
+.design-preview *, .design-preview *::before, .design-preview *::after { box-sizing: border-box; }

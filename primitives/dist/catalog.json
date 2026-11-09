@@ -1,0 +1,104 @@
+{
+  "design": {
+    "checklist": [
+      {
+        "id": "DS-01",
+        "severity": "blocker",
+        "rule": "Colors, spacing, radii and durations use only var(--g-*) tokens; no hex, rgb(), or hardcoded layout values."
+      },
+      {
+        "id": "DS-02",
+        "severity": "blocker",
+        "rule": "The widget is readable in both light and dark themes; screenshots for both themes are provided."
+      },
+      {
+        "id": "DS-03",
+        "severity": "blocker",
+        "rule": "All visible UI text comes from labels or params; no hardcoded user-facing strings are present."
+      },
+      {
+        "id": "DS-04",
+        "severity": "major",
+        "rule": "Interactive controls use @grasp/primitives/ui (Button, Slider, Toggle, StepControls) instead of local equivalents."
+      },
+      {
+        "id": "DS-05",
+        "severity": "major",
+        "rule": "The widget fits a 320–800 px container without horizontal scrolling or clipped labels."
+      },
+      {
+        "id": "DS-06",
+        "severity": "major",
+        "rule": "Text is at least var(--g-text-sm); elements and labels do not overlap."
+      },
+      {
+        "id": "DS-07",
+        "severity": "major",
+        "rule": "Active or compared elements use --g-viz-active and a second non-color cue such as an outline or label."
+      },
+      {
+        "id": "DS-08",
+        "severity": "minor",
+        "rule": "Animations use var(--g-duration-*) and stop when reduced-motion durations are 0."
+      },
+      {
+        "id": "DS-09",
+        "severity": "major",
+        "rule": "Every SVG root has role=\"img\" and an aria-label; step captions are announced in an aria-live region."
+      },
+      {
+        "id": "DS-10",
+        "severity": "blocker",
+        "rule": "The widget renders without console errors for every provided parameter set."
+      }
+    ],
+    "tokens": [
+      "--g-color-accent",
+      "--g-color-accent-contrast",
+      "--g-color-bg",
+      "--g-color-border",
+      "--g-color-danger",
+      "--g-color-success",
+      "--g-color-surface",
+      "--g-color-text",
+      "--g-color-text-muted",
+      "--g-control-min-height",
+      "--g-duration-base",
+      "--g-duration-fast",
+      "--g-easing",
+      "--g-font-mono",
+      "--g-font-sans",
+      "--g-radius-lg",
+      "--g-radius-md",
+      "--g-radius-sm",
+      "--g-space-1",
+      "--g-space-2",
+      "--g-space-3",
+      "--g-space-4",
+      "--g-space-5",
+      "--g-space-6",
+      "--g-text-lg",
+      "--g-text-md",
+      "--g-text-sm",
+      "--g-toggle-height",
+      "--g-toggle-thumb-size",
+      "--g-toggle-thumb-travel",
+      "--g-toggle-width",
+      "--g-viz-1",
+      "--g-viz-2",
+      "--g-viz-3",
+      "--g-viz-4",
+      "--g-viz-5",
+      "--g-viz-6",
+      "--g-viz-active",
+      "--g-viz-done",
+      "--g-viz-muted"
+    ],
+    "uiExports": [
+      "Button",
+      "Slider",
+      "StepControls",
+      "Toggle"
+    ]
+  }
+}
