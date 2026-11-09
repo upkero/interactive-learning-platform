@@ -4,14 +4,11 @@
   "common.correct": "Correct",
   "common.incorrect": "Incorrect",
   "common.invalidFrames": "Unable to display this visualization.",
-  "common.mode": "Learning mode",
+  "common.invalidMode": "This visualization does not support the requested mode.",
   "common.next": "Next",
   "common.no": "No",
   "common.pause": "Pause",
   "common.play": "Play",
-  "common.predict": "Predict",
   "common.step": "Step {current} of {total}",
-  "common.steps": "Steps",
-  "common.watch": "Watch",
   "common.yes": "Yes"
 }

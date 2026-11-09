@@ -54,13 +54,13 @@ export const threeFrame = definePrimitive({
       name: "add-one",
       intent: "Explain adding one to two in separate steps.",
       mode: "steps",
-      params: { left: 2, right: 1 },
+      params: { left: 2 },
     },
   ],
   component: createStepPrimitive({
     modes,
     buildFrames,
-    renderFrame: (frame, _index, labels) => (
+    Scene: ({ frame, labels }) => (
       <div
         role="img"
         aria-label={t(

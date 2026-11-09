@@ -34,6 +34,13 @@
 
 .options { display: flex; flex-wrap: wrap; gap: var(--g-space-2); }
 
+.options button[aria-pressed="true"] {
+  background: var(--g-color-accent);
+  border-color: var(--g-color-accent);
+  color: var(--g-color-accent-contrast);
+  opacity: 1;
+}
+
 @media (max-width: 480px) {
   .options { flex-direction: column; }
 }

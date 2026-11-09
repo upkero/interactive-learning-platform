@@ -1,5 +1,7 @@
 # Primitive framework (SCRUM-123)
 
+The proposed cross-team contract is documented in [ADR-0010](../docs/adr/0010-primitive-contract.md).
+
 `pnpm --filter @grasp/primitives storybook` opens the development showcase at
 http://localhost:6006. Select **Primitives / Three frame**. This test fixture
 adds two integers in three frames. It is not registered in the production
@@ -11,7 +13,7 @@ registry or sent to the resolver; the MVP selection belongs to section 3.4.
 - **Invalid params**: a schema error instead of rendering the component.
 
 Select an example and mode in Controls; switch `ru/en` and `light/dark` in the
-toolbar. Actions records `step`, `mode`, `predict` and `complete` events. Answer
+toolbar. Actions records `step`, `predict` and `complete` events. Answer
 buttons submit immediately, once per visit. Both correct and incorrect answers
 unlock Next and reveal an explanation. Returning to a question resets the answer.
 
@@ -24,17 +26,19 @@ English description and 2–4 examples with `name`, `intent`, `mode`, `params`.
 
 Descriptions explain domain concepts, when to select the primitive, and its
 exclusions. An example intent is a realistic English resolver request. Every
-schema field has English `.meta({ description })`; numbers and arrays have
+schema field, including a discriminator, has English `.meta({ description })`; numbers and arrays have
 explicit bounds and categorical strings use enums. Defaults are optional in the
 exported input schema and are applied by `safeParse` before rendering.
 
-Use `createStepPrimitive({ buildFrames, renderFrame, modes })` for a pure frame
+Use `createStepPrimitive({ buildFrames, Scene, modes })` for a pure frame
 builder and a scene renderer. No network, time or randomness in frame builders.
 The shell renders an accessible fallback for empty sequences or sequences longer
 than `MAX_FRAMES = 200`; the factory also catches errors while building frames.
-Parameter or external initial-mode changes reset the session; locale/theme
-changes retain progress. Watch advances every 1200ms and pauses at the final
-frame; questions are active in Predict, where Next is blocked until an answer.
+The configured mode is fixed for the learner; an unsupported mode displays a
+fallback. Parameter or externally configured mode changes reset the session; locale/theme
+changes retain progress. Watch starts when visible, advances every 1200ms and
+pauses at the final frame; reduced motion requires a manual start. Questions are
+active in Predict, where Next is blocked until an answer.
 Steps and Predict have no automatic playback control.
 
 The public `StepControls` component also accepts optional `canAdvance`,
@@ -63,12 +67,12 @@ schemas, examples, MVP modes, English descriptions and the existing design
 checklist in `dist/catalog.json`. Its object shape is:
 
 ```json
-{ "catalog_version": 1, "design": {}, "primitives": [] }
+{ "catalogVersion": 1, "design": {}, "primitives": [] }
 ```
 
 `primitives` contains registered production entries (currently empty). This is
 the published interface: backend consumes `catalog.primitives`, upserts by `id`,
-and stores each `params_schema`. `backend/resources/catalog.json` is an identical
+and maps each `paramsSchema` to `params_schema`. `backend/resources/catalog.json` is an identical
 generated delivery copy. After changing definitions, regenerate and copy:
 
 ```sh

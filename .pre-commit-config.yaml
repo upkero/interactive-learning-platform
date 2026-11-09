@@ -27,7 +27,7 @@ repos:
   - repo: local
     hooks:
       - id: primitives-typescript-quality
-        name: primitives TypeScript lint and format
+        name: primitives TypeScript lint
         entry: pnpm --filter @grasp/primitives lint:code
         language: system
         pass_filenames: false

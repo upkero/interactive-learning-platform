@@ -16,11 +16,11 @@ export function serializePrimitives(
         title: primitive.title,
         description: primitive.description,
         modes: primitive.modes.filter((mode) => MVP_MODES.includes(mode)),
-        params_schema: z.toJSONSchema(primitive.paramsSchema, {
+        paramsSchema: z.toJSONSchema(primitive.paramsSchema, {
           io: "input",
           unrepresentable: "throw",
         }),
-        label_keys: [...primitive.labelKeys],
+        labelKeys: [...primitive.labelKeys],
         examples: primitive.examples.map(({ name, intent, mode, params }) => ({
           name,
           intent,

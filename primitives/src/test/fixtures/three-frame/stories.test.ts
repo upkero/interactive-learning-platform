@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { threeFrame } from "../../test/fixtures/three-frame";
+import { threeFrame } from "./index";
 import { AddOne, AddTwo, AddZero } from "./ThreeFramePrimitive.stories";
 
 describe("demo stories", () => {

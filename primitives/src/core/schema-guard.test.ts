@@ -75,6 +75,15 @@ describe("catalog schema guard", () => {
     expect(() => definePrimitive(validDefinition)).not.toThrow();
   });
 
+  it("requires an example for every supported MVP mode", () => {
+    expect(() =>
+      definePrimitive({
+        ...validDefinition,
+        modes: ["watch", "steps", "predict"],
+      })
+    ).toThrow("example for mode: predict");
+  });
+
   it("rejects refine even though its JSON Schema projection loses the check", () => {
     const schema = z.object({
       values: z.array(z.number()).refine((values) => values.length % 2 === 0),

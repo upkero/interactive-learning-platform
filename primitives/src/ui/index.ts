@@ -6,3 +6,4 @@ export {
   type StepControlsProps,
 } from "./StepControls";
 export { Toggle, type ToggleProps } from "./Toggle";
+export type { WidgetProps } from "./types";

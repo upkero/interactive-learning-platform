@@ -4,14 +4,11 @@
   "common.correct": "Верно",
   "common.incorrect": "Неверно",
   "common.invalidFrames": "Не удалось показать визуализацию.",
-  "common.mode": "Режим обучения",
+  "common.invalidMode": "Визуализация не поддерживает заданный режим.",
   "common.next": "Далее",
   "common.no": "Нет",
   "common.pause": "Пауза",
   "common.play": "Воспроизвести",
-  "common.predict": "Предсказать",
   "common.step": "Шаг {current} из {total}",
-  "common.steps": "Шаги",
-  "common.watch": "Просмотр",
   "common.yes": "Да"
 }

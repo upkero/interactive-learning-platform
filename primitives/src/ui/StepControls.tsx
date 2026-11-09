@@ -39,10 +39,11 @@ export function StepControls({
   const nextRef = useRef<HTMLButtonElement>(null);
   const nextHadFocus = useRef(false);
   useLayoutEffect(() => {
-    if (currentStep >= totalSteps && nextHadFocus.current)
+    if ((currentStep >= totalSteps || !canAdvance) && nextHadFocus.current) {
       previousRef.current?.focus();
-    nextHadFocus.current = false;
-  }, [currentStep, totalSteps]);
+      nextHadFocus.current = false;
+    }
+  }, [canAdvance, currentStep, totalSteps]);
   return (
     <div className={styles.controls}>
       <Button
@@ -63,10 +64,13 @@ export function StepControls({
         disabled={currentStep >= totalSteps || !canAdvance}
         ref={nextRef}
         label={labels.next}
-        onClick={() => {
-          nextHadFocus.current = document.activeElement === nextRef.current;
-          onNext();
+        onFocus={() => {
+          nextHadFocus.current = true;
         }}
+        onBlur={(event) => {
+          if (!event.currentTarget.disabled) nextHadFocus.current = false;
+        }}
+        onClick={onNext}
         variant="secondary"
       />
       <output aria-live="polite" className={styles.counter}>

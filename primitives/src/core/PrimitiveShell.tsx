@@ -1,10 +1,8 @@
 import {
   useCallback,
   useEffect,
-  useId,
   useLayoutEffect,
   useRef,
-  useState,
   type ReactNode,
 } from "react";
 import { t, type Labels } from "./labels";
@@ -18,7 +16,7 @@ import {
   type Mode,
   type PrimitiveEvent,
 } from "./types";
-import { Button, ModeTabs, StepControls } from "../ui";
+import { Button, StepControls } from "../ui";
 import styles from "./PrimitiveShell.module.css";
 
 export interface PrimitiveShellProps<F extends Frame> {
@@ -34,25 +32,20 @@ export function PrimitiveShell<F extends Frame>(props: PrimitiveShellProps<F>) {
   if (props.frames.length < 1 || props.frames.length > MAX_FRAMES) {
     return <p role="alert">{t(props.labels, "common.invalidFrames")}</p>;
   }
+  const mode = props.mode ?? "watch";
+  if (!MVP_MODES.includes(mode) || !(props.modes ?? MVP_MODES).includes(mode)) {
+    return <p role="alert">{t(props.labels, "common.invalidMode")}</p>;
+  }
   return <ValidPrimitiveShell {...props} />;
 }
 
 function ValidPrimitiveShell<F extends Frame>({
   frames,
   labels,
-  mode: initialMode = "watch",
-  modes = MVP_MODES,
+  mode = "watch",
   onEvent,
   renderFrame,
 }: PrimitiveShellProps<F>) {
-  const supported = modes.filter((mode) => MVP_MODES.includes(mode));
-  if (!supported.length)
-    throw new Error("PrimitiveShell requires an MVP mode.");
-  const [selectedMode, setMode] = useState(
-    supported.includes(initialMode) ? initialMode : supported[0]
-  );
-  const mode = supported.includes(selectedMode) ? selectedMode : supported[0];
-  const id = useId();
   const stepper = useStepper(frames.length);
   const frame = frames[stepper.index];
   const eventHandler = useRef(onEvent);
@@ -69,6 +62,40 @@ function ValidPrimitiveShell<F extends Frame>({
     Boolean(predict.question) || mode !== "watch"
   );
   const completed = useRef(false);
+  const questionRef = useRef<HTMLFieldSetElement>(null);
+  const shellRef = useRef<HTMLElement>(null);
+  const autoStarted = useRef(false);
+
+  useEffect(() => {
+    const element = shellRef.current;
+    if (
+      mode !== "watch" ||
+      !element ||
+      autoStarted.current ||
+      typeof IntersectionObserver === "undefined" ||
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    )
+      return;
+    const observer = new IntersectionObserver((entries) => {
+      if (
+        entries.some((entry) => entry.isIntersecting) &&
+        !autoStarted.current
+      ) {
+        autoStarted.current = true;
+        playback.play();
+        observer.disconnect();
+      }
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [mode, playback.play]);
+
+  useLayoutEffect(() => {
+    if (predict.question && shellRef.current?.contains(document.activeElement))
+      questionRef.current
+        ?.querySelector<HTMLButtonElement>("button:not(:disabled)")
+        ?.focus();
+  }, [predict.question?.id]);
 
   useEffect(() => {
     emit({ type: "step", index: stepper.index, total: frames.length });
@@ -80,31 +107,9 @@ function ValidPrimitiveShell<F extends Frame>({
     }
   }, [emit, predict.canAdvance, stepper.atEnd]);
 
-  function changeMode(next: Mode) {
-    playback.pause();
-    setMode(next);
-    emit({ type: "mode", mode: next });
-  }
-
   return (
-    <section className={styles.shell}>
-      <ModeTabs
-        ariaLabel={t(labels, "common.mode")}
-        idPrefix={id}
-        panelId={`${id}-panel`}
-        onChange={changeMode}
-        tabs={supported.map((mode) => ({
-          id: mode,
-          label: t(labels, `common.${mode}`),
-        }))}
-        value={mode}
-      />
-      <div
-        role="tabpanel"
-        id={`${id}-panel`}
-        aria-labelledby={`${id}-${mode}`}
-        className={styles.panel}
-      >
+    <section ref={shellRef} className={styles.shell}>
+      <div className={styles.panel}>
         <div className={styles.scene}>
           {renderFrame(frame, stepper.index, labels)}
         </div>
@@ -112,7 +117,7 @@ function ValidPrimitiveShell<F extends Frame>({
           {t(labels, frame.captionKey, frame.captionVars)}
         </p>
         {predict.question && (
-          <fieldset className={styles.question}>
+          <fieldset ref={questionRef} className={styles.question}>
             <legend>
               {t(
                 labels,

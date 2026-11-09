@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { PrimitiveStory } from "../../../.storybook/PrimitiveStory";
-import { threeFrame } from "../../test/fixtures/three-frame";
-import { threeFrameLabels } from "../../test/fixtures/three-frame/labels";
+import { PrimitiveStory } from "../../../../.storybook/PrimitiveStory";
+import { threeFrame } from "./index";
+import { threeFrameLabels } from "./labels";
 
 const meta = {
   title: "Primitives/Three frame",

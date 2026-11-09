@@ -32,20 +32,12 @@ for (const example of examples)
             `/iframe.html?id=primitives-three-frame--${stories[example.name]}&viewMode=story&args=mode:${mode}&globals=locale:${locale};theme:${theme}`
           );
           const labels = locale === "en" ? en : ru;
-          await expect(
-            page.getByRole("tab", {
-              name: labels[`common.${mode}`],
-              exact: true,
-            })
-          ).toHaveAttribute("aria-selected", "true");
+          await expect(page.getByRole("tablist")).toHaveCount(0);
           await expect(page.locator(".primitive-preview")).toHaveAttribute(
             "data-theme",
             theme
           );
           if (mode === "watch") {
-            await page
-              .getByRole("button", { name: labels["common.play"], exact: true })
-              .click();
             await expect(
               page.getByText(locale === "en" ? "Step 3 of 3" : "Шаг 3 из 3", {
                 exact: true,
@@ -121,18 +113,42 @@ test("invalid params show an error without rendering the primitive", async ({
   await expect(page.getByRole("tablist")).toHaveCount(0);
 });
 
+test("predict moves keyboard focus to the first answer", async ({ page }) => {
+  await page.goto(
+    "/iframe.html?id=primitives-three-frame--add-two&viewMode=story&args=mode:predict"
+  );
+  const next = page.getByRole("button", { name: "Next", exact: true });
+  await next.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("button", { name: "Yes", exact: true })
+  ).toBeFocused();
+});
+
+test("reduced motion does not autoplay watch", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(
+    "/iframe.html?id=primitives-three-frame--add-two&viewMode=story&args=mode:watch"
+  );
+  await expect(
+    page.getByRole("button", { name: "Play", exact: true })
+  ).toBeVisible();
+  await page.waitForTimeout(1400);
+  await expect(page.getByText("Step 1 of 3", { exact: true })).toBeVisible();
+});
+
 test("manager toolbar switches locale and theme; Actions receives primitive events", async ({
   page,
 }) => {
   await page.goto("/?path=/story/primitives-three-frame--add-two");
   const canvas = page.frameLocator("#storybook-preview-iframe");
   await expect(
-    canvas.getByRole("tab", { name: "Watch", exact: true })
+    canvas.getByRole("button", { name: "Next", exact: true })
   ).toBeVisible();
   await page.getByRole("button", { name: "Widget locale" }).click();
   await page.getByText("ru", { exact: true }).click();
   await expect(
-    canvas.getByRole("tab", { name: "Просмотр", exact: true })
+    canvas.getByRole("button", { name: "Далее", exact: true })
   ).toBeVisible();
   await page.getByRole("button", { name: "Color theme" }).click();
   await page.getByText("dark", { exact: true }).click();

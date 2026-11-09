@@ -30,7 +30,7 @@ try {
   )) as typeof import("../src/core/catalog.ts");
   const primitives = serializePrimitives(getPrimitives());
   const catalog = {
-    catalog_version: 1,
+    catalogVersion: 1,
     design: {
       checklist: designChecklist,
       tokens,

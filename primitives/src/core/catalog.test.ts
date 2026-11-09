@@ -49,7 +49,7 @@ describe("published resolver catalog", () => {
       ...catalog.primitives,
       ...serializePrimitives([threeFrame]),
     ]) {
-      const validate = ajv.compile(primitive.params_schema);
+      const validate = ajv.compile(primitive.paramsSchema);
       for (const example of primitive.examples)
         expect(validate(example.params), JSON.stringify(validate.errors)).toBe(
           true

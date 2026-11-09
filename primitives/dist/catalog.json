@@ -1,5 +1,5 @@
 {
-  "catalog_version": 1,
+  "catalogVersion": 1,
   "design": {
     "checklist": [
       {
@@ -19,7 +19,7 @@
       },
       {
         "id": "DS-04",
-        "rule": "Interactive controls use @grasp/primitives/ui (Button, Slider, Toggle, ModeTabs, StepControls) instead of local equivalents.",
+        "rule": "Interactive controls use @grasp/primitives/ui (Button, Slider, Toggle, StepControls) instead of local equivalents.",
         "severity": "major"
       },
       {
@@ -97,7 +97,6 @@
     ],
     "uiExports": [
       "Button",
-      "ModeTabs",
       "Slider",
       "StepControls",
       "Toggle"

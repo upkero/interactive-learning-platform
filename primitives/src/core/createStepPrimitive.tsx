@@ -1,9 +1,9 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, type ComponentType } from "react";
 import { PrimitiveShell } from "./PrimitiveShell";
 import {
   MVP_MODES,
   type Frame,
-  type Labels,
+  type SceneProps,
   type Mode,
   type PrimitiveProps,
 } from "./types";
@@ -12,7 +12,7 @@ import { stableStringify } from "./serialization";
 
 export function createStepPrimitive<Params, F extends Frame>(config: {
   buildFrames: (params: Params) => readonly F[];
-  renderFrame: (frame: F, index: number, labels: Labels) => ReactNode;
+  Scene: ComponentType<SceneProps<Params, F>>;
   modes?: readonly Mode[];
 }) {
   return function StepPrimitive({
@@ -25,7 +25,13 @@ export function createStepPrimitive<Params, F extends Frame>(config: {
     const result = useMemo(() => {
       try {
         return { frames: config.buildFrames(params) };
-      } catch {
+      } catch (error) {
+        if (
+          import.meta.env?.DEV ||
+          (typeof process !== "undefined" &&
+            process.env.NODE_ENV === "development")
+        )
+          console.error("Failed to build primitive frames", error);
         return { frames: null };
       }
       // JSON-equivalent params intentionally share frame data and session identity.
@@ -41,7 +47,14 @@ export function createStepPrimitive<Params, F extends Frame>(config: {
         mode={mode}
         modes={config.modes ?? MVP_MODES}
         onEvent={onEvent}
-        renderFrame={config.renderFrame}
+        renderFrame={(frame, index, sceneLabels) => (
+          <config.Scene
+            frame={frame}
+            index={index}
+            labels={sceneLabels}
+            params={params}
+          />
+        )}
       />
     );
   };

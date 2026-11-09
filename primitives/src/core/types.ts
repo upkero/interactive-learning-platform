@@ -14,7 +14,6 @@ export type { Labels, LabelVariables } from "./labels";
 export type PrimitiveEvent =
   | { type: "step"; index: number; total: number }
   | { type: "predict"; questionId: string; correct: boolean }
-  | { type: "mode"; mode: Mode }
   | { type: "complete" };
 
 export interface PrimitiveProps<Params> {
@@ -39,6 +38,13 @@ export interface Frame {
   question?: PredictQuestion;
 }
 
+export interface SceneProps<Params, F extends Frame> {
+  frame: F;
+  index: number;
+  params: Params;
+  labels: Labels;
+}
+
 export interface PrimitiveExample<Params> {
   /** Kebab-case name; used as the Storybook story identifier. */
   name: string;
@@ -48,7 +54,7 @@ export interface PrimitiveExample<Params> {
   params: Params;
 }
 
-export interface PrimitiveDefinition<Params> {
+export interface PrimitiveDefinition<Params, Input = Params> {
   /** Stable kebab-case identifier, for example `array-ops`. */
   id: string;
   /** Semver version; a breaking schema change increments its major version. */
@@ -61,15 +67,15 @@ export interface PrimitiveDefinition<Params> {
    */
   description: string;
   /** Input schema shared by the resolver, backend catalog, and frontend. */
-  paramsSchema: z.ZodType<Params>;
+  paramsSchema: z.ZodType<Params, Input>;
   modes: readonly Mode[];
   component: ComponentType<PrimitiveProps<Params>>;
   /** Two to four realistic, English few-shot examples for the resolver. */
-  examples: readonly PrimitiveExample<Params>[];
+  examples: readonly PrimitiveExample<Input>[];
   /** Translation keys required by this primitive in both locale dictionaries. */
   labelKeys: readonly string[];
 }
 
 /** Heterogeneous registry boundary; params must be safeParse'd before rendering. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type AnyPrimitiveDefinition = PrimitiveDefinition<any>;
+export type AnyPrimitiveDefinition = PrimitiveDefinition<any, any>;

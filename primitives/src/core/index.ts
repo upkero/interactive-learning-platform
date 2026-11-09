@@ -8,6 +8,7 @@ export { useStepper } from "./modes/useStepper";
 export { MODES, MVP_MODES, MAX_FRAMES } from "./types";
 export type {
   Frame,
+  SceneProps,
   Mode,
   PrimitiveEvent,
   PrimitiveProps,

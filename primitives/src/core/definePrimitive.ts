@@ -38,9 +38,13 @@ export function assertCatalogSafeSchema(schema: z.ZodType): void {
   visit(schema);
 }
 
-export function definePrimitive<Params>(
-  definition: PrimitiveDefinition<Params>
-): PrimitiveDefinition<Params> {
+export function definePrimitive<Schema extends z.ZodType>(
+  definition: PrimitiveDefinition<z.output<Schema>, z.input<Schema>> & {
+    paramsSchema: Schema;
+  }
+): PrimitiveDefinition<z.output<Schema>, z.input<Schema>> & {
+  paramsSchema: Schema;
+} {
   if (!KEBAB_CASE.test(definition.id)) {
     throw new Error(`Primitive id must be kebab-case: ${definition.id}`);
   }
@@ -90,6 +94,13 @@ export function definePrimitive<Params>(
       );
     }
     definition.paramsSchema.parse(example.params);
+  }
+
+  for (const mode of definition.modes.filter((item) =>
+    MVP_MODES.includes(item)
+  )) {
+    if (!definition.examples.some((example) => example.mode === mode))
+      throw new Error(`Primitive needs an example for mode: ${mode}`);
   }
 
   assertCatalogSafeSchema(definition.paramsSchema);

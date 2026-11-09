@@ -182,14 +182,21 @@ describe("three-frame primitive", () => {
       />
     );
     expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Watch" }));
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    rerender(
+      <Demo
+        params={{ left: 4, right: 0 }}
+        mode="watch"
+        labels={{ ...en, ...threeFrameLabels.en }}
+      />
+    );
     expect(screen.getByRole("button", { name: "Play" })).toBeEnabled();
   });
-  it("only exposes supported modes and enforces MAX_FRAMES", () => {
+  it("rejects unsupported modes and enforces MAX_FRAMES", () => {
     const StepsOnly = createStepPrimitive({
       modes: ["steps"],
       buildFrames,
-      renderFrame: () => null,
+      Scene: () => null,
     });
     render(
       <StepsOnly
@@ -198,12 +205,14 @@ describe("three-frame primitive", () => {
         labels={{ ...en, ...threeFrameLabels.en }}
       />
     );
-    expect(screen.getAllByRole("tab")).toHaveLength(1);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      en["common.invalidMode"]
+    );
     cleanup();
     const TooMany = createStepPrimitive({
       buildFrames: () =>
         Array.from({ length: 201 }, () => ({ captionKey: "common.next" })),
-      renderFrame: () => null,
+      Scene: () => null,
     });
     render(<TooMany params={{}} mode="steps" labels={en} />);
     expect(screen.getByRole("alert")).toHaveTextContent(
@@ -213,13 +222,13 @@ describe("three-frame primitive", () => {
   it("shows a fallback when frame construction fails or returns no frames", () => {
     const Empty = createStepPrimitive({
       buildFrames: () => [],
-      renderFrame: () => null,
+      Scene: () => null,
     });
     const Broken = createStepPrimitive({
       buildFrames: () => {
         throw new Error("invalid frames");
       },
-      renderFrame: () => null,
+      Scene: () => null,
     });
     const { rerender } = render(<Empty params={{}} mode="steps" labels={en} />);
     expect(screen.getByRole("alert")).toHaveTextContent(
