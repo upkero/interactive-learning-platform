@@ -95,7 +95,7 @@
       "--g-viz-done",
       "--g-viz-muted"
     ],
-    "ui_exports": [
+    "uiExports": [
       "Button",
       "ModeTabs",
       "Slider",
