@@ -34,8 +34,9 @@ describe("design catalog", () => {
     const catalog = JSON.parse(first);
     expect(catalog.design.checklist).toHaveLength(10);
     expect(catalog.design.tokens).toContain("--g-color-accent");
-    expect(catalog.design.uiExports).toEqual([
+    expect(catalog.design.ui_exports).toEqual([
       "Button",
+      "ModeTabs",
       "Slider",
       "StepControls",
       "Toggle",

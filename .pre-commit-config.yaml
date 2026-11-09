@@ -23,3 +23,18 @@ repos:
     hooks:
       - id: prettier
         types_or: [yaml, markdown, json]
+
+  - repo: local
+    hooks:
+      - id: primitives-typescript-quality
+        name: primitives TypeScript lint and format
+        entry: pnpm --filter @grasp/primitives lint:code
+        language: system
+        pass_filenames: false
+        files: ^primitives/.*\.(ts|tsx)$
+      - id: primitives-typescript-format
+        name: primitives TypeScript formatting
+        entry: pnpm --filter @grasp/primitives format:check
+        language: system
+        pass_filenames: false
+        files: ^primitives/.*\.(ts|tsx)$

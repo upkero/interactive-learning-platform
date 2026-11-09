@@ -4,16 +4,13 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 for (const theme of ["light", "dark"] as const) {
-  test(`all UI stories pass axe in ${theme} theme`, async ({
-    page,
-    request,
-  }) => {
+  test(`all stories pass axe in ${theme} theme`, async ({ page, request }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     const index = await (await request.get("/index.json")).json();
     const stories = (
       Object.values(index.entries) as { id: string; type: string }[]
-    ).filter((entry) => entry.type === "story" && entry.id.startsWith("ui-"));
-    expect(stories.length).toBeGreaterThanOrEqual(5);
+    ).filter((entry) => entry.type === "story");
+    expect(stories.length).toBeGreaterThanOrEqual(7);
     const screenshots = join(process.cwd(), "test-results", "screenshots");
     mkdirSync(screenshots, { recursive: true });
     for (const story of stories) {
@@ -51,6 +48,7 @@ for (const theme of ["light", "dark"] as const) {
     );
     const preview = page.locator(".design-preview");
     await expect(preview).toHaveAttribute("data-theme", theme);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     expect(
       await preview.evaluate((el) =>
         getComputedStyle(el).getPropertyValue("--g-duration-fast").trim()
@@ -108,4 +106,17 @@ test("Storybook Controls update the rendered component", async ({ page }) => {
   await expect(
     canvas.getByRole("slider", { name: "Playback speed" })
   ).toBeVisible();
+});
+
+test("long mode labels wrap within a 320px viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto("/iframe.html?id=ui-modetabs--long-labels&viewMode=story");
+  await expect(
+    page.getByRole("tab", { name: "Предсказать результат" })
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth
+    )
+  ).toBe(true);
 });

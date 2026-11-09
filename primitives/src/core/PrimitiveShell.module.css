@@ -8,12 +8,14 @@
 }
 
 .scene {
+  box-sizing: border-box;
   background: var(--g-color-surface);
   border: 1px solid var(--g-color-border);
   border-radius: var(--g-radius-md);
   padding: var(--g-space-4);
   overflow-wrap: anywhere;
   min-width: 0;
+  max-width: 100%;
 }
 
 .caption { color: var(--g-color-text-muted); margin: 0; }

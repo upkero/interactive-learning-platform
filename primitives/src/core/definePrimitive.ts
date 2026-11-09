@@ -13,13 +13,20 @@ export function assertCatalogSafeSchema(schema: z.ZodType): void {
   const forbidden = new Set(["custom", "transform", "pipe"]);
 
   function visit(value: unknown): void {
-    if (typeof value !== "object" || value === null || visited.has(value)) return;
+    if (typeof value !== "object" || value === null || visited.has(value))
+      return;
     visited.add(value);
 
-    const definition = (value as { _zod?: { def?: { type?: string; check?: string } } })._zod?.def;
-    if (definition?.check === "custom" || (definition?.type && forbidden.has(definition.type))) {
+    const definition = (
+      value as { _zod?: { def?: { type?: string; check?: string } } }
+    )._zod?.def;
+    if (
+      definition?.check === "custom" ||
+      definition?.check === "overwrite" ||
+      (definition?.type && forbidden.has(definition.type))
+    ) {
       throw new Error(
-        `Schema contains unsupported Zod ${definition.type ?? definition.check}; use a JSON Schema-compatible structure instead.`,
+        `Schema contains unsupported Zod ${definition.type ?? definition.check}; use a JSON Schema-compatible structure instead.`
       );
     }
 
@@ -32,7 +39,7 @@ export function assertCatalogSafeSchema(schema: z.ZodType): void {
 }
 
 export function definePrimitive<Params>(
-  definition: PrimitiveDefinition<Params>,
+  definition: PrimitiveDefinition<Params>
 ): PrimitiveDefinition<Params> {
   if (!KEBAB_CASE.test(definition.id)) {
     throw new Error(`Primitive id must be kebab-case: ${definition.id}`);
@@ -41,9 +48,14 @@ export function definePrimitive<Params>(
     throw new Error(`Primitive version must be semver: ${definition.version}`);
   }
   if (!definition.title.trim() || !definition.description.trim()) {
-    throw new Error("Primitive title and description must be non-empty English catalog text.");
+    throw new Error(
+      "Primitive title and description must be non-empty English catalog text."
+    );
   }
-  if (definition.modes.length === 0 || definition.modes.some((mode) => !MODES.includes(mode))) {
+  if (
+    definition.modes.length === 0 ||
+    definition.modes.some((mode) => !MODES.includes(mode))
+  ) {
     throw new Error("Primitive must declare one or more supported modes.");
   }
   if (definition.examples.length < 2 || definition.examples.length > 4) {
@@ -55,7 +67,10 @@ export function definePrimitive<Params>(
   if (new Set(definition.modes).size !== definition.modes.length) {
     throw new Error("Primitive modes must be unique.");
   }
-  if (new Set(definition.examples.map((example) => example.name)).size !== definition.examples.length) {
+  if (
+    new Set(definition.examples.map((example) => example.name)).size !==
+    definition.examples.length
+  ) {
     throw new Error("Primitive example names must be unique.");
   }
   if (new Set(definition.labelKeys).size !== definition.labelKeys.length) {
@@ -70,7 +85,9 @@ export function definePrimitive<Params>(
       throw new Error(`Example intent must be non-empty: ${example.name}`);
     }
     if (!definition.modes.includes(example.mode)) {
-      throw new Error(`Example ${example.name} uses an unsupported mode: ${example.mode}`);
+      throw new Error(
+        `Example ${example.name} uses an unsupported mode: ${example.mode}`
+      );
     }
     definition.paramsSchema.parse(example.params);
   }

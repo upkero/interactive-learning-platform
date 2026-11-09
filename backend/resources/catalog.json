@@ -1,5 +1,5 @@
 {
-  "catalogVersion": 1,
+  "catalog_version": 1,
   "design": {
     "checklist": [
       {
@@ -103,79 +103,5 @@
       "Toggle"
     ]
   },
-  "primitives": [
-    {
-      "description": "Framework demonstration of adding two non-negative integers from zero to ten. Shows an initial quantity, a prediction about whether it increases, and the resulting sum. Not for negative numbers, fractions, subtraction or general algorithms.",
-      "examples": [
-        {
-          "intent": "Show how adding two counters changes a group of three.",
-          "mode": "watch",
-          "name": "add-two",
-          "params": {
-            "left": 3,
-            "right": 2
-          }
-        },
-        {
-          "intent": "Ask whether adding zero changes a group of four counters.",
-          "mode": "predict",
-          "name": "add-zero",
-          "params": {
-            "left": 4,
-            "right": 0
-          }
-        },
-        {
-          "intent": "Explain adding one to two in separate steps.",
-          "mode": "steps",
-          "name": "add-one",
-          "params": {
-            "left": 2,
-            "right": 1
-          }
-        }
-      ],
-      "id": "three-frame",
-      "label_keys": [
-        "common.yes",
-        "common.no",
-        "three-frame.start",
-        "three-frame.predict",
-        "three-frame.question",
-        "three-frame.explanation",
-        "three-frame.result",
-        "three-frame.scene",
-        "three-frame.initial"
-      ],
-      "modes": [
-        "watch",
-        "steps",
-        "predict"
-      ],
-      "params_schema": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "properties": {
-          "left": {
-            "description": "Initial number of counters, from zero to ten.",
-            "maximum": 10,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "right": {
-            "default": 1,
-            "description": "Number of counters added, from zero to ten. Zero leaves the quantity unchanged.",
-            "maximum": 10,
-            "minimum": 0,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "left"
-        ],
-        "type": "object"
-      },
-      "title": "Three-frame addition demo",
-      "version": "1.0.0"
-    }
-  ]
+  "primitives": []
 }

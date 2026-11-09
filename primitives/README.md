@@ -1,11 +1,11 @@
 # Primitive framework (SCRUM-123)
 
 `pnpm --filter @grasp/primitives storybook` opens the development showcase at
-http://localhost:6006. Select **Primitives / Three frame**. This registered demo
-adds two integers in three frames. It is a framework example, not the MVP
-primitive selection for section 3.4.
+http://localhost:6006. Select **Primitives / Three frame**. This test fixture
+adds two integers in three frames. It is not registered in the production
+registry or sent to the resolver; the MVP selection belongs to section 3.4.
 
-- **Add two**: automatic playback, stopping at the question frame.
+- **Add two**: automatic playback, continuing through inactive question frames.
 - **Add zero**: predict whether adding zero increases the quantity.
 - **Add one**: manual steps.
 - **Invalid params**: a schema error instead of rendering the component.
@@ -30,10 +30,17 @@ exported input schema and are applied by `safeParse` before rendering.
 
 Use `createStepPrimitive({ buildFrames, renderFrame, modes })` for a pure frame
 builder and a scene renderer. No network, time or randomness in frame builders.
-The factory rejects empty sequences and sequences longer than `MAX_FRAMES = 200`.
+The shell renders an accessible fallback for empty sequences or sequences longer
+than `MAX_FRAMES = 200`; the factory also catches errors while building frames.
 Parameter or external initial-mode changes reset the session; locale/theme
-changes retain progress. Watch advances every 1200ms and pauses at a question or
-the final frame. Steps and Predict have no automatic playback control.
+changes retain progress. Watch advances every 1200ms and pauses at the final
+frame; questions are active in Predict, where Next is blocked until an answer.
+Steps and Predict have no automatic playback control.
+
+The public `StepControls` component also accepts optional `canAdvance`,
+`showPlayback` and `playbackDisabled` props to control the Next button and
+playback controls. Generated widgets should use this shared component when
+they need step navigation, as required by checklist rule DS-04.
 
 `labelKeys` lists all primitive-specific keys; common shell labels are supplied
 by both exported dictionaries. `t` interpolates `{name}`, leaves missing values
@@ -46,17 +53,20 @@ from `@grasp/primitives/i18n/<locale>.json`. Resolve `primitive_id`, validate
 `params` via `definition.paramsSchema.safeParse`, then render
 `definition.component` with the parsed data, mode, labels and onEvent. Unknown
 ids, invalid params or unsupported modes must use the application's fallback and
-client logging. That application integration is owned by the application team.
+client logging. The application must also use an ErrorBoundary around each widget
+to contain unforeseen scene-rendering errors. That integration is owned by the
+application team. Since the package currently exports TypeScript sources, Next.js
+consumers should add `@grasp/primitives` to `transpilePackages`.
 
 `pnpm --filter @grasp/primitives catalog` produces canonical Draft 2020-12 input
 schemas, examples, MVP modes, English descriptions and the existing design
 checklist in `dist/catalog.json`. Its object shape is:
 
 ```json
-{ "catalogVersion": 1, "design": {}, "primitives": [] }
+{ "catalog_version": 1, "design": {}, "primitives": [] }
 ```
 
-`primitives` contains registered entries (the real file is not empty). This is
+`primitives` contains registered production entries (currently empty). This is
 the published interface: backend consumes `catalog.primitives`, upserts by `id`,
 and stores each `params_schema`. `backend/resources/catalog.json` is an identical
 generated delivery copy. After changing definitions, regenerate and copy:

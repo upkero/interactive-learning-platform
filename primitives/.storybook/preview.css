@@ -1,4 +1,4 @@
-body { margin: 0; }
+body { margin: 0; background: var(--g-color-bg); }
 .design-preview {
   box-sizing: border-box;
   background: var(--g-color-bg);

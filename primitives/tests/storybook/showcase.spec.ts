@@ -1,73 +1,164 @@
 import { readFileSync } from "node:fs";
 import { test, expect } from "@playwright/test";
-const en: Record<string, string> = JSON.parse(readFileSync("src/i18n/en.json", "utf8"));
-const ru: Record<string, string> = JSON.parse(readFileSync("src/i18n/ru.json", "utf8"));
+const en: Record<string, string> = JSON.parse(
+  readFileSync("src/i18n/en.json", "utf8")
+);
+const ru: Record<string, string> = JSON.parse(
+  readFileSync("src/i18n/ru.json", "utf8")
+);
 
-const catalog = JSON.parse(readFileSync("dist/catalog.json", "utf8"));
-const examples: { name: string; params: { left: number; right: number } }[] = catalog.primitives.find((item: { id: string }) => item.id === "three-frame").examples;
-const stories: Record<string, string> = { "add-two": "add-two", "add-zero": "add-zero", "add-one": "add-one" };
+const examples = [
+  { name: "add-two", params: { left: 3, right: 2 } },
+  { name: "add-zero", params: { left: 4, right: 0 } },
+  { name: "add-one", params: { left: 2, right: 1 } },
+];
+const stories: Record<string, string> = {
+  "add-two": "add-two",
+  "add-zero": "add-zero",
+  "add-one": "add-one",
+};
 
-for (const example of examples) for (const mode of ["watch", "steps", "predict"] as const) {
-  for (const locale of ["en", "ru"] as const) for (const theme of ["light", "dark"] as const) {
-    test(`${example.name} / ${mode} / ${locale} / ${theme}`, async ({ page }) => {
-      const errors: string[] = [];
-      page.on("pageerror", (error) => errors.push(error.message));
-      await page.setViewportSize({ width: 320, height: 800 });
-      await page.goto(`/iframe.html?id=primitives-three-frame--${stories[example.name]}&viewMode=story&args=mode:${mode}&globals=locale:${locale};theme:${theme}`);
-      const labels = locale === "en" ? en : ru;
-      await expect(page.getByRole("tab", { name: labels[`common.${mode}`], exact: true })).toHaveAttribute("aria-selected", "true");
-      await expect(page.locator(".primitive-preview")).toHaveAttribute("data-theme", theme);
-      if (mode === "watch") {
-        await page.getByRole("button", { name: labels["common.play"], exact: true }).click();
-        await expect(page.getByText(locale === "en" ? "Step 2 of 3" : "Шаг 2 из 3", { exact: true })).toBeVisible();
-        await expect(page.getByRole("button", { name: labels["common.play"], exact: true })).toBeDisabled();
-      } else await page.getByRole("button", { name: labels["common.next"], exact: true }).click();
-      if (mode === "predict") {
-        await expect(page.getByRole("button", { name: labels["common.next"], exact: true })).toBeDisabled();
-        const question = page.locator("fieldset");
-        await expect(question).toBeVisible();
-        const panelBox = await question.boundingBox();
-        const nextBox = await page.getByRole("button", { name: labels["common.next"], exact: true }).boundingBox();
-        expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(nextBox!.y);
-        await page.getByRole("button", { name: labels[example.params.right > 0 ? "common.yes" : "common.no"], exact: true }).click();
-        await expect(page.getByText(labels["common.correct"], { exact: true })).toBeVisible();
+for (const example of examples)
+  for (const mode of ["watch", "steps", "predict"] as const) {
+    for (const locale of ["en", "ru"] as const)
+      for (const theme of ["light", "dark"] as const) {
+        test(`${example.name} / ${mode} / ${locale} / ${theme}`, async ({
+          page,
+        }) => {
+          const errors: string[] = [];
+          page.on("pageerror", (error) => errors.push(error.message));
+          await page.setViewportSize({ width: 320, height: 800 });
+          await page.goto(
+            `/iframe.html?id=primitives-three-frame--${stories[example.name]}&viewMode=story&args=mode:${mode}&globals=locale:${locale};theme:${theme}`
+          );
+          const labels = locale === "en" ? en : ru;
+          await expect(
+            page.getByRole("tab", {
+              name: labels[`common.${mode}`],
+              exact: true,
+            })
+          ).toHaveAttribute("aria-selected", "true");
+          await expect(page.locator(".primitive-preview")).toHaveAttribute(
+            "data-theme",
+            theme
+          );
+          if (mode === "watch") {
+            await page
+              .getByRole("button", { name: labels["common.play"], exact: true })
+              .click();
+            await expect(
+              page.getByText(locale === "en" ? "Step 3 of 3" : "Шаг 3 из 3", {
+                exact: true,
+              })
+            ).toBeVisible({ timeout: 5000 });
+          } else
+            await page
+              .getByRole("button", { name: labels["common.next"], exact: true })
+              .click();
+          if (mode === "predict") {
+            await expect(
+              page.getByRole("button", {
+                name: labels["common.next"],
+                exact: true,
+              })
+            ).toBeDisabled();
+            const question = page.locator("fieldset");
+            await expect(question).toBeVisible();
+            const panelBox = await question.boundingBox();
+            const nextBox = await page
+              .getByRole("button", { name: labels["common.next"], exact: true })
+              .boundingBox();
+            expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(
+              nextBox!.y
+            );
+            await page
+              .getByRole("button", {
+                name: labels[
+                  example.params.right > 0 ? "common.yes" : "common.no"
+                ],
+                exact: true,
+              })
+              .click();
+            await expect(
+              page.getByText(labels["common.correct"], { exact: true })
+            ).toBeVisible();
+          }
+          if (mode !== "watch")
+            await page
+              .getByRole("button", { name: labels["common.next"], exact: true })
+              .click();
+          await expect(
+            page.getByRole("button", {
+              name: labels["common.next"],
+              exact: true,
+            })
+          ).toBeDisabled();
+          await expect(
+            page.getByText(
+              `${example.params.left} + ${example.params.right} = ${example.params.left + example.params.right}`,
+              { exact: true }
+            )
+          ).toBeVisible();
+          expect(
+            await page.evaluate(
+              () => document.documentElement.scrollWidth <= window.innerWidth
+            )
+          ).toBe(true);
+          expect(errors).toEqual([]);
+        });
       }
-      await page.getByRole("button", { name: labels["common.next"], exact: true }).click();
-      await expect(page.getByRole("button", { name: labels["common.next"], exact: true })).toBeDisabled();
-      await expect(page.getByText(`${example.params.left} + ${example.params.right} = ${example.params.left + example.params.right}`, { exact: true })).toBeVisible();
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-      expect(errors).toEqual([]);
-    });
   }
-}
 
-test("invalid params show an error without rendering the primitive", async ({ page }) => {
-  await page.goto("/iframe.html?id=primitives-three-frame--invalid-params&viewMode=story");
-  await expect(page.getByRole("alert")).toContainText("Invalid primitive parameters");
+test("invalid params show an error without rendering the primitive", async ({
+  page,
+}) => {
+  await page.goto(
+    "/iframe.html?id=primitives-three-frame--invalid-params&viewMode=story"
+  );
+  await expect(page.getByRole("alert")).toContainText(
+    "Invalid primitive parameters"
+  );
   await expect(page.getByRole("tablist")).toHaveCount(0);
 });
 
-test("manager toolbar switches locale and theme; Actions receives primitive events", async ({ page }) => {
+test("manager toolbar switches locale and theme; Actions receives primitive events", async ({
+  page,
+}) => {
   await page.goto("/?path=/story/primitives-three-frame--add-two");
   const canvas = page.frameLocator("#storybook-preview-iframe");
-  await expect(canvas.getByRole("tab", { name: "Watch", exact: true })).toBeVisible();
+  await expect(
+    canvas.getByRole("tab", { name: "Watch", exact: true })
+  ).toBeVisible();
   await page.getByRole("button", { name: "Widget locale" }).click();
   await page.getByText("ru", { exact: true }).click();
-  await expect(canvas.getByRole("tab", { name: "Просмотр", exact: true })).toBeVisible();
+  await expect(
+    canvas.getByRole("tab", { name: "Просмотр", exact: true })
+  ).toBeVisible();
   await page.getByRole("button", { name: "Color theme" }).click();
   await page.getByText("dark", { exact: true }).click();
-  await expect(canvas.locator(".primitive-preview")).toHaveAttribute("data-theme", "dark");
+  await expect(canvas.locator(".primitive-preview")).toHaveAttribute(
+    "data-theme",
+    "dark"
+  );
   await page.getByRole("tab", { name: /Actions/ }).click();
   await canvas.getByRole("button", { name: "Далее", exact: true }).click();
-  await expect(page.getByText("primitive:event", { exact: false }).first()).toBeVisible();
+  await expect(
+    page.getByText("primitive:event", { exact: false }).first()
+  ).toBeVisible();
 });
 
-test("every indexed story renders without a runtime error", async ({ page, request }) => {
+test("every indexed story renders without a runtime error", async ({
+  page,
+  request,
+}) => {
   const response = await request.get("/index.json");
   const index = await response.json();
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  for (const story of Object.values(index.entries) as { id: string; type: string }[]) {
+  for (const story of Object.values(index.entries) as {
+    id: string;
+    type: string;
+  }[]) {
     if (story.type !== "story") continue;
     await page.goto(`/iframe.html?id=${story.id}&viewMode=story`);
     await expect(page.locator("#storybook-root")).not.toBeEmpty();

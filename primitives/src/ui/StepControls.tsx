@@ -52,11 +52,13 @@ export function StepControls({
         onClick={onPrevious}
         variant="secondary"
       />
-      {showPlayback && <Button
-        label={isPlaying ? labels.pause : labels.play}
-        onClick={onTogglePlayback}
-        disabled={playbackDisabled || currentStep >= totalSteps}
-      />}
+      {showPlayback && (
+        <Button
+          label={isPlaying ? labels.pause : labels.play}
+          onClick={onTogglePlayback}
+          disabled={playbackDisabled || currentStep >= totalSteps}
+        />
+      )}
       <Button
         disabled={currentStep >= totalSteps || !canAdvance}
         ref={nextRef}

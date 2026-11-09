@@ -6,4 +6,12 @@ export { usePlayback } from "./modes/usePlayback";
 export { usePredict } from "./modes/usePredict";
 export { useStepper } from "./modes/useStepper";
 export { MODES, MVP_MODES, MAX_FRAMES } from "./types";
-export type { Frame, Mode, PrimitiveEvent, PrimitiveProps, PrimitiveDefinition, PrimitiveExample, AnyPrimitiveDefinition } from "./types";
+export type {
+  Frame,
+  Mode,
+  PrimitiveEvent,
+  PrimitiveProps,
+  PrimitiveDefinition,
+  PrimitiveExample,
+  AnyPrimitiveDefinition,
+} from "./types";
