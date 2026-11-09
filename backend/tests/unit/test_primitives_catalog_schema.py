@@ -9,7 +9,7 @@ import pytest
 from jsonschema import Draft202012Validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.app.seed.primitives_seed import load_catalog, seed_primitives_from_catalog
+from src.app.seed.primitives_seed import seed_primitives_from_catalog
 
 BACKEND = Path(__file__).resolve().parents[2]
 CATALOGS = (
@@ -100,12 +100,3 @@ async def test_invalid_entry_reports_field_location(tmp_path: Path) -> None:
     path.write_text(json.dumps(fixture), encoding="utf-8")
     with pytest.raises(ValueError, match=r"primitives\.0\.paramsSchema"):
         await seed_primitives_from_catalog(AsyncMock(spec=AsyncSession), path)
-
-
-@pytest.mark.unit
-async def test_invalid_json_error_is_single_line(tmp_path: Path) -> None:
-    path = tmp_path / "catalog.json"
-    path.write_text("{", encoding="utf-8")
-    with pytest.raises(ValueError, match=r"^Invalid primitives catalog: .+$") as exc:
-        await load_catalog(path)
-    assert "\n" not in str(exc.value)

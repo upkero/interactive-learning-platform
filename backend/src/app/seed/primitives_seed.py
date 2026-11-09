@@ -52,25 +52,11 @@ def resolve_catalog_path(explicit: Path | str | None) -> Path:
 
 async def seed_primitives_from_catalog(session: AsyncSession, catalog_path: Path) -> int:
     """Upsert every primitive from the catalog file; return items count."""
-    return await seed_primitives(session, await load_catalog(catalog_path))
-
-
-async def load_catalog(catalog_path: Path) -> CatalogFile:
-    """Read and validate the catalog file; raise ValueError with a one-line message."""
     payload = await asyncio.to_thread(catalog_path.read_text, encoding="utf-8")
     try:
-        return CatalogFile.model_validate_json(payload)
+        catalog = CatalogFile.model_validate_json(payload)
     except ValidationError as exc:
-        details: list[str] = []
-        for error in exc.errors():
-            loc = ".".join(str(part) for part in error.get("loc", ()))
-            msg = str(error.get("msg", "Validation error"))
-            details.append(f"{loc}: {msg}" if loc else msg)
-        raise ValueError(f"Invalid primitives catalog: {'; '.join(details)}") from exc
-
-
-async def seed_primitives(session: AsyncSession, catalog: CatalogFile) -> int:
-    """Upsert every primitive from the validated catalog; return items count."""
+        raise ValueError(f"Invalid primitives catalog: {exc}") from exc
     repository = PrimitiveRepository(session)
     for item in catalog.primitives:
         await repository.upsert(

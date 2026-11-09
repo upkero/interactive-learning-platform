@@ -87,11 +87,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "seed-dev":
         return asyncio.run(_run_seed_dev(fake_embeddings=args.fake_embeddings))
     if args.command == "seed-primitives":
-        try:
-            return asyncio.run(_run_seed_primitives(catalog=args.catalog))
-        except (FileNotFoundError, ValueError) as exc:
-            print(f"seed-primitives: {exc}", file=sys.stderr)
-            return 2
+        return asyncio.run(_run_seed_primitives(catalog=args.catalog))
     parser.error(f"Unknown command: {args.command}")  # pragma: no cover
     return 2
 
