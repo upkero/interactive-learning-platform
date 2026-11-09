@@ -80,10 +80,11 @@ pnpm --filter @grasp/primitives catalog
 cp primitives/dist/catalog.json backend/resources/catalog.json
 ```
 
-Backend owns seed, the Python `Draft202012Validator` integration test, and copying
-resources into its image. This change does not implement or assert completion of
-those backend tasks. Frontend-side Ajv Draft 2020-12 tests independently validate
-every exported example and input defaults.
+The backend image includes the resource. Its seeder reads `catalog.primitives`
+and maps camelCase `paramsSchema` to the database field `params_schema`.
+Backend tests validate examples with Python `Draft202012Validator` and check
+the seeder against a generated non-empty fixture and the production catalog.
+Frontend-side Ajv tests independently validate example schemas.
 
 ## Mobile question-panel contract
 

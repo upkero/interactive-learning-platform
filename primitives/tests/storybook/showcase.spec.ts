@@ -123,6 +123,11 @@ test("predict moves keyboard focus to the first answer", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Yes", exact: true })
   ).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator('fieldset [role="status"]')).toBeFocused();
+  await expect(page.locator('fieldset [role="status"]')).toContainText(
+    "Correct"
+  );
 });
 
 test("reduced motion does not autoplay watch", async ({ page }) => {

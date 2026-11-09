@@ -75,7 +75,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--catalog",
         type=Path,
         default=None,
-        help="Path to catalog.json (default: published primitives dist).",
+        help="Path to catalog.json (default: backend resources or published primitives dist).",
     )
     return parser
 

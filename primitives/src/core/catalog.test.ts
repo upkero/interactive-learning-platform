@@ -61,4 +61,21 @@ describe("published resolver catalog", () => {
       }
     }
   });
+  it("keeps the backend test catalog synchronized with the actual fixture schema", () => {
+    const contents = readFileSync(
+      fileURLToPath(
+        new URL(
+          "../../../backend/tests/support/fixtures/seed/three-frame-catalog.json",
+          import.meta.url
+        )
+      ),
+      "utf8"
+    );
+    expect(contents).toBe(
+      stableStringify({
+        catalogVersion: 1,
+        primitives: serializePrimitives([threeFrame]),
+      }) + "\n"
+    );
+  });
 });

@@ -63,6 +63,8 @@ function ValidPrimitiveShell<F extends Frame>({
   );
   const completed = useRef(false);
   const questionRef = useRef<HTMLFieldSetElement>(null);
+  const feedbackRef = useRef<HTMLDivElement>(null);
+  const answerHadFocus = useRef(false);
   const shellRef = useRef<HTMLElement>(null);
   const autoStarted = useRef(false);
 
@@ -96,6 +98,13 @@ function ValidPrimitiveShell<F extends Frame>({
         ?.querySelector<HTMLButtonElement>("button:not(:disabled)")
         ?.focus();
   }, [predict.question?.id]);
+
+  useLayoutEffect(() => {
+    if (predict.answeredId !== null && answerHadFocus.current) {
+      feedbackRef.current?.focus();
+      answerHadFocus.current = false;
+    }
+  }, [predict.answeredId]);
 
   useEffect(() => {
     emit({ type: "step", index: stepper.index, total: frames.length });
@@ -132,12 +141,21 @@ function ValidPrimitiveShell<F extends Frame>({
                   label={t(labels, option.labelKey)}
                   aria-pressed={predict.answeredId === option.id}
                   disabled={predict.answeredId !== null}
-                  onClick={() => predict.answer(option.id)}
+                  onClick={(event) => {
+                    answerHadFocus.current =
+                      document.activeElement === event.currentTarget;
+                    predict.answer(option.id);
+                  }}
                   variant="secondary"
                 />
               ))}
             </div>
-            <div role="status" aria-live="polite">
+            <div
+              ref={feedbackRef}
+              role="status"
+              aria-live="polite"
+              tabIndex={-1}
+            >
               {predict.correct !== null && (
                 <>
                   <p>
