@@ -72,6 +72,32 @@ def test_missing_catalog_is_one_line_with_exit_code_1(tmp_path: Path, capsys: py
     assert _single_stderr_line(capsys) == f"seed-primitives: Primitives catalog not found: {path}"
 
 
+@pytest.mark.usefixtures("no_database")
+def test_non_utf8_catalog_is_reported_as_invalid(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    path = tmp_path / "catalog.json"
+    path.write_bytes(b"\xff\xfe{}")
+
+    assert cli.main(["seed-primitives", "--catalog", str(path)]) == 1
+    assert _single_stderr_line(capsys).startswith("seed-primitives: Invalid primitives catalog: Invalid JSON")
+
+
+@pytest.mark.usefixtures("no_database")
+def test_unreadable_catalog_is_one_line_with_exit_code_1(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "catalog.json"
+    path.write_text("{}", encoding="utf-8")
+
+    def denied(self: Path) -> bytes:
+        raise PermissionError(13, "Permission denied", str(self))
+
+    # chmod is not enough: the test may run as root, which reads any file.
+    monkeypatch.setattr(Path, "read_bytes", denied)
+
+    assert cli.main(["seed-primitives", "--catalog", str(path)]) == 1
+    assert _single_stderr_line(capsys) == f"seed-primitives: [Errno 13] Permission denied: '{path}'"
+
+
 @pytest.mark.usefixtures("fresh_settings")
 def test_settings_errors_are_not_reported_as_catalog_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DB_POOL_SIZE", "not-a-number")

@@ -37,14 +37,14 @@ async def _run_seed_dev(fake_embeddings: bool) -> int:
 async def _run_seed_primitives(catalog: Path | None) -> int:
     """Validate the catalog, then open a dedicated engine and sync it.
 
-    A missing or invalid catalog is a user error: it is reported as one line
+    A missing, unreadable or invalid catalog is a user error: it is reported as one line
     on stderr with exit code 1, before any database connection. Settings and
     database errors are not caught and keep their traceback.
     """
     try:
         catalog_path = resolve_catalog_path(catalog)
         catalog_file = await load_catalog(catalog_path)
-    except (FileNotFoundError, ValueError) as exc:
+    except (OSError, ValueError) as exc:
         print(f"seed-primitives: {exc}", file=sys.stderr)
         return 1
     settings = get_app_settings()

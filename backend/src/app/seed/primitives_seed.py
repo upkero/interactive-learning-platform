@@ -59,8 +59,12 @@ def _describe_validation_error(exc: ValidationError) -> str:
 
 
 async def load_catalog(catalog_path: Path) -> CatalogFile:
-    """Read and validate the catalog file; raise ValueError with a one-line message."""
-    payload = await asyncio.to_thread(catalog_path.read_text, encoding="utf-8")
+    """Read and validate the catalog file.
+
+    Raises OSError if the file cannot be read and ValueError with a one-line
+    message if it is not a valid catalog (including invalid JSON or UTF-8).
+    """
+    payload = await asyncio.to_thread(catalog_path.read_bytes)
     try:
         return CatalogFile.model_validate_json(payload)
     except ValidationError as exc:
