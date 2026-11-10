@@ -7,10 +7,12 @@ OpenAI-compatible API, so ``SystemBlock.cache`` is ignored here.
 """
 
 from collections.abc import Sequence
+from dataclasses import asdict
 from typing import Any
 
 import openai
 from openai import OpenAIError
+from openai.lib._pydantic import to_strict_json_schema
 from pydantic import BaseModel, ValidationError
 
 from src.app.contracts.llm.image_part import ImagePart
@@ -78,9 +80,13 @@ class OpenAICompatibleLLMClient(LLMClient):
                 "type": "json_schema",
                 "json_schema": {
                     "name": schema.__name__,
-                    "schema": schema.model_json_schema(),
-                    # Strict mode makes real OpenAI guarantee schema adherence;
-                    # Ollama ignores the flag.
+                    # to_strict_json_schema is what the SDK itself uses in
+                    # chat.completions.parse: OpenAI's strict mode requires
+                    # additionalProperties:false and all fields in required,
+                    # which a plain model_json_schema() does not satisfy
+                    # (the API answers 400). Private module — keep this
+                    # import inside llm/ only.
+                    "schema": to_strict_json_schema(schema),
                     "strict": True,
                 },
             },
@@ -175,7 +181,9 @@ class OpenAICompatibleLLMClient(LLMClient):
             content=content,
             model=getattr(completion, "model", None) or self.model_name,
             finish_reason=getattr(choice, "finish_reason", None),
-            usage=self._usage_to_mapping(getattr(completion, "usage", None)),
+            usage=asdict(token_usage)
+            if (token_usage := self._token_usage(getattr(completion, "usage", None))) is not None
+            else None,
             metadata=self._metadata(completion),
         )
 
@@ -185,17 +193,6 @@ class OpenAICompatibleLLMClient(LLMClient):
         if not choices:
             raise LLMGenerationError("LLM provider returned no choices.")
         return choices[0]
-
-    @staticmethod
-    def _usage_to_mapping(usage: Any) -> dict[str, int] | None:
-        if usage is None:
-            return None
-        result: dict[str, int] = {}
-        for field in _USAGE_FIELDS:
-            value = getattr(usage, field, None)
-            if isinstance(value, int):
-                result[field] = value
-        return result or None
 
     @staticmethod
     def _token_usage(usage: Any) -> TokenUsage | None:

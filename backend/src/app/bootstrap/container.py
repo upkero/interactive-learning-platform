@@ -17,6 +17,7 @@ from src.app.core.settings.storage import get_storage_settings
 from src.app.core.settings.upload import get_upload_settings
 from src.app.db.session import build_engine, build_session_factory
 from src.app.interfaces.llm.llm_client import LLMClient
+
 from src.app.interfaces.services.part_pipeline import PartPipeline
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.llm.factory import create_llm_client
@@ -243,8 +244,9 @@ class ApplicationContainer:
         return get_cheap_llm_settings()
 
     @cached_property
-    def metrics_collector(self) -> MetricsCollector:
-        return PrometheusMetricsCollector()
+    def metrics_collector(self) -> MetricsCollectorProtocol:
+        # The real Prometheus exporter arrives with story 1.9.
+        return NoopMetricsCollector()
 
     @cached_property
     def main_llm(self) -> LLMClient:

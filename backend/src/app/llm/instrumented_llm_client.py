@@ -18,6 +18,7 @@ no traceback), input/generation/unexpected failures keep the traceback.
 from collections.abc import Sequence
 from logging import ERROR, WARNING, Logger
 from time import perf_counter
+from typing import NoReturn
 
 from pydantic import BaseModel
 
@@ -25,9 +26,15 @@ from src.app.contracts.llm.llm_message import LLMMessage
 from src.app.contracts.llm.llm_request import LLMRequest
 from src.app.contracts.llm.llm_response import LLMResponse
 from src.app.contracts.llm.structured_response import StructuredResponse, TokenUsage
-from src.app.exceptions.llm import LLMGenerationError, LLMInputError, LLMRateLimitError, LLMSchemaError
+from src.app.exceptions.llm import (
+    LLMGenerationError,
+    LLMInputError,
+    LLMOutputTruncatedError,
+    LLMRateLimitError,
+    LLMSchemaError,
+)
 from src.app.interfaces.llm.llm_client import LLMClient
-from src.app.interfaces.observability.metrics_collector import MetricsCollector, MetricTags
+from src.app.interfaces.observability.metrics_collector import MetricsCollectorProtocol, MetricTags
 
 _LLM_DURATION_BUCKETS = (1.0, 2.0, 5.0, 10.0, 20.0, 30.0, 60.0, 90.0, 120.0, 180.0)
 _TOKENS_BUCKETS = (100.0, 250.0, 500.0, 1000.0, 2500.0, 5000.0, 10000.0, 25000.0, 50000.0)
@@ -49,6 +56,7 @@ _ERROR_HANDLERS: tuple[tuple[type[BaseException], str, int, bool], ...] = (
     (LLMInputError, "invalid_input", WARNING, True),
     (LLMSchemaError, "schema_error", WARNING, False),
     (LLMRateLimitError, "rate_limit_error", WARNING, False),
+    (LLMOutputTruncatedError, "output_truncated", WARNING, False),
     (LLMGenerationError, "generation_error", ERROR, True),
     (Exception, "unexpected_error", ERROR, True),
 )
@@ -60,7 +68,7 @@ class InstrumentedLLMClient(LLMClient):
         *,
         client: LLMClient,
         logger: Logger,
-        metrics: MetricsCollector,
+        metrics: MetricsCollectorProtocol,
     ) -> None:
         self._client = client
         self._logger = logger
@@ -134,25 +142,24 @@ class InstrumentedLLMClient(LLMClient):
         *,
         started_at: float,
         purpose: str,
-    ) -> None:
+    ) -> NoReturn:
         """Observe metrics and log the failure; always re-raises ``exc``."""
         for exc_type, outcome, level, with_traceback in _ERROR_HANDLERS:
-            if not isinstance(exc, exc_type):
-                continue
-            duration = self._observe_duration(started_at=started_at, outcome=outcome, purpose=purpose)
-            self._record_request(outcome=outcome, purpose=purpose)
-            self._logger.log(
-                level,
-                "LLM call failed: outcome=%s purpose=%s model=%s in %.3fs error=%s.",
-                outcome,
-                purpose,
-                self.model_name,
-                duration,
-                exc,
-                exc_info=exc if with_traceback else None,
-            )
-            raise exc
-        raise AssertionError("unreachable: Exception is the catch-all handler")
+            if isinstance(exc, exc_type):
+                duration = self._observe_duration(started_at=started_at, outcome=outcome, purpose=purpose)
+                self._record_request(outcome=outcome, purpose=purpose)
+                self._logger.log(
+                    level,
+                    "LLM call failed: outcome=%s purpose=%s model=%s in %.3fs error=%s.",
+                    outcome,
+                    purpose,
+                    self.model_name,
+                    duration,
+                    exc,
+                    exc_info=exc if with_traceback else None,
+                )
+                break
+        raise exc
 
     def _log_cache_miss(self, request: LLMRequest, usage: TokenUsage | None) -> None:
         """A cache=True call with zero cache tokens usually means the cached
@@ -204,19 +211,16 @@ class InstrumentedLLMClient(LLMClient):
             )
 
     def _record_plain_usage(self, response: LLMResponse) -> None:
-        """Plain completion usage comes as a provider-specific mapping
-        (``prompt_tokens``/``completion_tokens``/...): record every present
-        numeric counter as-is instead of re-mapping it to TokenUsage."""
+        """Plain completion usage is a mapping with the canonical TokenUsage
+        field names (clients normalize provider names before returning)."""
         usage = response.usage
-        if not usage:
+        if not usage or not any(usage.values()):
             return
-        values = {key: value for key, value in usage.items() if isinstance(value, int)}
-        if not any(values.values()):
-            return
-        for key, value in values.items():
-            self._metrics.observe_histogram(
-                f"{_METRIC_PREFIX}.usage.{key}",
-                float(value),
-                tags=self._metric_tags(outcome="success", purpose=_UNSET_PURPOSE),
-                buckets=_TOKENS_BUCKETS,
+        self._record_usage(
+            TokenUsage(
+                input_tokens=usage.get("input_tokens", 0),
+                output_tokens=usage.get("output_tokens", 0),
+                cache_read_input_tokens=usage.get("cache_read_input_tokens", 0),
+                cache_creation_input_tokens=usage.get("cache_creation_input_tokens", 0),
             )
+        )

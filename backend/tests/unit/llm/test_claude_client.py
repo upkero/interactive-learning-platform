@@ -22,7 +22,12 @@ from src.app.contracts.llm.structured_response import TokenUsage
 from src.app.contracts.llm.system_block import SystemBlock
 from src.app.contracts.llm.text_part import TextPart
 from src.app.core.settings.llm import LLMSettings
-from src.app.exceptions.llm import LLMGenerationError, LLMRateLimitError, LLMSchemaError
+from src.app.exceptions.llm import (
+    LLMGenerationError,
+    LLMOutputTruncatedError,
+    LLMRateLimitError,
+    LLMSchemaError,
+)
 from src.app.llm.claude_client import ClaudeClient
 
 
@@ -161,7 +166,10 @@ async def test_structured_broken_json_raises_schema_error() -> None:
 
 
 @pytest.mark.unit
-async def test_structured_truncated_output_raises_schema_error() -> None:
+async def test_structured_truncated_output_raises_truncated_error() -> None:
+    # Truncation must NOT map to LLMSchemaError: call_structured retries
+    # schema errors, and a retry with the same max_tokens would fail the
+    # same way (paid double for a guaranteed failure).
     captured: list[httpx2.Request] = []
     client, _ = _sdk(
         _replaying(
@@ -170,7 +178,7 @@ async def test_structured_truncated_output_raises_schema_error() -> None:
         )
     )
 
-    with pytest.raises(LLMSchemaError, match="max_tokens"):
+    with pytest.raises(LLMOutputTruncatedError, match="max_tokens"):
         await client.complete_structured(_request(), _Draft)
 
 
