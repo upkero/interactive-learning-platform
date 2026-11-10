@@ -117,7 +117,7 @@ HTTP layer only. Routers validate incoming schemas, call services, and return re
 api/v1/
 ├── router.py            # top-level APIRouter, includes sub-routers
 ├── routers/             # one file per feature (health.py, chat.py, ...)
-├── dependencies/        # FastAPI Depends helpers (get_llm_client, get_container)
+├── dependencies/        # FastAPI Depends helpers (get_container, get_db_session)
 ├── middleware/          # request_id middleware
 └── exception_handlers.py
 ```
@@ -158,11 +158,26 @@ Typed exception hierarchy. All app exceptions inherit `BaseAppException` which c
 ```python
 class ApplicationContainer:
     @cached_property
-    def llm_client(self) -> OpenAICompatibleLLMClient:
-        return create_llm_client(LLMSettings())
+    def main_llm(self) -> LLMClient:
+        return InstrumentedLLMClient(
+            client=create_llm_client(self.llm_settings),
+            logger=getLogger("grasp.llm"),
+            metrics=self.metrics_collector,
+        )
+
+    @cached_property
+    def cheap_llm(self) -> LLMClient:
+        return InstrumentedLLMClient(
+            client=create_llm_client(self.cheap_llm_overrides.resolve(self.llm_settings)),
+            logger=getLogger("grasp.llm.cheap"),
+            metrics=self.metrics_collector,
+        )
 ```
 
-Use `Depends(get_llm_client)` in routers instead of reaching into `app.state` directly.
+Two LLM profiles are exposed this way: `main_llm` for the resolver's heavy
+passes and `cheap_llm` for light tasks (`LLM_CHEAP_*` overrides on top of
+the main profile). Reach them via `ContainerDep` and `container.main_llm`
+instead of reaching into `app.state` directly.
 
 ---
 
