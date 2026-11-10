@@ -43,10 +43,12 @@ services:
   # AIStor-образ не стартует без лицензии: файл кладётся в infra/license/minio.license
   # (не коммитится, см. .gitignore; reference — docker-compose.yml faq-assistant).
   minio:
-    # AIStor-образ закреплён по digest: quay удаляет устаревшие daily-сборки
-    # через несколько дней, floating-тег со временем ломает запуск; свою копию
-    # храним в GHCR (воркфлоу publish-minio-copy) и берем только оттуда.
-    image: quay.io/minio/aistor/minio@sha256:65ba851d715e4f5c58851eb751922fc903011175c8f652d41a6438dfe9eb00e6
+    # Наша копия AIStor-образа MinIO в приватном GHCR (пакет aistor-minio,
+    # публикуется воркфлоу publish-minio-copy), закреплённая по digest:
+    # quay удаляет устаревшие daily-сборки через несколько дней. Обновление
+    # образа = новый SOURCE/TARGET в publish-minio-copy.yml и новый digest
+    # здесь и в ci.yml одним PR.
+    image: ghcr.io/upkero/interactive-learning-platform/aistor-minio@sha256:03f71816a1761e6b46228e2bdb856c43285f031cfcd02f922e7781841826f838
     command: server /data --console-address ":9001" --license /minio.license
     env_file: ../backend/.env
     ports: ["9000:9000", "9001:9001"]
@@ -71,7 +73,7 @@ services:
     # Отдельный образ mc больше не публикуется (quay, Docker Hub), поэтому
     # job использует mc из того же AIStor-образа; entrypoint полностью
     # заменяет дефолт, так что сервер MinIO здесь не стартует.
-    image: quay.io/minio/aistor/minio@sha256:65ba851d715e4f5c58851eb751922fc903011175c8f652d41a6438dfe9eb00e6
+    image: ghcr.io/upkero/interactive-learning-platform/aistor-minio@sha256:03f71816a1761e6b46228e2bdb856c43285f031cfcd02f922e7781841826f838
     depends_on:
       minio: { condition: service_healthy }
     env_file: ../backend/.env

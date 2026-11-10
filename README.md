@@ -22,6 +22,13 @@ cp backend/.env.example backend/.env
 docker compose --env-file backend/.env -f infra/compose.yml up -d
 ```
 
+Образ MinIO лежит в приватном GHCR-пакете, поэтому разово войдите в
+ghcr.io (токену достаточно scope `read:packages`):
+
+```bash
+echo "$GHCR_TOKEN" | docker login ghcr.io -u <github-логин> --password-stdin
+```
+
 Данные MinIO лежат на XFS-каталоге из `MINIO_DATA_DIR` — разовая
 настройка диска описана в [docs/minio-xfs.md](docs/minio-xfs.md).
 

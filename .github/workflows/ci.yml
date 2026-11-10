@@ -11,6 +11,10 @@ jobs:
   # ---------------------------------------------------------------------------
   backend:
     runs-on: ubuntu-latest
+    permissions:
+      # pull the private MinIO copy from GHCR; nothing is published here
+      contents: read
+      packages: read
     services:
       db:
         image: pgvector/pgvector:pg17
@@ -44,12 +48,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The build is pinned by digest: quay purges superseded edge-daily
-      # manifests within days, and our own copy lives in the private GHCR
-      # image aistor-minio (copied by publish-minio-copy) — see infra/compose.yml.
-      # The drive must be XFS: fresh builds (~>=11-08) refuse ext4-backed
-      # volumes and never come online ("drives-online: 0", S3 403); the
-      # runner's /var/lib/docker is ext4, so mount a small loop XFS drive.
+      # The build is our private copy in GHCR (aistor-minio, pushed by the
+      # publish-minio-copy workflow), pinned by digest — quay purges
+      # superseded edge-daily manifests within days. Updating the image =
+      # new SOURCE/TARGET in publish-minio-copy.yml and a new digest here
+      # and in infra/compose.yml, one PR. The drive must be XFS: fresh
+      # builds refuse ext4-backed volumes and never come online
+      # ("drives-online: 0", S3 403) — runner's /var/lib/docker is ext4,
+      # so mount a small loop XFS drive.
       - name: Prepare an XFS drive for MinIO
         run: |
           sudo apt-get update -qq
@@ -58,6 +64,9 @@ jobs:
           sudo mkfs.xfs -q /srv/minio-dev.xfs
           sudo mkdir -p /srv/minio-data
           sudo mount -o loop /srv/minio-dev.xfs /srv/minio-data
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Start MinIO (AIStor, license from the CI secret)
         env:
@@ -77,7 +86,7 @@ jobs:
             -e MINIO_ROOT_PASSWORD=minioadmin \
             -v "${GITHUB_WORKSPACE}/infra/license/minio.license:/minio.license:ro" \
             -v /srv/minio-data:/data \
-            quay.io/minio/aistor/minio@sha256:65ba851d715e4f5c58851eb751922fc903011175c8f652d41a6438dfe9eb00e6 \
+            ghcr.io/upkero/interactive-learning-platform/aistor-minio@sha256:03f71816a1761e6b46228e2bdb856c43285f031cfcd02f922e7781841826f838 \
             server /data --console-address ":9001" --license /minio.license
 
       - name: Wait for MinIO to become ready (live, then readable)
