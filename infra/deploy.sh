@@ -27,10 +27,32 @@ if [ ! -f "backend/.env" ]; then
 fi
 chmod 600 backend/.env
 
+# MinIO: каталог данных должен существовать и быть XFS
+# ------------------------------------------------------
+# Свежие AIStor-сборки отказываются форматировать ext4-тома и остаются
+# офлайн («drives-online: 0», каждый S3-запрос — 403). Разовая настройка
+# диска описана в docs/minio-xfs.md.
+MINIO_DATA_DIR="$(grep -E '^MINIO_DATA_DIR=' backend/.env | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'" | xargs)"
+if [ -z "$MINIO_DATA_DIR" ]; then
+    echo "ERROR: MINIO_DATA_DIR is not set in backend/.env." >&2
+    echo "Point it at an XFS directory prepared per docs/minio-xfs.md." >&2
+    exit 1
+fi
+if [ ! -d "$MINIO_DATA_DIR" ]; then
+    echo "ERROR: MINIO_DATA_DIR '$MINIO_DATA_DIR' does not exist." >&2
+    echo "Prepare the XFS drive per docs/minio-xfs.md first." >&2
+    exit 1
+fi
+if [ ! "$(stat -f -c %T "$MINIO_DATA_DIR")" = "xfs" ]; then
+    echo "ERROR: $MINIO_DATA_DIR is not on an XFS filesystem (found: $(stat -f -c %T "$MINIO_DATA_DIR"))." >&2
+    echo "MinIO AIStor builds refuse ext4-backed drives; see docs/minio-xfs.md." >&2
+    exit 1
+fi
+
 echo "Pulling production images (tag: ${IMAGE_TAG})..."
-docker compose -f infra/compose.yml -f infra/compose.prod.yml pull
+docker compose --env-file backend/.env -f infra/compose.yml -f infra/compose.prod.yml pull
 
 echo "Starting services..."
-docker compose -f infra/compose.yml -f infra/compose.prod.yml up -d --remove-orphans
+docker compose --env-file backend/.env -f infra/compose.yml -f infra/compose.prod.yml up -d --remove-orphans
 
 echo "Deployment finished successfully."

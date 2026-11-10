@@ -1,4 +1,4 @@
-"""FastAPI dependencies, split into files by domain (see the lead requirement)."""
+"""FastAPI dependencies, split into files by domain: each sub-module imports only what its domain needs."""
 
 from src.app.api.v1.dependencies.container import ContainerDep, get_container
 from src.app.api.v1.dependencies.db import DBSessionDep, get_db_session

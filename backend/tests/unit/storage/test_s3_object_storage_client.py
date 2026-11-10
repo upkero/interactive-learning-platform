@@ -210,7 +210,7 @@ async def test_ping_checks_both_buckets_on_the_ping_client(
     settings: StorageSettings,
     stub_ping_client: _StubS3Client,
 ) -> None:
-    """ping() speaks through the dedicated client only (review V5)."""
+    """ping() speaks through the dedicated client only."""
     working = _StubS3Client()
     client = _build(settings, working, _StubS3Client(), stub_ping_client)
     assert await client.ping() is True

@@ -53,8 +53,8 @@ async def _check_object_storage(storage: ObjectStorageClient) -> str | None:
     """``ping()`` verifies reachability, credentials and bucket existence.
 
     A degraded MinIO signals through the boolean result, not through an
-    exception, so the result itself must be checked (review B1: a plain
-    ``False`` used to be silently treated as healthy).
+    exception, so the result itself must be checked: a plain ``False``
+    is unavailability, not an error to swallow as healthy.
     """
     try:
         if not await asyncio.wait_for(storage.ping(), _CHECK_TIMEOUT_SECONDS):

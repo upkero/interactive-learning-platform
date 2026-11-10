@@ -43,25 +43,18 @@ services:
   # AIStor-образ не стартует без лицензии: файл кладётся в infra/license/minio.license
   # (не коммитится, см. .gitignore; reference — docker-compose.yml faq-assistant).
   minio:
-    # Our licensed AIStor build (Free license from SUBNET only works on edge
-    # builds after 2026-10-29) pinned by digest — quay purges superseded
-    # edge-daily manifests within days, so re-pin when this dies with
-    # "not found" / renders "manifest unknown": see the comment in
-    # .github/workflows/ci.yml (same digest there). PENDING (lead): copy
-    # via the one-off publish-minio-copy workflow to our private GHCR
-    # (ghcr.io/upkero/interactive-learning-platform/aistor-minio) and move
-    # this pin there for good; docker login ghcr.io once for local pulls.
+    # AIStor-образ закреплён по digest: quay удаляет устаревшие daily-сборки
+    # через несколько дней, floating-тег со временем ломает запуск; свою копию
+    # храним в GHCR (воркфлоу publish-minio-copy) и берем только оттуда.
     image: quay.io/minio/aistor/minio@sha256:869afa6cb6731d87e23cdb4bbe7e4bce4bb15ae82ea657282031738c8cb70831
     command: server /data --console-address ":9001" --license /minio.license
     env_file: ../backend/.env
     ports: ["9000:9000", "9001:9001"]
-    # NOTE: AIStor builds since ~2026-11-08 reject ext4-backed docker
-    # volumes (the drive formats and then never comes online: every S3
-    # request 403 AccessDenied while /minio/health still answers 200).
-    # The data drive must be XFS: /srv/minio-dev is a 20G loop-image
-    # formatted once via fstab — setup in AGENTS.md ("MinIO gotchas").
+    # Диск данных обязан быть XFS: свежие сборки AIStor отказываются
+    # форматировать ext4-тома и остаются офлайн; путь задаёт MINIO_DATA_DIR
+    # из backend/.env (разовая настройка диска — docs/minio-xfs.md).
     volumes:
-      - /srv/minio-dev:/data
+      - ${MINIO_DATA_DIR:?MINIO_DATA_DIR must point to an XFS directory, see docs/minio-xfs.md}:/data
       - ./license/minio.license:/minio.license:ro
     healthcheck:
       # Современные образы MinIO не содержат curl; в них есть mc с алиасом local
@@ -75,12 +68,9 @@ services:
 
   # 4. Инициализация бакетов документов и картинок в MinIO
   minio-init:
-    # quay.io/minio/mc on quay is dead (401 for every tag — MinIO dropped
-    # the community repos 2026-09) and Docker Hub minio/mc is gone as well.
-    # The AIStor runtime image ships mc (the minio healthcheck uses it), so
-    # the init job piggybacks on the same pinned image — no separate mc
-    # repository. The entrypoint fully replaces the image default, so the
-    # MinIO server never starts here.
+    # Отдельный образ mc больше не публикуется (quay, Docker Hub), поэтому
+    # job использует mc из того же AIStor-образа; entrypoint полностью
+    # заменяет дефолт, так что сервер MinIO здесь не стартует.
     image: quay.io/minio/aistor/minio@sha256:869afa6cb6731d87e23cdb4bbe7e4bce4bb15ae82ea657282031738c8cb70831
     depends_on:
       minio: { condition: service_healthy }

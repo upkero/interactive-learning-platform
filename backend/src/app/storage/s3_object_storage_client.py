@@ -10,7 +10,8 @@ Two boto3 clients are used for traffic: the working one on
 SigV4 signs the host, so browser links must point to the public address
 (in dev ``localhost:9000``, in prod ``https://files.<domain>``), never
 to the internal ``minio:9000``. A third, fail-fast client serves the
-``/health/ready`` probe (review V5).
+``/health/ready`` probe: single attempt and short timeouts, so one
+head_bucket cannot outlive the 5 s readiness budget.
 """
 
 import asyncio
@@ -36,7 +37,7 @@ def _build_s3_client(
     connect_timeout: float,
     read_timeout: float,
 ) -> BaseClient:
-    """One boto3 S3 client factory for all profiles (review round 2).
+    """One boto3 S3 client factory for all profiles.
 
     botocore clients are thread-safe and boto3 sessions are not, so each
     built client is created once per container and shared between threads.
@@ -71,7 +72,7 @@ def build_s3_client(settings: StorageSettings, *, endpoint_url: str) -> BaseClie
 
 
 def build_ping_client(settings: StorageSettings) -> BaseClient:
-    """A third client dedicated to ``/health/ready`` probes (review V5).
+    """A third client dedicated to ``/health/ready`` probes.
 
     Readiness is checked under ``asyncio.wait_for(..., 5 s)``: with the
     working client's default 3 retry attempts and 5+30 s timeouts one
@@ -152,7 +153,7 @@ class S3ObjectStorageClient(ObjectStorageClient):
         expires_seconds: int | None = None,
     ) -> str:
         # local signing, no network call — therefore no to_thread.
-        # ``or`` would turn an explicit 0 into the default TTL (review 6);
+        # ``or`` would turn an explicit 0 into the default TTL;
         # only an omitted argument falls back to the settings value.
         ttl = expires_seconds if expires_seconds is not None else self._settings.presign_ttl_seconds
         url = self._presign_client.generate_presigned_url(
@@ -165,7 +166,7 @@ class S3ObjectStorageClient(ObjectStorageClient):
     async def ping(self) -> bool:
         """``head_bucket`` over both buckets on the dedicated ping client.
 
-        Fail fast (review V5): the readiness router waits at most 5 s,
+        Fail fast: the readiness router waits at most 5 s,
         so retries and long timeouts of the working client would defeat
         the whole probe.
         """

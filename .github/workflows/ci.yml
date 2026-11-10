@@ -44,25 +44,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # MinIO timeline (see REVIEW_1_3.md and infra/compose.yml):
-      # - quay.io/minio/mc is dead (MinIO dropped community repos, 2026-09);
-      #   bucket init now reuses mc from inside the AIStor image (below).
-      # - quay purges superseded edge-daily manifests within days: the
-      #   10-31 build died 11-06 (observed), the 11-06 10:27 build died
-      #   ~11-09 as well ("docker pull ... not found"). Re-pin to the live
-      #   `edge-daily` digest:
-      #   docker manifest inspect quay.io/minio/aistor/minio:edge-daily
-      #   PENDING (lead): run the one-off publish-minio-copy workflow to
-      #   stash the build in our private GHCR, then switch this pin and
-      #   infra/compose.yml to ghcr.io/upkero/interactive-learning-platform/
-      #   aistor-minio@sha256:<ghcr-digest> for good — quay churn stops
-      #   hurting CI (the workflow currently copies the 2026-11-10 digest).
-      # - fresh builds (>~11-08) REFUSE ext4-backed docker volumes: the
-      #   drive formats and then never comes online ("drives-online: 0",
-      #   every S3 call 403 while /minio/health still answers 200 — the
-      #   wait loop below would never see /health/ready). The runners
-      #   format /var/lib/docker as ext4, so give MinIO a small XFS drive,
-      #   same trick as the local dev setup (/srv/minio-dev, see AGENTS.md).
+      # The build is pinned by digest: quay purges superseded edge-daily
+      # manifests within days, and our own copy lives in the private GHCR
+      # image aistor-minio (copied by publish-minio-copy) — see infra/compose.yml.
+      # The drive must be XFS: fresh builds (~>=11-08) refuse ext4-backed
+      # volumes and never come online ("drives-online: 0", S3 403); the
+      # runner's /var/lib/docker is ext4, so mount a small loop XFS drive.
       - name: Prepare an XFS drive for MinIO
         run: |
           sudo apt-get update -qq

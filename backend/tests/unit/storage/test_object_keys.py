@@ -15,7 +15,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_source_key_layout() -> None:
-    """{owner}/{doc}/source.{ext} — no directory prefixes (lead's decision)."""
+    """{owner}/{doc}/source.{ext} — keys stay flat, no directory prefixes."""
     owner_id, document_id = uuid4(), uuid4()
     assert source_key(owner_id, document_id, "pdf") == f"{owner_id}/{document_id}/source.pdf"
 

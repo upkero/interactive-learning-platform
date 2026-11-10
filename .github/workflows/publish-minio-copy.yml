@@ -1,11 +1,25 @@
-# One-off tool: copies the license-validated MinIO (AIStor) image from quay
-# into our private GHCR namespace, where nothing garbage-collects it.
-# Run it by hand once per image update: Actions → publish-minio-copy → Run.
-# The pushed digest (printed in the log) goes into ci.yml and infra/compose.yml.
+# One-off tool: copies the pinned, license-validated MinIO (AIStor) image
+# from quay into our private GHCR namespace, where nothing garbage-collects
+# it. Runs automatically on any push that touches this file (so it works
+# from a PR branch, where workflow_dispatch is hidden), plus manually:
+# Actions → publish-minio-copy → Run workflow.
+# The digest it prints ("PIN THIS DIGEST") goes into ci.yml and
+# infra/compose.yml, replacing the quay source pin for good.
 name: publish-minio-copy
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/publish-minio-copy.yml
+
+env:
+  # The MinIO FREE license (issued 2026-10-29) is only accepted by
+  # edge-daily builds published after it; the digest below is one such
+  # build, pinned by manifest digest so quay's purge of superseded
+  # edge-daily tags cannot silently change what gets copied.
+  SOURCE: quay.io/minio/aistor/minio@sha256:869afa6cb6731d87e23cdb4bbe7e4bce4bb15ae82ea657282031738c8cb70831
+  TARGET: ghcr.io/${{ github.repository }}/aistor-minio:2026-11-10
 
 jobs:
   copy:
@@ -15,9 +29,13 @@ jobs:
       packages: write
     steps:
       - name: Get crane (registry copy tool)
+        # The tarball is verified against the release's checksums.txt
+        # before anything from it is executed.
         run: |
           version=0.22.1
           curl -sfL "https://github.com/google/go-containerregistry/releases/download/v${version}/go-containerregistry_Linux_x86_64.tar.gz" -o crane.tar.gz
+          curl -sfL "https://github.com/google/go-containerregistry/releases/download/v${version}/checksums.txt" -o checksums.txt
+          grep "go-containerregistry_Linux_x86_64.tar.gz" checksums.txt | sha256sum -c -
           tar -xzf crane.tar.gz crane
           ./crane version
 
@@ -29,14 +47,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: echo "$GITHUB_TOKEN" | ./crane auth login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      - name: Copy the validated build from quay
-        run: |
-          set -o pipefail
-          ./crane copy --platform linux/amd64 \
-            "quay.io/minio/aistor/minio@sha256:869afa6cb6731d87e23cdb4bbe7e4bce4bb15ae82ea657282031738c8cb70831" \
-            "ghcr.io/${{ github.repository }}/aistor-minio:2026-11-10"
+      - name: Copy the pinned build from quay
+        run: ./crane copy --platform linux/amd64 "$SOURCE" "$TARGET"
 
       - name: Report the GHCR digest to pin
         run: |
-          digest=$(./crane digest "ghcr.io/${{ github.repository }}/aistor-minio:2026-11-06")
+          digest=$(./crane digest "$TARGET")
           echo "PIN THIS DIGEST in ci.yml and infra/compose.yml: ${digest}"

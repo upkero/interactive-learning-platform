@@ -160,7 +160,7 @@ class FileInspector:
     def _check_docx(self, data: bytes) -> int | None:
         """Validate the archive: members, REAL unpacked size, optional Pages.
 
-        Declared sizes are not trusted (review V1/V2): a bomb may claim
+        Declared sizes are not trusted: a bomb may claim
         ``file_size=1`` in its local and central headers and dodge naive
         ``sum(file_size)`` checks — and even ``zipfile``'s own streaming
         reads, which it clamps by ``file_size``. Members are instead
@@ -202,7 +202,7 @@ class FileInspector:
         Members are ordered by file offset, not by central-directory
         order: the ZIP spec does not require the two to match, and a
         valid archive whose central-directory records are shuffled must
-        not be rejected (lead review round 2). Overlap abuse is kept:
+        not be rejected. Overlap abuse is kept:
         records sharing one offset yield an empty payload slice and fail
         with 415.
         """

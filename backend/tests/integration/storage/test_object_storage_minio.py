@@ -56,7 +56,7 @@ async def test_presigned_url_points_to_public_endpoint_and_opens(
         await object_storage.put_object(bucket="documents", key=key, data=b"presigned", content_type="text/plain")
         url = object_storage.presign_get_url(bucket="documents", key=key, expires_seconds=120)
 
-        # SigV4 signs the host (review V3): strict comparison, not a guess
+        # SigV4 signs the host: strict comparison, not a guess
         # by ":9000" — the link must address the public endpoint exactly.
         assert urlsplit(url).netloc == urlsplit(storage_settings.public_endpoint_url).netloc
         if urlsplit(storage_settings.public_endpoint_url).netloc != urlsplit(storage_settings.endpoint_url).netloc:

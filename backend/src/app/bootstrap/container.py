@@ -24,7 +24,7 @@ class ApplicationContainer:
     def object_storage(self) -> ObjectStorageClient:
         """S3 client over MinIO; boto3 stays hidden inside src/app/storage/.
 
-        Three boto3 clients (review V5): the working one on the internal
+        Three boto3 clients: the working one on the internal
         address, the signer on the public one, and a fail-fast client
         for the readiness probe whose retries cannot outlive the 5 s
         readiness budget.

@@ -2,10 +2,10 @@
 
 Keys must be built only through these functions (story 1.3 rules):
 the user-provided file name never becomes part of a key — it lives in
-``documents.title``. The layout follows the lead's decision (review):
-``{owner_id}/{document_id}/...`` without directory prefixes — bucket
-assignment already separates documents from images, and saving on one
-prefix avoids the doubled-nesting look of ``documents/documents/...``.
+``documents.title``. The layout keeps keys flat —
+``{owner_id}/{document_id}/...`` without directory prefixes: bucket
+assignment already separates documents from images, and a ``documents/``
+prefix would only add the doubled-nesting look of ``documents/documents/...``.
 """
 
 from uuid import UUID
