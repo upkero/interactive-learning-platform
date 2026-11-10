@@ -2,15 +2,23 @@
 
 They cost real money and need a real key, so they are excluded from the
 default run (``addopts = "-m 'not live'"``) and skipped unless
-``LLM_API_KEY``/``ANTHROPIC_API_KEY`` is set. Run them explicitly:
+``LLM_API_KEY`` is set. Run them explicitly with the full profile:
 
-    LLM_API_KEY=sk-ant-... uv run pytest -m live -v
+    LLM_PROVIDER=anthropic LLM_MODEL=claude-sonnet-5-5 LLM_API_KEY=sk-ant-... \
+        uv run pytest -m live -v
+
+Via OpenRouter (its /api/v1/messages endpoint is Anthropic-compatible):
+
+    LLM_PROVIDER=anthropic LLM_MODEL=anthropic/claude-sonnet-5.5 \
+        LLM_API_KEY=sk-or-... LLM_BASE_URL=https://openrouter.ai/api \
+        uv run pytest -m live -v
 
 Covered criteria:
 - 2.1.1 structured output: ``call_structured`` returns a validated PageDraft
   from the real model;
 - 2.1.4 prompt caching: two calls with the same ``SystemBlock(cache=True)``
-  longer than the cacheable minimum — the second one reports
+  longer than the cacheable minimum — the first reports
+  ``cache_creation_input_tokens > 0``, the second
   ``cache_read_input_tokens > 0``.
 """
 
@@ -30,8 +38,8 @@ from src.app.llm.structured import call_structured
 pytestmark = [
     pytest.mark.live,
     pytest.mark.skipif(
-        not (os.environ.get("LLM_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")),
-        reason="live test needs LLM_API_KEY (or ANTHROPIC_API_KEY)",
+        not os.environ.get("LLM_API_KEY"),
+        reason="live test needs LLM_API_KEY",
     ),
 ]
 
@@ -80,8 +88,12 @@ async def test_prompt_caching_fires_on_second_call() -> None:
         messages=(LLMMessage(role="user", content="Reply with the single word: ready."),),
     )
 
-    await client.complete_structured(request, PageDraft)
+    first = await client.complete_structured(request, PageDraft)
     second = await client.complete_structured(request, PageDraft)
 
+    # The cacheable prefix sits close to the 512-token minimum, so make sure
+    # the first call actually created the cache entry.
+    assert first.usage is not None
+    assert first.usage.cache_creation_input_tokens > 0
     assert second.usage is not None
     assert second.usage.cache_read_input_tokens > 0

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from src.app.interfaces.observability.metrics_collector import MetricsCollector, MetricTags
+from src.app.interfaces.observability.metrics_collector import MetricTags
 
 
 @dataclass(frozen=True)
@@ -27,7 +27,9 @@ class RecordedGauge:
     tags: MetricTags | None
 
 
-class RecordingMetricsCollector(MetricsCollector):
+class RecordingMetricsCollector:
+    """Unit-test double matching MetricsCollectorProtocol structurally."""
+
     def __init__(self) -> None:
         self.counters: list[RecordedCounter] = []
         self.histograms: list[RecordedHistogram] = []

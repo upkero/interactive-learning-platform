@@ -1,3 +1,3 @@
-from src.app.interfaces.observability.metrics_collector import MetricsCollector, MetricTags
+from src.app.interfaces.observability.metrics_collector import MetricsCollectorProtocol, MetricTags
 
-__all__ = ["MetricTags", "MetricsCollector"]
+__all__ = ["MetricTags", "MetricsCollectorProtocol"]

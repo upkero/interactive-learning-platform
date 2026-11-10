@@ -123,6 +123,9 @@ async def test_structured_request_body_uses_strict_json_schema() -> None:
     json_schema = body["response_format"]["json_schema"]
     assert json_schema["name"] == "_Draft"
     assert json_schema["strict"] is True
+    # OpenAI's strict mode: no extra properties, every field required.
+    assert json_schema["schema"]["additionalProperties"] is False
+    assert json_schema["schema"]["required"] == ["title"]
     assert json_schema["schema"]["properties"]["title"]["type"] == "string"
     # System blocks go first, user messages after them.
     assert body["messages"][0] == {"role": "system", "content": "shared context"}
@@ -207,7 +210,14 @@ async def test_plain_complete_sends_settings_and_returns_usage_mapping() -> None
     assert response.content == "hello"
     assert response.model == "llama3.2"
     assert response.finish_reason == "stop"
-    assert response.usage == {"prompt_tokens": 3, "completion_tokens": 5, "total_tokens": 8}
+    # Usage is normalized to the canonical TokenUsage field names; this
+    # reply has no prompt_tokens_details, so cache_read is 0.
+    assert response.usage == {
+        "input_tokens": 3,
+        "output_tokens": 5,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+    }
     assert response.metadata == {"id": "chatcmpl-1", "created": 1700000000}
     body = json.loads(captured[0].content)
     assert body["temperature"] == 0.5

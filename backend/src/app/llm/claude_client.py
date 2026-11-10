@@ -38,7 +38,12 @@ from src.app.contracts.llm.llm_response import LLMResponse
 from src.app.contracts.llm.structured_response import StructuredResponse, TokenUsage
 from src.app.contracts.llm.system_block import SystemBlock
 from src.app.core.settings.llm import LLMSettings
-from src.app.exceptions.llm import LLMGenerationError, LLMRateLimitError, LLMSchemaError
+from src.app.exceptions.llm import (
+    LLMGenerationError,
+    LLMOutputTruncatedError,
+    LLMRateLimitError,
+    LLMSchemaError,
+)
 from src.app.interfaces.llm.llm_client import LLMClient
 
 
@@ -80,7 +85,7 @@ class ClaudeClient(LLMClient):
             content=text,
             model=response.model,
             finish_reason=response.stop_reason,
-            usage=asdict(usage) if (usage := self._usage(response.usage)) is not None else None,
+            usage=asdict(token_usage) if (token_usage := self._usage(response.usage)) is not None else None,
         )
 
     async def complete_structured[T: BaseModel](
@@ -111,7 +116,11 @@ class ClaudeClient(LLMClient):
         if response.stop_reason == "refusal":
             raise LLMGenerationError("Claude refused the request.")
         if response.stop_reason == "max_tokens":
-            raise LLMSchemaError("Claude output was cut off by max_tokens before the JSON schema was satisfied.")
+            # Truncation fails the schema deterministically: a retry with the
+            # same max_tokens would pay for the same failure again.
+            raise LLMOutputTruncatedError(
+                "Claude output was cut off by max_tokens before the JSON schema was satisfied."
+            )
 
         text = self._text(response)
         try:

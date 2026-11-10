@@ -10,10 +10,10 @@ from src.app.core.settings.celery import get_celery_settings
 from src.app.core.settings.llm import CheapLLMSettings, LLMSettings, get_cheap_llm_settings, get_llm_settings
 from src.app.db.session import build_engine, build_session_factory
 from src.app.interfaces.llm.llm_client import LLMClient
-from src.app.interfaces.observability.metrics_collector import MetricsCollector
+from src.app.interfaces.observability.metrics_collector import MetricsCollectorProtocol
 from src.app.llm.factory import create_llm_client
 from src.app.llm.instrumented_llm_client import InstrumentedLLMClient
-from src.app.observability.prometheus_metrics_collector import PrometheusMetricsCollector
+from src.app.observability.noop_metrics_collector import NoopMetricsCollector
 
 
 class ApplicationContainer:
@@ -26,8 +26,9 @@ class ApplicationContainer:
         return get_cheap_llm_settings()
 
     @cached_property
-    def metrics_collector(self) -> MetricsCollector:
-        return PrometheusMetricsCollector()
+    def metrics_collector(self) -> MetricsCollectorProtocol:
+        # The real Prometheus exporter arrives with story 1.9.
+        return NoopMetricsCollector()
 
     @cached_property
     def main_llm(self) -> LLMClient:

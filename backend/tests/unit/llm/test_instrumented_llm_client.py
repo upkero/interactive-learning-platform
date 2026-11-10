@@ -10,7 +10,13 @@ from src.app.contracts.llm.llm_request import LLMPurpose, LLMRequest
 from src.app.contracts.llm.llm_response import LLMResponse
 from src.app.contracts.llm.structured_response import StructuredResponse, TokenUsage
 from src.app.contracts.llm.system_block import SystemBlock
-from src.app.exceptions.llm import LLMGenerationError, LLMInputError, LLMRateLimitError, LLMSchemaError
+from src.app.exceptions.llm import (
+    LLMGenerationError,
+    LLMInputError,
+    LLMOutputTruncatedError,
+    LLMRateLimitError,
+    LLMSchemaError,
+)
 from src.app.llm.instrumented_llm_client import InstrumentedLLMClient
 from tests.support.fakes.llm.llm_client import FakeLLMClient
 from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
@@ -142,18 +148,36 @@ async def test_structured_unexpected_error_maps_outcome() -> None:
 
 
 @pytest.mark.unit
+async def test_structured_truncated_error_gets_its_own_outcome() -> None:
+    # Truncated output is a subclass of LLMGenerationError but must NOT be
+    # counted as generation_error: it would hide the "raise max_tokens"
+    # signal behind generic failures.
+    fake = FakeLLMClient(responses=[LLMOutputTruncatedError("cut off")])
+    metrics = RecordingMetricsCollector()
+    instrumented = _instrumented(fake, metrics)
+
+    with pytest.raises(LLMOutputTruncatedError):
+        await instrumented.complete_structured(_request("main_pass"), _Draft)
+
+    assert all(
+        record.tags == _tags("output_truncated", "main_pass")
+        for record in metrics.histograms_named("llm.complete.duration_seconds")
+    )
+
+
+@pytest.mark.unit
 async def test_plain_complete_success_and_invalid_input() -> None:
-    ok = FakeLLMClient(responses=[LLMResponse(content="hello", usage={"prompt_tokens": 3, "completion_tokens": 5})])
+    ok = FakeLLMClient(responses=[LLMResponse(content="hello", usage={"input_tokens": 3, "output_tokens": 5})])
     metrics = RecordingMetricsCollector()
     instrumented = _instrumented(ok, metrics)
 
     response = await instrumented.complete((LLMMessage(role="user", content="q"),))
     assert response.content == "hello"
     assert all(counter.tags == _tags("success") for counter in metrics.counters_named("llm.complete.requests"))
-    prompt_records = metrics.histograms_named("llm.complete.usage.prompt_tokens")
-    assert prompt_records and prompt_records[0].value == 3.0
-    completion_records = metrics.histograms_named("llm.complete.usage.completion_tokens")
-    assert completion_records and completion_records[0].value == 5.0
+    input_records = metrics.histograms_named("llm.complete.usage.input_tokens")
+    assert input_records and input_records[0].value == 3.0
+    output_records = metrics.histograms_named("llm.complete.usage.output_tokens")
+    assert output_records and output_records[0].value == 5.0
 
     bad = FakeLLMClient(responses=[LLMInputError("empty")])
     metrics2 = RecordingMetricsCollector()
@@ -199,13 +223,13 @@ async def test_structured_without_usage_records_no_usage_metrics() -> None:
 
 @pytest.mark.unit
 async def test_mapping_without_counters_records_nothing() -> None:
-    fake = FakeLLMClient(responses=[LLMResponse(content="x", usage={"total_tokens": 0})])
+    fake = FakeLLMClient(responses=[LLMResponse(content="x", usage={"input_tokens": 0})])
     metrics = RecordingMetricsCollector()
     instrumented = _instrumented(fake, metrics)
 
     await instrumented.complete((LLMMessage(role="user", content="q"),))
 
-    assert not metrics.histograms_named("llm.complete.usage.total_tokens")
+    assert not metrics.histograms_named("llm.complete.usage.input_tokens")
 
 
 @pytest.mark.unit
