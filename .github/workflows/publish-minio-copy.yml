@@ -33,8 +33,8 @@ jobs:
         run: |
           set -o pipefail
           ./crane copy --platform linux/amd64 \
-            "quay.io/minio/aistor/minio@sha256:1579a5a26d4dd55223728c595e548ae6de0283c52b175fc831a64270e2f18c6f" \
-            "ghcr.io/${{ github.repository }}/aistor-minio:2026-11-06"
+            "quay.io/minio/aistor/minio@sha256:869afa6cb6731d87e23cdb4bbe7e4bce4bb15ae82ea657282031738c8cb70831" \
+            "ghcr.io/${{ github.repository }}/aistor-minio:2026-11-10"
 
       - name: Report the GHCR digest to pin
         run: |

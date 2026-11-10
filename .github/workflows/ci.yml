@@ -44,24 +44,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # MinIO is a docker-run step, not a `services:` entry: the AIStor image
-      # refuses to start without the license file, and service containers
-      # cannot mount one from a secret (review Б2: fail, never skip).
-      # The image is pinned by digest because the FREE license (issued
-      # 2026-10-29) is only accepted by `edge-daily` builds published after
-      # it: every static RELEASE/EDGE tag predates the license's ES384 key
-      # and rejects it with "invalid JWT". Two caveats of that pin:
-      # - quay purges superseded daily manifests, so when the tag rolls the
-      #   previous digest dies with "manifest unknown" (observed twice on
-      #   2026-11-06: the 10-31 build was removed, then the 05:54 11-06
-      #   build was purged the same day). Re-pin to the current
-      #   `edge-daily` manifest digest when that happens
-      #   (docker manifest inspect quay.io/minio/aistor/minio:edge-daily).
-      # - the pinned build below is the latest edge-daily manifest
-      #   (published 2026-11-06 10:27), resolved right after the last purge.
-      # - TEMPORARY: once our own copy of the image lives in GHCR
-      #   (ghcr.io/upkero/interactive-learning-platform/aistor-minio),
-      #   this pin moves there for good and the quay churn stops.
+      # MinIO timeline (see REVIEW_1_3.md and infra/compose.yml):
+      # - quay.io/minio/mc is dead (MinIO dropped community repos, 2026-09);
+      #   bucket init now reuses mc from inside the AIStor image (below).
+      # - quay purges superseded edge-daily manifests within days: the
+      #   10-31 build died 11-06 (observed), the 11-06 10:27 build died
+      #   ~11-09 as well ("docker pull ... not found"). Re-pin to the live
+      #   `edge-daily` digest:
+      #   docker manifest inspect quay.io/minio/aistor/minio:edge-daily
+      #   PENDING (lead): run the one-off publish-minio-copy workflow to
+      #   stash the build in our private GHCR, then switch this pin and
+      #   infra/compose.yml to ghcr.io/upkero/interactive-learning-platform/
+      #   aistor-minio@sha256:<ghcr-digest> for good — quay churn stops
+      #   hurting CI (the workflow currently copies the 2026-11-10 digest).
+      # - fresh builds (>~11-08) REFUSE ext4-backed docker volumes: the
+      #   drive formats and then never comes online ("drives-online: 0",
+      #   every S3 call 403 while /minio/health still answers 200 — the
+      #   wait loop below would never see /health/ready). The runners
+      #   format /var/lib/docker as ext4, so give MinIO a small XFS drive,
+      #   same trick as the local dev setup (/srv/minio-dev, see AGENTS.md).
+      - name: Prepare an XFS drive for MinIO
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xfsprogs
+          sudo truncate -s 2G /srv/minio-dev.xfs
+          sudo mkfs.xfs -q /srv/minio-dev.xfs
+          sudo mkdir -p /srv/minio-data
+          sudo mount -o loop /srv/minio-dev.xfs /srv/minio-data
+
       - name: Start MinIO (AIStor, license from the CI secret)
         env:
           # keep the secret out of the command text (GitHub recommends env)
@@ -79,7 +89,8 @@ jobs:
             -e MINIO_ROOT_USER=minioadmin \
             -e MINIO_ROOT_PASSWORD=minioadmin \
             -v "${GITHUB_WORKSPACE}/infra/license/minio.license:/minio.license:ro" \
-            quay.io/minio/aistor/minio@sha256:1579a5a26d4dd55223728c595e548ae6de0283c52b175fc831a64270e2f18c6f \
+            -v /srv/minio-data:/data \
+            quay.io/minio/aistor/minio@sha256:869afa6cb6731d87e23cdb4bbe7e4bce4bb15ae82ea657282031738c8cb70831 \
             server /data --console-address ":9001" --license /minio.license
 
       - name: Wait for MinIO to become ready (live, then readable)
