@@ -46,7 +46,7 @@ services:
     # AIStor-образ закреплён по digest: quay удаляет устаревшие daily-сборки
     # через несколько дней, floating-тег со временем ломает запуск; свою копию
     # храним в GHCR (воркфлоу publish-minio-copy) и берем только оттуда.
-    image: quay.io/minio/aistor/minio@sha256:869afa6cb6731d87e23cdb4bbe7e4bce4bb15ae82ea657282031738c8cb70831
+    image: quay.io/minio/aistor/minio@sha256:65ba851d715e4f5c58851eb751922fc903011175c8f652d41a6438dfe9eb00e6
     command: server /data --console-address ":9001" --license /minio.license
     env_file: ../backend/.env
     ports: ["9000:9000", "9001:9001"]
@@ -71,7 +71,7 @@ services:
     # Отдельный образ mc больше не публикуется (quay, Docker Hub), поэтому
     # job использует mc из того же AIStor-образа; entrypoint полностью
     # заменяет дефолт, так что сервер MinIO здесь не стартует.
-    image: quay.io/minio/aistor/minio@sha256:869afa6cb6731d87e23cdb4bbe7e4bce4bb15ae82ea657282031738c8cb70831
+    image: quay.io/minio/aistor/minio@sha256:65ba851d715e4f5c58851eb751922fc903011175c8f652d41a6438dfe9eb00e6
     depends_on:
       minio: { condition: service_healthy }
     env_file: ../backend/.env

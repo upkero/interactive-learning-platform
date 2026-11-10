@@ -18,7 +18,7 @@ env:
   # edge-daily builds published after it; the digest below is one such
   # build, pinned by manifest digest so quay's purge of superseded
   # edge-daily tags cannot silently change what gets copied.
-  SOURCE: quay.io/minio/aistor/minio@sha256:869afa6cb6731d87e23cdb4bbe7e4bce4bb15ae82ea657282031738c8cb70831
+  SOURCE: quay.io/minio/aistor/minio@sha256:65ba851d715e4f5c58851eb751922fc903011175c8f652d41a6438dfe9eb00e6
   TARGET: ghcr.io/${{ github.repository }}/aistor-minio:2026-11-10
 
 jobs:

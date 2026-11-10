@@ -77,7 +77,7 @@ jobs:
             -e MINIO_ROOT_PASSWORD=minioadmin \
             -v "${GITHUB_WORKSPACE}/infra/license/minio.license:/minio.license:ro" \
             -v /srv/minio-data:/data \
-            quay.io/minio/aistor/minio@sha256:869afa6cb6731d87e23cdb4bbe7e4bce4bb15ae82ea657282031738c8cb70831 \
+            quay.io/minio/aistor/minio@sha256:65ba851d715e4f5c58851eb751922fc903011175c8f652d41a6438dfe9eb00e6 \
             server /data --console-address ":9001" --license /minio.license
 
       - name: Wait for MinIO to become ready (live, then readable)
