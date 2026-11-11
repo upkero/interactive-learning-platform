@@ -3,6 +3,7 @@
 from uuid import UUID, uuid4
 
 from src.app.contracts.users import UserRecord
+from src.app.exceptions.users import UserAlreadyExistsError
 from src.app.interfaces.repositories.users import UserRepositoryProtocol
 from tests.support.time import now
 
@@ -28,6 +29,9 @@ class FakeUserRepository(UserRepositoryProtocol):
         locale: str = "ru",
         monthly_limit: int = 20,
     ) -> UserRecord:
+        # mirrors the citext unique constraint of the users table
+        if await self.get_by_email(email) is not None:
+            raise UserAlreadyExistsError
         record = UserRecord(
             id=uuid4(),
             email=email,
