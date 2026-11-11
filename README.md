@@ -22,8 +22,8 @@ cp backend/.env.example backend/.env
 docker compose --env-file backend/.env -f infra/compose.yml up -d
 ```
 
-Образ MinIO лежит в приватном GHCR-пакете, поэтому разово войдите в
-ghcr.io (токену достаточно scope `read:packages`):
+Образ MinIO лежит в GHCR-пакете `aistor-minio`; если лид перевёл его в
+Private, разово войдите в ghcr.io (токену достаточно scope `read:packages`):
 
 ```bash
 echo "$GHCR_TOKEN" | docker login ghcr.io -u <github-логин> --password-stdin
@@ -62,10 +62,9 @@ http://localhost:8000/docs
 
 Боевая конфигурация описана в `docs/adr/0009-deployment.md`.
 
-Один раз перед первым деплоем:
+Один раз перед первым деплоем (если образы в GHCR переведены в Private):
 
 ```bash
-# Пакеты в GHCR приватные по умолчанию
 docker login ghcr.io
 ```
 
@@ -76,4 +75,4 @@ docker login ghcr.io
 IMAGE_TAG=<commit-sha> ./infra/deploy.sh
 ```
 
-Скрипт требует `IMAGE_TAG` (деплой воспроизводим, без туманных тегов), проверяет `backend/.env` (права 600) и XFS-каталог `MINIO_DATA_DIR`, тянет образы из GHCR и поднимает стек с Nginx-прокси (порты 80/443). Образы GHCR приватные — соблюдайте и `docker login ghcr.io` на самой VPS.
+Скрипт требует `IMAGE_TAG` (деплой воспроизводим, без туманных тегов), проверяет `backend/.env` (права 600) и XFS-каталог `MINIO_DATA_DIR`, тянет образы из GHCR и поднимает стек с Nginx-прокси (порты 80/443). Если пакет `aistor-minio` переведён в Private, войдите в GHCR и на самой VPS.

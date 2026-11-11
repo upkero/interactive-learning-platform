@@ -12,7 +12,7 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     permissions:
-      # pull the private MinIO copy from GHCR; nothing is published here
+      # pull our MinIO copy from GHCR; nothing is published here
       contents: read
       packages: read
     services:
@@ -48,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The build is our private copy in GHCR (aistor-minio, pushed by the
+      # The build is our copy in GHCR (aistor-minio, pushed by the
       # publish-minio-copy workflow), pinned by digest — quay purges
       # superseded edge-daily manifests within days. Updating the image =
       # new SOURCE/TARGET in publish-minio-copy.yml and a new digest here
