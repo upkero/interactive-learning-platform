@@ -13,7 +13,11 @@ from src.app.models.base import Base
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False: fileConfig would otherwise flip
+    # .disabled=True on every logger created before the migrations run,
+    # silencing all application logging for the rest of the process
+    # (this is what made log assertions fail in the test suite).
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

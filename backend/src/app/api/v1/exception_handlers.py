@@ -17,12 +17,18 @@ def _error_response(
     detail: Any,
     error_code: str,
     headers: Mapping[str, str] | None = None,
+    extra: Mapping[str, Any] | None = None,
 ) -> JSONResponse:
     # Cast to dict: JSONResponse requires dict headers
     resp_headers = dict(headers) if headers else None
+    content: dict[str, Any] = {"detail": detail, "error_code": error_code}
+    # Domain exceptions may carry numbers the frontend needs in the body
+    # (quota_exceeded -> available/requested): they land at the top level.
+    if extra:
+        content.update(extra)
     return JSONResponse(
         status_code=status,
-        content={"detail": detail, "error_code": error_code},
+        content=content,
         headers=resp_headers,
     )
 
@@ -36,7 +42,7 @@ async def handle_app_exception(request: Request, exc: BaseAppException) -> JSONR
             exc.detail,
             exc_info=exc,
         )
-    return _error_response(exc.status_code, exc.detail, exc.error_code)
+    return _error_response(exc.status_code, exc.detail, exc.error_code, extra=exc.extra)
 
 
 async def handle_request_validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
