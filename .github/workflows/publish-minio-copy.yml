@@ -2,7 +2,9 @@
 # from quay into our private GHCR namespace, where nothing garbage-collects
 # it. Runs automatically on any push that touches this file (so it works
 # from a PR branch, where workflow_dispatch is hidden), plus manually:
-# Actions → publish-minio-copy → Run workflow.
+# Actions → publish-minio-copy → Run workflow. It is idempotent: if the
+# TARGET already exists in GHCR, the run does nothing — safe when the merge
+# into dev/main re-triggers it after quay has already purged the SOURCE.
 # The digest it prints ("PIN THIS DIGEST") goes into ci.yml and
 # infra/compose.yml, replacing the quay source pin for good.
 name: publish-minio-copy
@@ -17,9 +19,10 @@ env:
   # The MinIO FREE license (issued 2026-10-29) is only accepted by
   # edge-daily builds published after it; the digest below is one such
   # build, pinned by manifest digest so quay's purge of superseded
-  # edge-daily tags cannot silently change what gets copied.
+  # edge-daily tags cannot silently change what gets copied. The TARGET
+  # tag must name the build date of that digest.
   SOURCE: quay.io/minio/aistor/minio@sha256:65ba851d715e4f5c58851eb751922fc903011175c8f652d41a6438dfe9eb00e6
-  TARGET: ghcr.io/${{ github.repository }}/aistor-minio:2026-11-10
+  TARGET: ghcr.io/${{ github.repository }}/aistor-minio:2026-11-11
 
 jobs:
   copy:
@@ -48,7 +51,12 @@ jobs:
         run: echo "$GITHUB_TOKEN" | ./crane auth login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Copy the pinned build from quay
-        run: ./crane copy --platform linux/amd64 "$SOURCE" "$TARGET"
+        run: |
+          if ./crane digest "$TARGET" > /dev/null 2>&1; then
+            echo "$TARGET already exists, nothing to copy."
+            exit 0
+          fi
+          ./crane copy --platform linux/amd64 "$SOURCE" "$TARGET"
 
       - name: Report the GHCR digest to pin
         run: |

@@ -43,7 +43,7 @@ services:
   # AIStor-образ не стартует без лицензии: файл кладётся в infra/license/minio.license
   # (не коммитится, см. .gitignore; reference — docker-compose.yml faq-assistant).
   minio:
-    # Наша копия AIStor-образа MinIO в GHCR (пакет aistor-minio,
+    # Наша приватная копия AIStor-образа MinIO в GHCR (пакет aistor-minio,
     # публикуется воркфлоу publish-minio-copy), закреплённая по digest:
     # quay удаляет устаревшие daily-сборки через несколько дней. Обновление
     # образа = новый SOURCE/TARGET в publish-minio-copy.yml и новый digest

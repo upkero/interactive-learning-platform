@@ -12,7 +12,8 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     permissions:
-      # pull our MinIO copy from GHCR; nothing is published here
+      # pull the private MinIO copy from GHCR (aistor-minio is a private
+      # package: a one-time docker login ghcr.io above is mandatory)
       contents: read
       packages: read
     services:
@@ -48,11 +49,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The build is our copy in GHCR (aistor-minio, pushed by the
+      # The build is our private copy in GHCR (aistor-minio, pushed by the
       # publish-minio-copy workflow), pinned by digest — quay purges
       # superseded edge-daily manifests within days. Updating the image =
       # new SOURCE/TARGET in publish-minio-copy.yml and a new digest here
-      # and in infra/compose.yml, one PR. The drive must be XFS: fresh
+      # and in infra/compose.yml, one PR. The workflow skips the copy when
+      # the target already exists, so re-runs after merges are safe. The drive must be XFS: fresh
       # builds refuse ext4-backed volumes and never come online
       # ("drives-online: 0", S3 403) — runner's /var/lib/docker is ext4,
       # so mount a small loop XFS drive.
