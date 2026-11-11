@@ -56,6 +56,14 @@ jobs:
             echo "$TARGET already exists, nothing to copy."
             exit 0
           fi
+          # quay purges superseded edge-daily manifests within a day; if the
+          # pinned SOURCE is already gone while our GHCR copy still has the
+          # build under another tag, the fix is a manual re-tag (no quay left
+          # to copy from): crane tag ghcr.io/<repo>/aistor-minio@sha256:<ghcr-digest> <tag>
+          if ! ./crane digest "$SOURCE" > /dev/null 2>&1; then
+            echo "::error::SOURCE is gone from quay and TARGET does not exist yet. Retag our existing GHCR copy by hand: crane tag ghcr.io/${{ github.repository }}/aistor-minio@sha256:<ghcr-digest-from-ci.yml> ${TARGET##*:}"
+            exit 1
+          fi
           ./crane copy --platform linux/amd64 "$SOURCE" "$TARGET"
 
       - name: Report the GHCR digest to pin
