@@ -11,6 +11,11 @@ jobs:
   # ---------------------------------------------------------------------------
   backend:
     runs-on: ubuntu-latest
+    permissions:
+      # pull the private MinIO copy from GHCR (aistor-minio is a private
+      # package: a one-time docker login ghcr.io above is mandatory)
+      contents: read
+      packages: read
     services:
       db:
         image: pgvector/pgvector:pg17
@@ -35,9 +40,97 @@ jobs:
       REDIS_URL: redis://localhost:6379/0
       AUTH_JWT_SECRET: ci-test-jwt-secret-must-be-at-least-32-characters-long
       SEED_PASSWORD: ci-seed-password
+      # MinIO raised below, admin creds match the dev defaults in compose
+      S3_ENDPOINT_URL: http://localhost:9000
+      S3_PUBLIC_ENDPOINT_URL: http://localhost:9000
+      S3_ACCESS_KEY_ID: minioadmin
+      S3_SECRET_ACCESS_KEY: minioadmin
 
     steps:
       - uses: actions/checkout@v4
+
+      # The build is our private copy in GHCR (aistor-minio, pushed by the
+      # publish-minio-copy workflow), pinned by digest — quay purges
+      # superseded edge-daily manifests within days. Updating the image =
+      # new SOURCE/TARGET in publish-minio-copy.yml and a new digest here
+      # and in infra/compose.yml, one PR. The workflow skips the copy when
+      # the target already exists, so re-runs after merges are safe. The drive must be XFS: fresh
+      # builds refuse ext4-backed volumes and never come online
+      # ("drives-online: 0", S3 403) — runner's /var/lib/docker is ext4,
+      # so mount a small loop XFS drive.
+      - name: Prepare an XFS drive for MinIO
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xfsprogs
+          sudo truncate -s 2G /srv/minio-dev.xfs
+          sudo mkfs.xfs -q /srv/minio-dev.xfs
+          sudo mkdir -p /srv/minio-data
+          sudo mount -o loop /srv/minio-dev.xfs /srv/minio-data
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Start MinIO (AIStor, license from the CI secret)
+        env:
+          # keep the secret out of the command text (GitHub recommends env)
+          MINIO_LICENSE_B64: ${{ secrets.MINIO_LICENSE_B64 }}
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/infra/license"
+          # fail loudly before the server runs without a license
+          if [ -z "$MINIO_LICENSE_B64" ]; then
+            echo "::error::Secret MINIO_LICENSE_B64 is empty. Set it to the base64 of infra/license/minio.license (single line)."
+            exit 1
+          fi
+          printf '%s' "$MINIO_LICENSE_B64" | base64 -d > "${GITHUB_WORKSPACE}/infra/license/minio.license"
+          docker run -d --name minio \
+            -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            -v "${GITHUB_WORKSPACE}/infra/license/minio.license:/minio.license:ro" \
+            -v /srv/minio-data:/data \
+            ghcr.io/upkero/interactive-learning-platform/aistor-minio@sha256:03f71816a1761e6b46228e2bdb856c43285f031cfcd02f922e7781841826f838 \
+            server /data --console-address ":9001" --license /minio.license
+
+      - name: Wait for MinIO to become ready (live, then readable)
+        run: |
+          # /minio/health/live is process-alive only: the current daily
+          # build finishes formatting its pool AFTER the live endpoint
+          # answers and early `mc` traffic fails with "drives-online: 0".
+          # Wait for /health/ready (read quorum established) instead.
+          for _ in $(seq 1 60); do
+            if ! curl -sf http://localhost:9000/minio/health/live > /dev/null; then
+              sleep 1
+              continue
+            fi
+            if curl -sf http://localhost:9000/minio/health/ready > /dev/null; then
+              echo "MinIO is live and ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs minio
+          exit 1
+
+      - name: Create documents and images buckets (as minio-init does)
+        run: |
+          # Retry a few times: right after formatting, a first mb call can
+          # still land inside the pool's quorum-emergence window.
+          ok=""
+          for _ in $(seq 1 15); do
+            if docker exec minio /bin/sh -c \
+              "mc alias set local http://localhost:9000 minioadmin minioadmin &&
+               mc mb --ignore-existing local/documents local/images"; then
+              ok=1
+              break
+            fi
+            echo "mc mb attempt failed; retrying."
+            sleep 2
+          done
+          if [ -z "$ok" ]; then
+            echo "mc mb failed after retries; full MinIO logs:"
+            docker logs minio
+            exit 1
+          fi
 
       - uses: astral-sh/setup-uv@v6
 

@@ -43,12 +43,20 @@ services:
   # AIStor-образ не стартует без лицензии: файл кладётся в infra/license/minio.license
   # (не коммитится, см. .gitignore; reference — docker-compose.yml faq-assistant).
   minio:
-    image: quay.io/minio/aistor/minio:${MINIO_IMAGE_TAG:-latest}
+    # Наша приватная копия AIStor-образа MinIO в GHCR (пакет aistor-minio,
+    # публикуется воркфлоу publish-minio-copy), закреплённая по digest:
+    # quay удаляет устаревшие daily-сборки через несколько дней. Обновление
+    # образа = новый SOURCE/TARGET в publish-minio-copy.yml и новый digest
+    # здесь и в ci.yml одним PR.
+    image: ghcr.io/upkero/interactive-learning-platform/aistor-minio@sha256:03f71816a1761e6b46228e2bdb856c43285f031cfcd02f922e7781841826f838
     command: server /data --console-address ":9001" --license /minio.license
     env_file: ../backend/.env
     ports: ["9000:9000", "9001:9001"]
+    # Диск данных обязан быть XFS: свежие сборки AIStor отказываются
+    # форматировать ext4-тома и остаются офлайн; путь задаёт MINIO_DATA_DIR
+    # из backend/.env (разовая настройка диска — docs/minio-xfs.md).
     volumes:
-      - miniodata:/data
+      - ${MINIO_DATA_DIR:?MINIO_DATA_DIR must point to an XFS directory, see docs/minio-xfs.md}:/data
       - ./license/minio.license:/minio.license:ro
     healthcheck:
       # Современные образы MinIO не содержат curl; в них есть mc с алиасом local
@@ -62,7 +70,10 @@ services:
 
   # 4. Инициализация бакетов документов и картинок в MinIO
   minio-init:
-    image: quay.io/minio/mc:latest
+    # Отдельный образ mc больше не публикуется (quay, Docker Hub), поэтому
+    # job использует mc из того же AIStor-образа; entrypoint полностью
+    # заменяет дефолт, так что сервер MinIO здесь не стартует.
+    image: ghcr.io/upkero/interactive-learning-platform/aistor-minio@sha256:03f71816a1761e6b46228e2bdb856c43285f031cfcd02f922e7781841826f838
     depends_on:
       minio: { condition: service_healthy }
     env_file: ../backend/.env
@@ -163,5 +174,4 @@ networks:
 volumes:
   pgdata: {}
   redisdata: {}
-  miniodata: {}
   ollamadata: {}

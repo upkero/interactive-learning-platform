@@ -171,6 +171,31 @@ async def test_image_repository_roundtrip(session_factory: SessionFactory) -> No
         assert [i.id for i in await repository.list_by_document(document_id)] == [created.id]
 
 
+async def test_image_repository_get_many_batches_and_preserves_order(
+    session_factory: SessionFactory,
+) -> None:
+    """get_many returns records for existing ids, missing ids are skipped."""
+    _, document_id = await _new_document(session_factory)
+    async with session_factory() as session:
+        repository = ImageRepository(session)
+        records = await repository.add_many(
+            document_id,
+            [
+                ImageDraft(object_key="img/a.png", width=1, height=1, page=1),
+                ImageDraft(object_key="img/b.png", width=2, height=2, page=2),
+                ImageDraft(object_key="img/c.png", width=3, height=3, page=3),
+            ],
+        )
+        await session.commit()
+
+    second, _, third = records  # asking in a shuffled order
+    async with session_factory() as session:
+        fetched = await ImageRepository(session).get_many(
+            [third.id, uuid4(), second.id, second.id],
+        )
+    assert [record.id for record in fetched] == [third.id, second.id, second.id]
+
+
 async def test_user_material_repository_roundtrip(session_factory: SessionFactory) -> None:
     owner_id, document_id = await _new_document(session_factory)
     async with session_factory() as session, session.begin():

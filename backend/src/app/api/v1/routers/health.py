@@ -3,31 +3,28 @@
 Readiness rules (story 1.4.1, platform observability):
 - ``/health/live`` — the process is alive, no checks.
 - ``/health/ready`` — the API can accept traffic: PostgreSQL (SELECT 1),
-  Redis (PING) and MinIO (health/live, when storage is configured).
+  Redis (PING) and MinIO (head_bucket of both buckets through
+  ``ObjectStorageClient.ping()``: verifies reachability, credentials and
+  that the buckets exist).
 The external LLM is deliberately not checked: Anthropic/Ollama being
 unavailable does not make the API not ready; generation runs in Celery
 workers.
 """
 
 import asyncio
-from typing import Annotated
 
-import httpx
 import redis.asyncio as aioredis
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.app.api.v1.dependencies import get_container
-from src.app.bootstrap.container import ApplicationContainer
-from src.app.core.settings.storage import get_storage_settings
+from src.app.api.v1.dependencies import ContainerDep
+from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 
 router = APIRouter(prefix="/health", tags=["infra"])
 
 # Readiness checks must fail fast so the LB does not wait on a stuck upstream
 _CHECK_TIMEOUT_SECONDS = 5.0
-
-ContainerDep = Annotated[ApplicationContainer, Depends(get_container)]
 
 
 @router.get("/live")
@@ -52,28 +49,29 @@ async def _check_redis(client: aioredis.Redis) -> str | None:
     return None
 
 
-async def _check_minio(endpoint_url: str) -> str | None:
-    if not endpoint_url:
-        # Storage is not configured — the API is still considered ready
-        return None
+async def _check_object_storage(storage: ObjectStorageClient) -> str | None:
+    """``ping()`` verifies reachability, credentials and bucket existence.
+
+    A degraded MinIO signals through the boolean result, not through an
+    exception, so the result itself must be checked: a plain ``False``
+    is unavailability, not an error to swallow as healthy.
+    """
     try:
-        async with httpx.AsyncClient(timeout=_CHECK_TIMEOUT_SECONDS) as client:
-            response = await client.get(f"{endpoint_url.rstrip('/')}/minio/health/live")
-            response.raise_for_status()
-    except (httpx.HTTPError, OSError):
+        if not await asyncio.wait_for(storage.ping(), _CHECK_TIMEOUT_SECONDS):
+            return "MinIO unavailable"
+    except Exception:  # any error means MinIO is not ready for traffic
         return "MinIO unavailable"
     return None
 
 
 @router.get("/ready")
 async def readiness(container: ContainerDep) -> dict[str, str]:
-    storage_settings = get_storage_settings()
     errors = [
         message
         for message in await asyncio.gather(
             _check_db(container.session_factory),
             _check_redis(container.redis_client),
-            _check_minio(storage_settings.endpoint_url),
+            _check_object_storage(container.object_storage),
         )
         if message
     ]

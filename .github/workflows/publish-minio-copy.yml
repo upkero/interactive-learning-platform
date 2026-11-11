@@ -1,0 +1,72 @@
+# One-off tool: copies the pinned, license-validated MinIO (AIStor) image
+# from quay into our private GHCR namespace, where nothing garbage-collects
+# it. Runs automatically on any push that touches this file (so it works
+# from a PR branch, where workflow_dispatch is hidden), plus manually:
+# Actions → publish-minio-copy → Run workflow. It is idempotent: if the
+# TARGET already exists in GHCR, the run does nothing — safe when the merge
+# into dev/main re-triggers it after quay has already purged the SOURCE.
+# The digest it prints ("PIN THIS DIGEST") goes into ci.yml and
+# infra/compose.yml, replacing the quay source pin for good.
+name: publish-minio-copy
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/publish-minio-copy.yml
+
+env:
+  # The MinIO FREE license (issued 2026-10-29) is only accepted by
+  # edge-daily builds published after it; the digest below is one such
+  # build, pinned by manifest digest so quay's purge of superseded
+  # edge-daily tags cannot silently change what gets copied. The TARGET
+  # tag must name the build date of that digest.
+  SOURCE: quay.io/minio/aistor/minio@sha256:65ba851d715e4f5c58851eb751922fc903011175c8f652d41a6438dfe9eb00e6
+  TARGET: ghcr.io/${{ github.repository }}/aistor-minio:2026-11-11
+
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Get crane (registry copy tool)
+        # The tarball is verified against the release's checksums.txt
+        # before anything from it is executed.
+        run: |
+          version=0.22.1
+          curl -sfL "https://github.com/google/go-containerregistry/releases/download/v${version}/go-containerregistry_Linux_x86_64.tar.gz" -o go-containerregistry_Linux_x86_64.tar.gz
+          curl -sfL "https://github.com/google/go-containerregistry/releases/download/v${version}/checksums.txt" -o checksums.txt
+          grep "go-containerregistry_Linux_x86_64.tar.gz" checksums.txt | sha256sum -c -
+          tar -xzf go-containerregistry_Linux_x86_64.tar.gz crane
+          ./crane version
+
+      # Path-style names (OWNER/REPO/IMAGE) are created only through the
+      # Actions GITHUB_TOKEN — a personal access token is denied
+      # (create_package), which is why this runs here.
+      - name: Log in to GHCR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GITHUB_TOKEN" | ./crane auth login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Copy the pinned build from quay
+        run: |
+          if ./crane digest "$TARGET" > /dev/null 2>&1; then
+            echo "$TARGET already exists, nothing to copy."
+            exit 0
+          fi
+          # quay purges superseded edge-daily manifests within a day; if the
+          # pinned SOURCE is already gone while our GHCR copy still has the
+          # build under another tag, the fix is a manual re-tag (no quay left
+          # to copy from): crane tag ghcr.io/<repo>/aistor-minio@sha256:<ghcr-digest> <tag>
+          if ! ./crane digest "$SOURCE" > /dev/null 2>&1; then
+            echo "::error::SOURCE is gone from quay and TARGET does not exist yet. Retag our existing GHCR copy by hand: crane tag ghcr.io/${{ github.repository }}/aistor-minio@sha256:<ghcr-digest-from-ci.yml> ${TARGET##*:}"
+            exit 1
+          fi
+          ./crane copy --platform linux/amd64 "$SOURCE" "$TARGET"
+
+      - name: Report the GHCR digest to pin
+        run: |
+          digest=$(./crane digest "$TARGET")
+          echo "PIN THIS DIGEST in ci.yml and infra/compose.yml: ${digest}"

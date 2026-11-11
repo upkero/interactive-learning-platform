@@ -14,22 +14,37 @@ cp backend/.env.example backend/.env
 
 ### 2. Запуск проекта
 
+Все команды compose запускаются с `--env-file backend/.env`: секция
+`env_file` подставляет переменные в контейнеры, но на интерполяцию
+самого compose (например, `MINIO_DATA_DIR`) она не влияет.
+
 ```bash
-docker compose -f infra/compose.yml up -d
+docker compose --env-file backend/.env -f infra/compose.yml up -d
 ```
+
+Образ MinIO лежит в **приватном** GHCR-пакете `aistor-minio`, поэтому
+перед первым `docker compose up` разово войдите в ghcr.io (токену
+достаточно scope `read:packages`):
+
+```bash
+echo "$GHCR_TOKEN" | docker login ghcr.io -u <github-логин> --password-stdin
+```
+
+Данные MinIO лежат на XFS-каталоге из `MINIO_DATA_DIR` — разовая
+настройка диска описана в [docs/minio-xfs.md](docs/minio-xfs.md).
 
 ### 3. Запуск с локальной моделью (профиль local-llm)
 
 Чтобы работать без платного ключа Anthropic, поднимите локальную Ollama вместе со стеком:
 
 ```bash
-docker compose -f infra/compose.yml --profile local-llm up -d
+docker compose --env-file backend/.env -f infra/compose.yml --profile local-llm up -d
 ```
 
 ## Проверка, что всё поднялось
 
 ```bash
-docker compose -f infra/compose.yml ps
+docker compose --env-file backend/.env -f infra/compose.yml ps
 ```
 
 Readiness-проверка API (БД, Redis, MinIO):
@@ -48,11 +63,11 @@ http://localhost:8000/docs
 
 Боевая конфигурация описана в `docs/adr/0009-deployment.md`.
 
-Один раз перед первым деплоем:
+Один раз перед первым деплоем — пакет MinIO в GHCR приватный, без
+входа VPS не скачает образ:
 
 ```bash
-# Пакеты в GHCR приватные по умолчанию
-docker login ghcr.io
+echo "$GHCR_TOKEN" | docker login ghcr.io -u <github-логин> --password-stdin
 ```
 
 Обновление стека (тег — sha коммита, который CI опубликовал в GHCR):
@@ -62,4 +77,4 @@ docker login ghcr.io
 IMAGE_TAG=<commit-sha> ./infra/deploy.sh
 ```
 
-Скрипт требует `IMAGE_TAG` (деплой воспроизводим, без туманных тегов), проверяет `backend/.env` (права 600), тянет образы из GHCR и поднимает стек с Nginx-прокси (порты 80/443).
+Скрипт требует `IMAGE_TAG` (деплой воспроизводим, без туманных тегов), проверяет `backend/.env` (права 600) и XFS-каталог `MINIO_DATA_DIR`, тянет образы из GHCR и поднимает стек с Nginx-прокси (порты 80/443). Пакет `aistor-minio` приватный — без `docker login ghcr.io` на самой VPS деплой не скачает образ MinIO.

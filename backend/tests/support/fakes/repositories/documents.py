@@ -169,6 +169,10 @@ class FakeImageRepository(ImageRepositoryProtocol):
     async def get(self, image_id: UUID) -> ImageRecord | None:
         return self._images.get(image_id)
 
+    async def get_many(self, image_ids: Sequence[UUID]) -> list[ImageRecord]:
+        """Input order preserved, duplicates repeated, missing ids skipped."""
+        return [record for image_id in image_ids if (record := self._images.get(image_id)) is not None]
+
     async def list_by_document(self, document_id: UUID) -> list[ImageRecord]:
         return [i for i in self._images.values() if i.document_id == document_id]
 
