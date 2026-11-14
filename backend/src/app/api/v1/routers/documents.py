@@ -13,9 +13,19 @@ from fastapi import APIRouter, UploadFile
 from fastapi.params import Form
 
 from src.app.api.v1.dependencies.auth import CurrentUserDep
-from src.app.api.v1.dependencies.services import DocumentQueryServiceDep, UploadServiceDep
+from src.app.api.v1.dependencies.services import (
+    DocumentQueryServiceDep,
+    ImportServiceDep,
+    UploadServiceDep,
+)
 from src.app.contracts.documents import DocumentDetails
-from src.app.schemas.documents import DocumentCreatedOut, DocumentOut, PartSummaryOut, SharedWithOut
+from src.app.schemas.documents import (
+    DocumentCreatedOut,
+    DocumentImportIn,
+    DocumentOut,
+    PartSummaryOut,
+    SharedWithOut,
+)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -33,6 +43,21 @@ async def upload_document(
         title=title,
         stream=file,
     )
+    return DocumentCreatedOut(id=document.id, status=document.status.value)
+
+
+@router.post(
+    "/import",
+    status_code=201,
+    response_model=DocumentCreatedOut,
+    operation_id="documents_import",
+)
+async def import_document(
+    body: DocumentImportIn,
+    user: CurrentUserDep,
+    service: ImportServiceDep,
+) -> DocumentCreatedOut:
+    document = await service.import_document(owner_id=user.id, url=body.url)
     return DocumentCreatedOut(id=document.id, status=document.status.value)
 
 

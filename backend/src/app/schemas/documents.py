@@ -18,6 +18,17 @@ class DocumentCreatedOut(BaseModel):
     status: Literal["uploaded", "parsing", "parsed", "generating", "done", "failed"]
 
 
+class DocumentImportIn(BaseModel):
+    """Body of ``POST /documents/import`` (story 1.4.4).
+
+    The link shape is validated in the service (not by a Pydantic
+    ``HttpUrl``) so a rejected URL answers the unified 422
+    ``invalid_gdocs_url`` error format.
+    """
+
+    url: str = Field(min_length=1, max_length=2048)
+
+
 class PartSummaryOut(BaseModel):
     id: UUID
     index: int

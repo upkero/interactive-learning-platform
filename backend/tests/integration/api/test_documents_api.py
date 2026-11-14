@@ -162,6 +162,57 @@ async def test_upload_without_a_cookie_is_401(client: TestClient) -> None:
     assert response.json()["error_code"] == "not_authenticated"
 
 
+async def test_import_creates_document_and_dispatches(client: TestClient, dispatcher: FakeTaskDispatcher) -> None:
+    _register(client)
+    response = client.post(
+        "/api/v1/documents/import",
+        json={"url": "https://docs.google.com/document/d/1AbC_dEf-123/edit"},
+    )
+    assert response.status_code == 201, response.text
+    created = response.json()
+    assert created["status"] == "uploaded"
+    document_id = UUID(created["id"])
+
+    assert dispatcher.calls == [("enqueue_parse", (document_id,))]
+
+    shown = client.get(f"/api/v1/documents/{document_id}")
+    assert shown.status_code == 200
+    body = shown.json()
+    assert body["title"] == "Untitled"
+    assert body["status"] == "uploaded"
+    assert body["role"] == "owner"
+    # for gdocs the source link is the original import link
+    assert body["source_url"] == "https://docs.google.com/document/d/1AbC_dEf-123/edit"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://example.com/document/d/1AbC/edit",
+        "https://docs.google.com/spreadsheets/d/1AbC/edit",
+        "https://docs.google.com/presentation/d/1AbC/edit",
+        "https://docs.google.com/document/edit/1AbC",
+        "not a link at all",
+    ],
+)
+async def test_invalid_import_link_is_422(client: TestClient, dispatcher: FakeTaskDispatcher, url: str) -> None:
+    _register(client)
+    response = client.post("/api/v1/documents/import", json={"url": url})
+    assert response.status_code == 422
+    assert response.json()["error_code"] == "invalid_gdocs_url"
+    assert dispatcher.calls == []
+
+
+async def test_import_counts_towards_the_processing_limit(client: TestClient) -> None:
+    _register(client)
+    first = client.post("/api/v1/documents/import", json={"url": "https://docs.google.com/document/d/first/edit"})
+    second = _upload(client, filename="second.pdf")
+    assert first.status_code == 201 and second.status_code == 201
+    third = client.post("/api/v1/documents/import", json={"url": "https://docs.google.com/document/d/third/edit"})
+    assert third.status_code == 429
+    assert third.json()["error_code"] == "processing_limit_reached"
+
+
 async def test_the_third_upload_in_processing_is_429(
     client: TestClient, dispatcher: FakeTaskDispatcher, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:

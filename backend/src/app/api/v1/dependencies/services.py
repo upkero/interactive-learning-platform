@@ -20,6 +20,7 @@ from src.app.repositories.user_material_repository import UserMaterialRepository
 from src.app.repositories.user_repository import UserRepository
 from src.app.services.documents.document_query_service import DocumentQueryService
 from src.app.services.documents.file_inspector import FileInspector
+from src.app.services.documents.import_service import ImportService
 from src.app.services.documents.upload_service import UploadService
 
 
@@ -74,13 +75,31 @@ def get_document_query_service(
 DocumentQueryServiceDep = Annotated[DocumentQueryService, Depends(get_document_query_service)]
 
 
+def get_import_service(
+    session: DBSessionDep,
+    dispatcher: TaskDispatcherDep,
+) -> ImportService:
+    return ImportService(
+        session=session,
+        dispatcher=dispatcher,
+        documents=DocumentRepository(session),
+        materials=UserMaterialRepository(session),
+        users=UserRepository(session),
+    )
+
+
+ImportServiceDep = Annotated[ImportService, Depends(get_import_service)]
+
+
 __all__ = [
     "DocumentQueryServiceDep",
     "FileInspectorDep",
+    "ImportServiceDep",
     "TaskDispatcherDep",
     "UploadServiceDep",
     "get_document_query_service",
     "get_file_inspector",
+    "get_import_service",
     "get_task_dispatcher",
     "get_upload_service",
 ]

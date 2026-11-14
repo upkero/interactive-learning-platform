@@ -75,3 +75,16 @@ class TooManyPagesError(UploadValidationError):
     status_code = 422
     error_code = "too_many_pages"
     default_detail = "The document has too many pages."
+
+
+class InvalidGdocsUrlError(BaseAppException):
+    """The import link is not a public Google Docs document URL (422).
+
+    Only ``https://docs.google.com/document/d/{id}...`` is accepted:
+    other domains and other Google products (Sheets, Slides) are refused
+    before any network activity (story 1.4.4, SSRF-safe).
+    """
+
+    status_code = 422
+    error_code = "invalid_gdocs_url"
+    default_detail = "The URL must point to a Google Docs document."
