@@ -85,6 +85,10 @@ class FileInspector:
     def __init__(self, settings: UploadSettings) -> None:
         self._s = settings
 
+    def max_read_bytes(self) -> int:
+        """The cap for ``read_with_limit``: the largest per-type limit."""
+        return max(self._s.max_bytes, self._s.max_markdown_bytes)
+
     async def inspect(self, data: bytes, filename: str | None) -> InspectedFile:
         """Inspect file content off the event loop; filename is a hint only."""
         return await asyncio.to_thread(self._inspect, data, (filename or "").lower())

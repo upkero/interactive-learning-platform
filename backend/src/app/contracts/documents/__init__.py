@@ -1,5 +1,6 @@
 """Immutable contracts of the document aggregate."""
 
+from src.app.contracts.documents.document_details import DocumentDetails, SharedUserInfo
 from src.app.contracts.documents.document_record import DocumentRecord
 from src.app.contracts.documents.image_draft import ImageDraft
 from src.app.contracts.documents.image_record import ImageRecord
@@ -14,6 +15,7 @@ from src.app.contracts.documents.statuses import (
 )
 
 __all__ = [
+    "DocumentDetails",
     "DocumentRecord",
     "DocumentStatus",
     "ImageDraft",
@@ -23,5 +25,6 @@ __all__ = [
     "PartDraft",
     "PartRecord",
     "PartStatus",
+    "SharedUserInfo",
     "SourceType",
 ]

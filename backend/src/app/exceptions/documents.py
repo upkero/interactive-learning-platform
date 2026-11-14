@@ -3,6 +3,26 @@
 from src.app.exceptions.base import BaseAppException
 
 
+class DocumentNotFoundError(BaseAppException):
+    """The document does not exist or is not accessible by this user.
+
+    404 instead of 403: a foreign document must not be distinguishable
+    from a missing one.
+    """
+
+    status_code = 404
+    error_code = "document_not_found"
+    default_detail = "Document not found."
+
+
+class ProcessingLimitError(BaseAppException):
+    """The user already has the maximum number of documents in processing."""
+
+    status_code = 429
+    error_code = "processing_limit_reached"
+    default_detail = "Too many documents are currently being processed."
+
+
 class DocumentsIntegrityError(BaseAppException):
     """Base exception for document integrity violations."""
 

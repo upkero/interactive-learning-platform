@@ -6,10 +6,12 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.app.contracts.documents.document_details import SharedUserInfo
 from src.app.contracts.documents.material_record import MaterialRecord
 from src.app.contracts.documents.statuses import MaterialRole
 from src.app.exceptions.documents import DocumentsIntegrityError, MaterialAccessDuplicateError
 from src.app.interfaces.repositories.documents import UserMaterialRepositoryProtocol
+from src.app.models.user import User
 from src.app.models.user_material import UserMaterial
 from src.app.repositories._errors import constraint_name
 
@@ -57,3 +59,22 @@ class UserMaterialRepository(UserMaterialRepositoryProtocol):
     async def list_by_user(self, user_id: UUID) -> list[MaterialRecord]:
         rows = await self._session.scalars(select(UserMaterial).where(UserMaterial.user_id == user_id))
         return [self._to_record(row) for row in rows.all()]
+
+    async def list_shared_with(self, document_id: UUID) -> list[SharedUserInfo]:
+        """Users with the shared role on the document, oldest share first."""
+        stmt = (
+            select(UserMaterial, User.email, User.display_name)
+            .join(User, User.id == UserMaterial.user_id)
+            .where(UserMaterial.document_id == document_id, UserMaterial.role == MaterialRole.SHARED.value)
+            .order_by(UserMaterial.created_at)
+        )
+        rows = await self._session.execute(stmt)
+        return [
+            SharedUserInfo(
+                user_id=material.user_id,
+                email=email,
+                display_name=display_name,
+                shared_at=material.created_at,
+            )
+            for material, email, display_name in rows.all()
+        ]

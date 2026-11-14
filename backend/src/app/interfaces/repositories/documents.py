@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from typing import Any, Protocol
 from uuid import UUID
 
+from src.app.contracts.documents.document_details import SharedUserInfo
 from src.app.contracts.documents.document_record import DocumentRecord
 from src.app.contracts.documents.image_draft import ImageDraft
 from src.app.contracts.documents.image_record import ImageRecord
@@ -94,3 +95,7 @@ class UserMaterialRepositoryProtocol(Protocol):
     ) -> MaterialRecord: ...
 
     async def list_by_user(self, user_id: UUID) -> list[MaterialRecord]: ...
+
+    async def list_shared_with(self, document_id: UUID) -> list[SharedUserInfo]:
+        """Users with the shared role on the document, oldest share first."""
+        ...

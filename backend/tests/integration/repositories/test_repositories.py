@@ -130,7 +130,12 @@ async def test_document_repository_roundtrip(session_factory: SessionFactory) ->
         )
         assert with_tree is not None and with_tree.topic_tree is not None
 
-        # uploaded and parsed both count as active; done does not
+        # uploaded, parsing and generating count as in processing (1.4.13);
+        # parsed waits idle for the user, done and failed do not count
+        assert await repository.count_active(user_id) == 0
+        await repository.set_status(document_id, DocumentStatus.PARSING)
+        assert await repository.count_active(user_id) == 1
+        await repository.set_status(document_id, DocumentStatus.GENERATING)
         assert await repository.count_active(user_id) == 1
         await repository.set_status(document_id, DocumentStatus.DONE)
         assert await repository.count_active(user_id) == 0

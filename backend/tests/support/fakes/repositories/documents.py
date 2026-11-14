@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
+from src.app.contracts.documents.document_details import SharedUserInfo
 from src.app.contracts.documents.document_record import DocumentRecord
 from src.app.contracts.documents.image_draft import ImageDraft
 from src.app.contracts.documents.image_record import ImageRecord
@@ -27,6 +28,18 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
 
     def __init__(self) -> None:
         self._documents: dict[UUID, DocumentRecord] = {}
+        # minimal transaction emulation: ids created since the last
+        # checkpoint (commit) are discarded by rollback()
+        self._pending: list[UUID] = []
+
+    def checkpoint(self) -> None:
+        self._pending.clear()
+
+    def rollback(self) -> None:
+        """Discard rows created since the last checkpoint (commit)."""
+        for document_id in self._pending:
+            self._documents.pop(document_id, None)
+        self._pending.clear()
 
     async def get(self, document_id: UUID) -> DocumentRecord | None:
         return self._documents.get(document_id)
@@ -69,6 +82,7 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
             updated_at=timestamp,
         )
         self._documents[record.id] = record
+        self._pending.append(record.id)
         return record
 
     async def set_status(
@@ -94,7 +108,7 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
         return None
 
     async def count_active(self, owner_id: UUID) -> int:
-        active = {DocumentStatus.UPLOADED, DocumentStatus.PARSING, DocumentStatus.PARSED, DocumentStatus.GENERATING}
+        active = {DocumentStatus.UPLOADED, DocumentStatus.PARSING, DocumentStatus.GENERATING}
         return sum(1 for d in self._documents.values() if d.owner_id == owner_id and d.status in active)
 
 
@@ -200,6 +214,23 @@ class FakeUserMaterialRepository(UserMaterialRepositoryProtocol):
 
     def __init__(self) -> None:
         self._materials: dict[tuple[UUID, UUID], MaterialRecord] = {}
+        # email/display_name are not part of MaterialRecord; tests register
+        # the user info alongside shared materials
+        self._user_info: dict[UUID, tuple[str, str | None]] = {}
+        # minimal transaction emulation, see FakeDocumentRepository
+        self._pending: list[tuple[UUID, UUID]] = []
+
+    def register_user(self, user_id: UUID, email: str, display_name: str | None = None) -> None:
+        self._user_info[user_id] = (email, display_name)
+
+    def checkpoint(self) -> None:
+        self._pending.clear()
+
+    def rollback(self) -> None:
+        """Discard rows created since the last checkpoint (commit)."""
+        for key in self._pending:
+            self._materials.pop(key, None)
+        self._pending.clear()
 
     async def get_role(self, user_id: UUID, document_id: UUID) -> MaterialRole | None:
         row = self._materials.get((user_id, document_id))
@@ -221,7 +252,20 @@ class FakeUserMaterialRepository(UserMaterialRepositoryProtocol):
             created_at=now(),
         )
         self._materials[(user_id, document_id)] = record
+        self._pending.append((user_id, document_id))
         return record
 
     async def list_by_user(self, user_id: UUID) -> list[MaterialRecord]:
         return [m for m in self._materials.values() if m.user_id == user_id]
+
+    async def list_shared_with(self, document_id: UUID) -> list[SharedUserInfo]:
+        return [
+            SharedUserInfo(
+                user_id=m.user_id,
+                email=self._user_info.get(m.user_id, ("", None))[0],
+                display_name=self._user_info.get(m.user_id, ("", None))[1],
+                shared_at=m.created_at,
+            )
+            for m in self._materials.values()
+            if m.document_id == document_id and m.role is MaterialRole.SHARED
+        ]

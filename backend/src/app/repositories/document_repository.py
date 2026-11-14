@@ -109,7 +109,14 @@ class DocumentRepository(DocumentRepositoryProtocol):
         return self._to_record(row)
 
     async def count_active(self, owner_id: UUID) -> int:
-        """Count documents currently in a processing state for an owner."""
+        """Count documents of an owner that are still in processing.
+
+        Processing means the pipeline still has to do something with the
+        document: ``uploaded`` (not taken by the worker yet), ``parsing``
+        or ``generating`` (story 1.4.13). A parsed document waits idle
+        for the user's plan/generate and does not hold pipeline capacity,
+        so it does not count.
+        """
         stmt = (
             select(func.count())
             .select_from(Document)
@@ -119,7 +126,6 @@ class DocumentRepository(DocumentRepositoryProtocol):
                     [
                         DocumentStatus.UPLOADED.value,
                         DocumentStatus.PARSING.value,
-                        DocumentStatus.PARSED.value,
                         DocumentStatus.GENERATING.value,
                     ]
                 ),

@@ -13,6 +13,7 @@ from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.llm.factory import create_llm_client
 from src.app.storage.s3_object_storage_client import S3ObjectStorageClient, build_ping_client, build_s3_client
+from src.app.tasks.dispatcher import CeleryTaskDispatcher
 
 
 class ApplicationContainer:
@@ -42,6 +43,15 @@ class ApplicationContainer:
         # Async Redis client for readiness probes and progress streams.
         redis_client: aioredis.Redis = aioredis.Redis.from_url(get_celery_settings().broker_url)
         return redis_client
+
+    @cached_property
+    def task_dispatcher(self) -> CeleryTaskDispatcher:
+        """Celery-backed queue entry point; tests replace it with a fake.
+
+        Task names are addressed through ``send_task``, so the API stays
+        decoupled from the worker's task registrations (story 1.5).
+        """
+        return CeleryTaskDispatcher(get_celery_settings())
 
     @cached_property
     def _db_engine(self) -> AsyncEngine:
