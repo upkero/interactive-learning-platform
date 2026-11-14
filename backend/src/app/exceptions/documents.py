@@ -15,6 +15,19 @@ class DocumentNotFoundError(BaseAppException):
     default_detail = "Document not found."
 
 
+class DocumentNotReadyError(BaseAppException):
+    """The document is not ready for the requested read/plan operation.
+
+    The document is still in ``uploaded``/``parsing`` (the caller gets
+    the current status in ``extra``) or ``failed`` (the caller gets the
+    parse error text as the detail).
+    """
+
+    status_code = 409
+    error_code = "document_not_ready"
+    default_detail = "The document is not parsed yet."
+
+
 class ProcessingLimitError(BaseAppException):
     """The user already has the maximum number of documents in processing."""
 

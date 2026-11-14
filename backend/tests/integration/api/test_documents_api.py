@@ -20,6 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from src.app.api.v1.dependencies.services import get_task_dispatcher
 from src.app.api.v1.middleware.rate_limit import limiter
 from src.app.bootstrap.container import ApplicationContainer
+from src.app.contracts.documents import DocumentStatus, PartDraft
+from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
 from src.main import create_app
 from tests.support.fakes.tasks import FakeTaskDispatcher
@@ -211,6 +213,106 @@ async def test_import_counts_towards_the_processing_limit(client: TestClient) ->
     third = client.post("/api/v1/documents/import", json={"url": "https://docs.google.com/document/d/third/edit"})
     assert third.status_code == 429
     assert third.json()["error_code"] == "processing_limit_reached"
+
+
+async def test_topics_tree_of_a_parsed_document(
+    client: TestClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    _register(client)
+    created = _upload(client, filename="lecture.pdf")
+    document_id = UUID(created.json()["id"])
+
+    # simulate the finished parse: parsed status, topic tree and parts
+    async with session_factory() as session, session.begin():
+        documents = DocumentRepository(session)
+        await documents.set_status(document_id, DocumentStatus.PARSED)
+        await documents.set_topic_tree(
+            document_id,
+            {
+                "topics": [
+                    {
+                        "id": "topic-adaptive",
+                        "title": "Adaptive learning",
+                        "children": [{"id": "topic-chunking", "title": "Semantic chunking", "children": []}],
+                    }
+                ]
+            },
+        )
+        await DocumentPartRepository(session).add_many(
+            document_id,
+            [
+                PartDraft(
+                    index=0,
+                    title="Part one",
+                    topic_ids=["topic-adaptive", "topic-chunking"],
+                    source_markdown="part one",
+                    token_count=142,
+                    profile={},
+                ),
+                PartDraft(
+                    index=1,
+                    title="Part two",
+                    topic_ids=["topic-chunking"],
+                    source_markdown="part two",
+                    token_count=178,
+                    profile={},
+                ),
+            ],
+        )
+
+    shown = client.get(f"/api/v1/documents/{document_id}/topics")
+    assert shown.status_code == 200, shown.text
+    topics = shown.json()["topics"]
+    assert topics[0]["id"] == "topic-adaptive"
+    assert topics[0]["level"] == 1
+    assert topics[0]["tokens"] == 320  # 142 + 178, counted once in the subtree
+    child = topics[0]["children"][0]
+    assert child["id"] == "topic-chunking"
+    assert child["level"] == 2
+    assert child["tokens"] == 320
+
+
+async def test_topics_of_a_parsing_document_is_409(
+    client: TestClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    _register(client)
+    created = _upload(client)
+    document_id = UUID(created.json()["id"])
+    async with session_factory() as session, session.begin():
+        await DocumentRepository(session).set_status(document_id, DocumentStatus.PARSING)
+
+    shown = client.get(f"/api/v1/documents/{document_id}/topics")
+    assert shown.status_code == 409
+    body = shown.json()
+    assert body["error_code"] == "document_not_ready"
+    assert body["status"] == "parsing"
+
+
+async def test_topics_of_a_failed_document_carries_the_parse_error(
+    client: TestClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    _register(client)
+    created = _upload(client)
+    document_id = UUID(created.json()["id"])
+    async with session_factory() as session, session.begin():
+        await DocumentRepository(session).set_status(document_id, DocumentStatus.FAILED, error="parse_failed")
+
+    shown = client.get(f"/api/v1/documents/{document_id}/topics")
+    assert shown.status_code == 409
+    body = shown.json()
+    assert body["error_code"] == "document_not_ready"
+    assert body["detail"] == "parse_failed"
+
+
+async def test_topics_of_a_foreign_document_is_404(client: TestClient) -> None:
+    _register(client, f"owner-{uuid4()}@example.com")
+    created = _upload(client)
+    client.cookies.clear()
+    _register(client, f"stranger-{uuid4()}@example.com")
+
+    shown = client.get(f"/api/v1/documents/{created.json()['id']}/topics")
+    assert shown.status_code == 404
+    assert shown.json()["error_code"] == "document_not_found"
 
 
 async def test_the_third_upload_in_processing_is_429(

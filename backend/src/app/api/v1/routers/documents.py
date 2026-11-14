@@ -25,6 +25,8 @@ from src.app.schemas.documents import (
     DocumentOut,
     PartSummaryOut,
     SharedWithOut,
+    TopicNodeOut,
+    TopicTreeOut,
 )
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -59,6 +61,16 @@ async def import_document(
 ) -> DocumentCreatedOut:
     document = await service.import_document(owner_id=user.id, url=body.url)
     return DocumentCreatedOut(id=document.id, status=document.status.value)
+
+
+@router.get("/{document_id}/topics", response_model=TopicTreeOut, operation_id="documents_topics")
+async def get_document_topics(
+    document_id: UUID,
+    user: CurrentUserDep,
+    service: DocumentQueryServiceDep,
+) -> TopicTreeOut:
+    tree = await service.get_topic_tree(user_id=user.id, document_id=document_id)
+    return TopicTreeOut(topics=[TopicNodeOut.model_validate(node) for node in tree["topics"]])
 
 
 @router.get("/{document_id}", response_model=DocumentOut, operation_id="documents_get")
