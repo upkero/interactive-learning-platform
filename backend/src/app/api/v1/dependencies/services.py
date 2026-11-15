@@ -38,6 +38,7 @@ from src.app.services.documents.upload_service import UploadService
 from src.app.services.quota.ledger import QuotaLedger
 from src.app.services.reports.report_service import ReportService
 from src.app.services.sharing.sharing_service import SharingService
+from src.app.services.users.profile_service import ProfileService
 
 
 def get_task_dispatcher(container: ContainerDep) -> TaskDispatcher:
@@ -175,6 +176,20 @@ def get_material_query_service(session: DBSessionDep) -> MaterialQueryService:
 
 
 MaterialQueryServiceDep = Annotated[MaterialQueryService, Depends(get_material_query_service)]
+
+
+def get_profile_service(session: DBSessionDep) -> ProfileService:
+    return ProfileService(session=session, users=UserRepository(session))
+
+
+ProfileServiceDep = Annotated[ProfileService, Depends(get_profile_service)]
+
+
+def get_quota_ledger(session: DBSessionDep) -> QuotaLedger:
+    return QuotaLedger(users=UserRepository(session), ledger=GenerationLedgerRepository(session), clock=SystemClock())
+
+
+QuotaLedgerDep = Annotated[QuotaLedger, Depends(get_quota_ledger)]
 
 
 __all__ = [

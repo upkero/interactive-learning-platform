@@ -81,3 +81,13 @@ class UserRepository(UserRepositoryProtocol):
             raise KeyError(user_id)
         row.profile = {**row.profile, "last_answers": answers}
         await self._session.flush()
+
+    async def update_profile_fields(self, user_id: UUID, fields: dict[str, Any]) -> UserRecord | None:
+        row = await self._session.get(User, user_id)
+        if row is None:
+            return None
+        for key in ("display_name", "locale", "notify_email"):
+            if key in fields:
+                setattr(row, key, fields[key])
+        await self._session.flush()
+        return self._to_record(row)

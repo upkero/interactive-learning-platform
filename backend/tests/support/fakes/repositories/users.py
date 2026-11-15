@@ -55,3 +55,12 @@ class FakeUserRepository(UserRepositoryProtocol):
     async def save_last_answers(self, user_id: UUID, answers: dict[str, Any]) -> None:
         user = self._users[user_id]
         self._users[user_id] = replace(user, profile={**user.profile, "last_answers": answers})
+
+    async def update_profile_fields(self, user_id: UUID, fields: dict[str, Any]) -> UserRecord | None:
+        user = self._users.get(user_id)
+        if user is None:
+            return None
+        allowed = {key: value for key, value in fields.items() if key in {"display_name", "locale", "notify_email"}}
+        updated = replace(user, **allowed)
+        self._users[user_id] = updated
+        return updated

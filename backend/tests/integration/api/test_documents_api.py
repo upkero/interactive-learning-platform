@@ -8,6 +8,7 @@ indistinguishable from a missing one (404).
 """
 
 from collections.abc import Iterator
+from datetime import date
 from pathlib import Path
 from typing import Any, cast
 from uuid import UUID, uuid4
@@ -15,13 +16,14 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select, update
+from sqlalchemy import event, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.api.v1.dependencies.services import get_task_dispatcher
 from src.app.api.v1.middleware.rate_limit import limiter
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.documents import DocumentStatus, MaterialRole, PartDraft, SourceType
+from src.app.contracts.quota import LedgerOp
 from src.app.contracts.widgets import UsageStatus, WidgetKind, WidgetUsageDraft
 from src.app.models.document_part import DocumentPart
 from src.app.models.generation_ledger import GenerationLedger
@@ -29,6 +31,7 @@ from src.app.models.quiz_attempt import QuizAttempt
 from src.app.models.report import Report
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
+from src.app.repositories.generation_ledger_repository import GenerationLedgerRepository
 from src.app.repositories.user_material_repository import UserMaterialRepository
 from src.app.repositories.user_repository import UserRepository
 from src.app.repositories.widget_repository import WidgetRepository
@@ -289,6 +292,49 @@ async def test_share_material_shows_for_recipient_without_spending_quota(
     assert client.post("/api/v1/materials/share", json=body).status_code == 404
     async with session_factory() as session:
         assert (await session.scalars(select(func.count()).select_from(GenerationLedger))).one() == 0
+
+
+async def test_me_patch_and_quota(client: TestClient, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    _register(client)
+    before = client.get("/api/v1/me")
+    assert before.status_code == 200
+    changed = client.patch("/api/v1/me", json={"notify_email": False})
+    assert changed.status_code == 200
+    assert changed.json() == {**before.json(), "notify_email": False}
+    quota = client.get("/api/v1/me/quota")
+    assert quota.status_code == 200
+    assert quota.json()["monthly_limit"] == 20
+    assert quota.json()["available"] == 20
+    async with session_factory() as session, session.begin():
+        await GenerationLedgerRepository(session).add(
+            user_id=UUID(before.json()["id"]),
+            op=LedgerOp.RESERVE,
+            delta=-4,
+            period_start=date.fromisoformat(quota.json()["period_start"]),
+        )
+    assert client.get("/api/v1/me/quota").json()["available"] == 16
+
+
+async def test_materials_query_uses_one_statement(
+    client: TestClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    document_id = await _new_parsed_document(client, session_factory)
+    async with session_factory() as session:
+        document = await DocumentRepository(session).get(document_id)
+        assert document is not None
+        queries: list[str] = []
+
+        def count_sql(conn: Any, cursor: Any, statement: str, parameters: Any, context: Any, many: Any) -> None:
+            queries.append(statement)
+
+        engine = session.get_bind()
+        event.listen(engine, "before_cursor_execute", count_sql)
+        try:
+            records = await UserMaterialRepository(session).list_details(document.owner_id, MaterialRole.OWNER)
+        finally:
+            event.remove(engine, "before_cursor_execute", count_sql)
+        assert len(queries) == 1
+        assert len(records) == 1 and records[0].parts_total == 3
 
 
 async def test_import_counts_towards_the_processing_limit(client: TestClient) -> None:
