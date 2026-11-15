@@ -1,5 +1,7 @@
 """In-memory fake of UserRepository."""
 
+from dataclasses import replace
+from typing import Any
 from uuid import UUID, uuid4
 
 from src.app.contracts.users import UserRecord
@@ -49,3 +51,7 @@ class FakeUserRepository(UserRepositoryProtocol):
 
     async def lock_for_update(self, user_id: UUID) -> UserRecord | None:
         return self._users.get(user_id)
+
+    async def save_last_answers(self, user_id: UUID, answers: dict[str, Any]) -> None:
+        user = self._users[user_id]
+        self._users[user_id] = replace(user, profile={**user.profile, "last_answers": answers})

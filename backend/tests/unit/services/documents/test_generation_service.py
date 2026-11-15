@@ -1,13 +1,18 @@
 """Unit tests 1.4.6: GenerationService.plan — pure preview, no writes."""
 
 from datetime import date
+from typing import cast
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.documents import DocumentStatus, MaterialRole, PartDraft, SourceType
+from src.app.contracts.documents.generation import GenerationAnswers
 from src.app.core.clock import Clock
 from src.app.exceptions.documents import DocumentNotFoundError, DocumentNotReadyError
+from src.app.exceptions.quota import QuotaExceededError
 from src.app.services.documents.generation_service import GenerationService
 from src.app.services.documents.splitting import TopicTreePlanner
 from src.app.services.quota.ledger import QuotaLedger
@@ -18,6 +23,7 @@ from tests.support.fakes.repositories.documents import (
 )
 from tests.support.fakes.repositories.quota import FakeGenerationLedgerRepository
 from tests.support.fakes.repositories.users import FakeUserRepository
+from tests.support.fakes.tasks import FakeTaskDispatcher
 
 pytestmark = pytest.mark.unit
 
@@ -181,3 +187,112 @@ async def test_parsing_document_is_409() -> None:
     with pytest.raises(DocumentNotReadyError) as exc_info:
         await service.plan(user_id=owner, document_id=document.id, topic_ids=["a"])
     assert exc_info.value.extra == {"status": "parsing"}
+
+
+async def test_start_reserves_and_dispatches_after_commit() -> None:
+    _, documents, materials, parts, ledger_repo, users = _service()
+    owner, document_id = await _parsed_document(users, documents, materials, parts)
+    session = AsyncMock(spec=AsyncSession)
+
+    class CommitCheckingDispatcher(FakeTaskDispatcher):
+        async def enqueue_part(self, part_id: UUID, *, high: bool = False) -> None:
+            session.commit.assert_awaited_once()
+            await super().enqueue_part(part_id, high=high)
+
+    dispatcher = CommitCheckingDispatcher()
+    service = GenerationService(
+        documents=documents,
+        materials=materials,
+        parts=parts,
+        planner=TopicTreePlanner(),
+        ledger=QuotaLedger(users=users, ledger=ledger_repo, clock=_FixedClock()),
+        users=users,
+        session=cast(AsyncSession, session),
+        dispatcher=dispatcher,
+    )
+    started = await service.start(
+        user_id=owner,
+        document_id=document_id,
+        topic_ids=["topic-adaptive"],
+        answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+    )
+    session.commit.assert_awaited_once()
+    assert started.cost == 1
+    assert started.available == 19
+    assert dispatcher.calls == [("enqueue_part", (started.part_ids[0], True))]
+    assert ledger_repo._entries[0].delta == -1
+    part = await parts.get(started.part_ids[0])
+    assert part is not None
+    assert part.index == 3
+    assert part.source_markdown == "part one\n\npart two"
+    assert (await users.get(owner)).profile["last_answers"]["goal"] == "exam"  # type: ignore[union-attr]
+
+
+async def test_start_rejects_insufficient_quota_without_writes() -> None:
+    _, documents, materials, parts, ledger_repo, users = _service()
+    owner, document_id = await _parsed_document(users, documents, materials, parts)
+    from dataclasses import replace
+
+    users._users[owner] = replace(users._users[owner], monthly_limit=0)
+    session = AsyncMock(spec=AsyncSession)
+    dispatcher = FakeTaskDispatcher()
+    service = GenerationService(
+        documents=documents,
+        materials=materials,
+        parts=parts,
+        planner=TopicTreePlanner(),
+        ledger=QuotaLedger(users=users, ledger=ledger_repo, clock=_FixedClock()),
+        users=users,
+        session=cast(AsyncSession, session),
+        dispatcher=dispatcher,
+    )
+    with pytest.raises(QuotaExceededError) as error:
+        await service.start(
+            user_id=owner,
+            document_id=document_id,
+            topic_ids=["topic-adaptive"],
+            answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+        )
+    assert error.value.extra == {"available": 0, "requested": 1}
+    assert len(await parts.list_by_document(document_id)) == 3
+    assert ledger_repo._entries == []
+    assert dispatcher.calls == []
+    session.rollback.assert_awaited_once()
+    session.commit.assert_not_awaited()
+
+
+async def test_start_requires_owner_even_when_processing_limit_is_full() -> None:
+    _, documents, materials, parts, ledger_repo, users = _service()
+    owner, document_id = await _parsed_document(users, documents, materials, parts)
+    stranger = await users.create(email="stranger@example.com", password_hash="hash")
+    await materials.create(user_id=stranger.id, document_id=document_id, role=MaterialRole.SHARED)
+    for _ in range(2):
+        await documents.create(
+            owner_id=stranger.id,
+            title="busy",
+            source_type=SourceType.UPLOAD,
+            object_key="file",
+            mime_type="text/markdown",
+            size_bytes=1,
+            checksum="a" * 64,
+        )
+    session = AsyncMock(spec=AsyncSession)
+    service = GenerationService(
+        documents=documents,
+        materials=materials,
+        parts=parts,
+        planner=TopicTreePlanner(),
+        ledger=QuotaLedger(users=users, ledger=ledger_repo, clock=_FixedClock()),
+        users=users,
+        session=cast(AsyncSession, session),
+        dispatcher=FakeTaskDispatcher(),
+    )
+    with pytest.raises(DocumentNotFoundError):
+        await service.start(
+            user_id=stranger.id,
+            document_id=document_id,
+            topic_ids=["topic-adaptive"],
+            answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+        )
+    assert (await documents.get(document_id)).owner_id == owner  # type: ignore[union-attr]
+    assert ledger_repo._entries == []

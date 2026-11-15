@@ -16,3 +16,9 @@ class LedgerEntryDuplicateError(QuotaIntegrityError):
     status_code = 409
     error_code = "ledger_entry_duplicate"
     default_detail = "A ledger entry for this part and operation already exists."
+
+
+class QuotaExceededError(BaseAppException):
+    status_code = 402
+    error_code = "quota_exceeded"
+    default_detail = "Not enough generation quota."

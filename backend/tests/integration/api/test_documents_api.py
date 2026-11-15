@@ -21,10 +21,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from src.app.api.v1.dependencies.services import get_task_dispatcher
 from src.app.api.v1.middleware.rate_limit import limiter
 from src.app.bootstrap.container import ApplicationContainer
-from src.app.contracts.documents import DocumentStatus, PartDraft
+from src.app.contracts.documents import DocumentStatus, MaterialRole, PartDraft, SourceType
 from src.app.models.generation_ledger import GenerationLedger
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
+from src.app.repositories.user_material_repository import UserMaterialRepository
+from src.app.repositories.user_repository import UserRepository
 from src.main import create_app
 from tests.support.fakes.tasks import FakeTaskDispatcher
 
@@ -347,6 +349,78 @@ async def test_plan_preview_is_stable_and_leaves_the_quota_journal_untouched(
     async with session_factory() as session:
         count = (await session.scalars(select(func.count()).select_from(GenerationLedger))).one()
     assert count == 0
+
+
+async def _new_parsed_document(
+    client: TestClient, session_factory: async_sessionmaker[AsyncSession], *, monthly_limit: int = 20
+) -> UUID:
+    email = f"generation-{uuid4()}@example.com"
+    _register(client, email)
+    async with session_factory() as session, session.begin():
+        user = await UserRepository(session).get_by_email(email)
+        assert user is not None
+        if monthly_limit != 20:
+            from sqlalchemy import update
+
+            from src.app.models.user import User
+
+            await session.execute(update(User).where(User.id == user.id).values(monthly_limit=monthly_limit))
+        document = await DocumentRepository(session).create(
+            owner_id=user.id,
+            title="Test",
+            source_type=SourceType.UPLOAD,
+            object_key="test.md",
+            mime_type="text/markdown",
+            size_bytes=1,
+            checksum="d" * 64,
+        )
+        await UserMaterialRepository(session).create(user_id=user.id, document_id=document.id, role=MaterialRole.OWNER)
+    await _make_parsed(document.id, session_factory)
+    return document.id
+
+
+async def test_generate_reserves_creates_parts_and_dispatches(
+    client: TestClient, dispatcher: FakeTaskDispatcher, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    document_id = await _new_parsed_document(client, session_factory)
+    response = client.post(
+        f"/api/v1/documents/{document_id}/generate",
+        json={"topic_ids": ["topic-adaptive"], "answers": {"level": "novice", "goal": "exam", "depth": "standard"}},
+    )
+    assert response.status_code == 202, response.text
+    result = response.json()
+    assert result["cost"] == 1
+    assert result["available"] == 19
+    part_id = UUID(result["part_ids"][0])
+    assert dispatcher.calls == [("enqueue_part", (part_id, True))]
+    async with session_factory() as session:
+        part = await DocumentPartRepository(session).get(part_id)
+        document = await DocumentRepository(session).get(document_id)
+        entries = (await session.scalars(select(GenerationLedger))).all()
+    assert part is not None and part.index == 3 and part.source_markdown == "part one\n\npart two"
+    assert part.profile == {"level": "novice", "goal": "exam", "depth": "standard"}
+    assert document is not None and document.status is DocumentStatus.GENERATING
+    assert [(entry.op, entry.delta) for entry in entries] == [("reserve", -1)]
+
+
+async def test_generate_insufficient_quota_leaves_no_changes(
+    client: TestClient, dispatcher: FakeTaskDispatcher, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    document_id = await _new_parsed_document(client, session_factory, monthly_limit=0)
+    response = client.post(
+        f"/api/v1/documents/{document_id}/generate",
+        json={"topic_ids": ["topic-adaptive"], "answers": {"level": "novice", "goal": "exam", "depth": "standard"}},
+    )
+    assert response.status_code == 402, response.text
+    assert response.json()["error_code"] == "quota_exceeded"
+    async with session_factory() as session:
+        parts = await DocumentPartRepository(session).list_by_document(document_id)
+        document = await DocumentRepository(session).get(document_id)
+        entries = (await session.scalars(select(GenerationLedger))).all()
+    assert len(parts) == 3
+    assert document is not None and document.status is DocumentStatus.PARSED
+    assert entries == []
+    assert dispatcher.calls == []
 
 
 async def test_plan_rejects_empty_and_unknown_selections(

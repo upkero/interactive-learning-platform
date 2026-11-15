@@ -20,10 +20,13 @@ from src.app.api.v1.dependencies.services import (
     UploadServiceDep,
 )
 from src.app.contracts.documents import DocumentDetails
+from src.app.contracts.documents.generation import GenerationAnswers
 from src.app.schemas.documents import (
     DocumentCreatedOut,
     DocumentImportIn,
     DocumentOut,
+    GenerateRequest,
+    GenerateResponse,
     PartSummaryOut,
     PlannedPartOut,
     PlanRequest,
@@ -89,6 +92,29 @@ async def plan_document(
         parts=[PlannedPartOut(index=part.index, title=part.title, tokens=part.tokens) for part in plan.parts],
         cost=len(plan.parts),
         available=available,
+    )
+
+
+@router.post(
+    "/{document_id}/generate", status_code=202, response_model=GenerateResponse, operation_id="documents_generate"
+)
+async def generate_document(
+    document_id: UUID,
+    body: GenerateRequest,
+    user: CurrentUserDep,
+    service: GenerationServiceDep,
+) -> GenerateResponse:
+    started = await service.start(
+        user_id=user.id,
+        document_id=document_id,
+        topic_ids=body.topic_ids,
+        answers=GenerationAnswers(**body.answers.model_dump()),
+    )
+    return GenerateResponse(
+        document_id=started.document_id,
+        part_ids=list(started.part_ids),
+        cost=started.cost,
+        available=started.available,
     )
 
 

@@ -77,7 +77,7 @@ class TopicTreeOut(BaseModel):
 class PlanRequest(BaseModel):
     """Body of ``POST /documents/{id}/plan`` (story 1.4.6)."""
 
-    topic_ids: list[str] = Field(default_factory=list)
+    topic_ids: list[str] = Field(default_factory=list, max_length=500)
 
 
 class PlannedPartOut(BaseModel):
@@ -94,5 +94,23 @@ class PlanResponse(BaseModel):
     """
 
     parts: list[PlannedPartOut]
+    cost: int
+    available: int
+
+
+class GenerationAnswersIn(BaseModel):
+    level: Literal["novice", "intermediate", "advanced"]
+    goal: Literal["exam", "understand", "refresh"]
+    depth: Literal["overview", "standard", "deep"]
+
+
+class GenerateRequest(BaseModel):
+    topic_ids: list[str] = Field(max_length=500)
+    answers: GenerationAnswersIn
+
+
+class GenerateResponse(BaseModel):
+    document_id: UUID
+    part_ids: list[UUID]
     cost: int
     available: int

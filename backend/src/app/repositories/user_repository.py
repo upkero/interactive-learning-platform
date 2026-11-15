@@ -1,5 +1,6 @@
 """Repository of users."""
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -73,3 +74,10 @@ class UserRepository(UserRepositoryProtocol):
         """Select a user with ``FOR UPDATE`` inside the caller's transaction."""
         row = (await self._session.scalars(select(User).where(User.id == user_id).with_for_update())).first()
         return self._to_record(row) if row is not None else None
+
+    async def save_last_answers(self, user_id: UUID, answers: dict[str, Any]) -> None:
+        row = await self._session.get(User, user_id)
+        if row is None:
+            raise KeyError(user_id)
+        row.profile = {**row.profile, "last_answers": answers}
+        await self._session.flush()

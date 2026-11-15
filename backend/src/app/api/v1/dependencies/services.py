@@ -98,12 +98,16 @@ ImportServiceDep = Annotated[ImportService, Depends(get_import_service)]
 
 def get_generation_service(
     session: DBSessionDep,
+    dispatcher: TaskDispatcherDep,
 ) -> GenerationService:
     return GenerationService(
         documents=DocumentRepository(session),
         materials=UserMaterialRepository(session),
         parts=DocumentPartRepository(session),
         planner=TopicTreePlanner(),
+        session=session,
+        users=UserRepository(session),
+        dispatcher=dispatcher,
         ledger=QuotaLedger(
             users=UserRepository(session),
             ledger=GenerationLedgerRepository(session),

@@ -12,8 +12,10 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from uuid import UUID
 
+from src.app.contracts.quota import LedgerOp
 from src.app.contracts.users import UserRecord
 from src.app.core.clock import Clock, SystemClock
+from src.app.exceptions.quota import QuotaExceededError
 from src.app.interfaces.repositories.quota import GenerationLedgerRepositoryProtocol
 from src.app.interfaces.repositories.users import UserRepositoryProtocol
 
@@ -90,3 +92,17 @@ class QuotaLedger:
     async def available(self, user_id: UUID) -> int:
         status = await self.status(user_id)
         return status.available
+
+    async def reserve(self, user_id: UUID, document_id: UUID, count: int) -> int:
+        """Reserve quota within the caller's transaction and user-row lock."""
+        status = await self.status(user_id)
+        if status.available < count:
+            raise QuotaExceededError(extra={"available": status.available, "requested": count})
+        await self._ledger.add(
+            user_id=user_id,
+            document_id=document_id,
+            op=LedgerOp.RESERVE,
+            delta=-count,
+            period_start=status.period_start,
+        )
+        return status.available - count
