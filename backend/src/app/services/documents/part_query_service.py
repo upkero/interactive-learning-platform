@@ -77,7 +77,7 @@ class PartQueryService:
             if part.status is not PartStatus.PUBLISHED or part.content is None:
                 return PartDetails(part=part, content=None)
 
-            content: dict[str, object] = deepcopy(part.content)
+            content: dict[str, object] = deepcopy({key: value for key, value in part.content.items()})
             content.pop("answer_keys", None)
             quizzes = content.get("quizzes", [])
             if not isinstance(quizzes, list) or any(not isinstance(quiz, dict) for quiz in quizzes):

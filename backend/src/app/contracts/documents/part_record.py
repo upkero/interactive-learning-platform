@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from src.app.contracts.documents.public_part_content import JsonValue
 from src.app.contracts.documents.statuses import PartStatus
 
 
@@ -23,7 +24,7 @@ class PartRecord:
     # deliberately (the domain never mutates profiles in place).
     profile: dict[str, Any]
     status: PartStatus
-    content: dict[str, Any] | None
+    content: dict[str, JsonValue] | None
     attempts: int
     stage_changed_at: datetime
     error: str | None

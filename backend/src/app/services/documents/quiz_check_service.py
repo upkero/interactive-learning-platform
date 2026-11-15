@@ -89,8 +89,12 @@ class QuizCheckService:
                 raise QuizNotFoundError()
             if part.status is not PartStatus.PUBLISHED or part.content is None:
                 raise QuizNotFoundError()
-            quiz = next((item for item in part.content.get("quizzes", []) if item.get("key") == quiz_key), None)
-            key = part.content.get("answer_keys", {}).get(quiz_key)
+            quizzes = part.content.get("quizzes")
+            keys = part.content.get("answer_keys")
+            if not isinstance(quizzes, list) or not isinstance(keys, dict):
+                raise QuizNotFoundError()
+            quiz = next((item for item in quizzes if isinstance(item, dict) and item.get("key") == quiz_key), None)
+            key = keys.get(quiz_key)
             if quiz is None or not isinstance(key, dict):
                 raise QuizNotFoundError()
             result = check_answer(quiz, key, answer)
