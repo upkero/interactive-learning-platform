@@ -13,13 +13,13 @@ from pydantic import BaseModel, EmailStr, Field
 
 class RegisterRequest(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=8, description="At least 8 characters.")
+    password: str = Field(min_length=8, max_length=1024, description="At least 8 characters.")
     display_name: str | None = Field(default=None, max_length=100)
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(max_length=1024)
 
 
 class AuthUserOut(BaseModel):

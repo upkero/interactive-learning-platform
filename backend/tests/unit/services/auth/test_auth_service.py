@@ -3,9 +3,10 @@
 from typing import cast
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.users import UserRecord
+from src.app.core.settings.auth import get_auth_settings
 from src.app.exceptions.auth import EmailTakenError, InvalidCredentialsError
 from src.app.exceptions.users import UserAlreadyExistsError
 from src.app.services.auth.auth_service import AuthService
@@ -17,14 +18,21 @@ pytestmark = pytest.mark.unit
 class _FakeSession:
     committed: bool = False
 
-    async def commit(self) -> None:
-        self.committed = True
+    async def __aenter__(self) -> "_FakeSession":
+        return self
+
+    async def __aexit__(self, exc_type: object, exc: object, tb: object) -> None:
+        self.committed = exc_type is None
+
+    def begin(self) -> "_FakeSession":
+        return self
 
 
 def _service() -> tuple[AuthService, FakeUserRepository, _FakeSession]:
     session = _FakeSession()
     users = FakeUserRepository()
-    return AuthService(session=cast(AsyncSession, session), users=users), users, session
+    factory = cast(async_sessionmaker[AsyncSession], lambda: session)
+    return AuthService(session_factory=factory, users=lambda _: users, settings=get_auth_settings()), users, session
 
 
 async def test_register_normalizes_email_and_hashes_password() -> None:
@@ -83,6 +91,7 @@ async def test_repository_conflict_maps_to_email_taken() -> None:
             raise UserAlreadyExistsError
 
     users = ConflictingRepository()
-    service = AuthService(session=cast(AsyncSession, _FakeSession()), users=users)
+    factory = cast(async_sessionmaker[AsyncSession], lambda: _FakeSession())
+    service = AuthService(session_factory=factory, users=lambda _: users, settings=get_auth_settings())
     with pytest.raises(EmailTakenError):
         await service.register(email="x@example.com", password="long-enough-password")

@@ -91,7 +91,7 @@ def test_login_returns_a_working_session(client: TestClient) -> None:
     assert response.status_code == 200
     assert response.headers["set-cookie"].lower().startswith(COOKIE.lower())
 
-    # the cookie from the client jar must authenticate the protected logout
+    # Logout clears the cookie regardless of whether the session is valid.
     logout = client.post("/api/v1/auth/logout")
     assert logout.status_code == 200
     assert logout.json() == {"status": "ok"}
@@ -106,10 +106,10 @@ def test_logout_drops_the_cookie(client: TestClient) -> None:
     assert "max-age=0" in deleted or '="";' in deleted
 
 
-def test_logout_without_a_cookie_is_401_not_authenticated(client: TestClient) -> None:
+def test_logout_without_a_cookie_succeeds(client: TestClient) -> None:
     response = client.post("/api/v1/auth/logout")
-    assert response.status_code == 401
-    assert response.json()["error_code"] == "not_authenticated"
+    assert response.status_code == 200
+    assert "max-age=0" in response.headers["set-cookie"].lower()
 
 
 def test_expired_token_is_401_not_authenticated(client: TestClient) -> None:
@@ -122,17 +122,20 @@ def test_expired_token_is_401_not_authenticated(client: TestClient) -> None:
     )
     client.cookies.set(COOKIE, expired_token)
 
-    response = client.post("/api/v1/auth/logout")
+    response = client.get("/api/v1/me")
     assert response.status_code == 401
     assert response.json()["error_code"] == "not_authenticated"
+    logout = client.post("/api/v1/auth/logout")
+    assert logout.status_code == 200
+    assert "max-age=0" in logout.headers["set-cookie"].lower()
 
 
 def test_token_of_an_unknown_user_is_401_not_authenticated(client: TestClient) -> None:
     from src.app.core.security import create_session_token
 
-    client.cookies.set(COOKIE, create_session_token(uuid4()))
+    client.cookies.set(COOKIE, create_session_token(uuid4(), get_auth_settings()))
 
-    response = client.post("/api/v1/auth/logout")
+    response = client.get("/api/v1/me")
     assert response.status_code == 401
     assert response.json()["error_code"] == "not_authenticated"
 

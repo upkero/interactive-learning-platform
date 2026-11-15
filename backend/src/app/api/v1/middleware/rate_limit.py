@@ -16,17 +16,19 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 
+from src.app.exceptions.auth import RateLimitedError
+
 
 def client_ip(request: Request) -> str:
     """Client IP behind the nginx proxy.
 
-    ``request.client`` is the proxy itself, so without the forwarded
-    header all users would share one rate bucket. The header is
-    trustworthy here: nginx overwrites it with the real client address.
+    Nginx overwrites X-Real-IP; X-Forwarded-For may contain client-supplied
+    values and must not be used for the rate-limit key. API access must be
+    restricted to trusted proxies in production.
     """
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    forwarded = request.headers.get("x-real-ip")
+    if forwarded and forwarded.strip():
+        return forwarded.strip()
     return get_remote_address(request)
 
 
@@ -35,10 +37,8 @@ limiter = Limiter(key_func=client_ip)
 
 async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     """Answer 429 in the unified error format instead of slowapi's plain text."""
-    return JSONResponse(
-        status_code=429,
-        content={"detail": "Too many requests.", "error_code": "rate_limited"},
-    )
+    error = RateLimitedError()
+    return JSONResponse(status_code=error.status_code, content={"detail": error.detail, "error_code": error.error_code})
 
 
 def register_rate_limit(app: FastAPI) -> None:

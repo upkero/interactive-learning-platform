@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
 from src.app.api.v1.exception_handlers import register_exception_handlers
+from src.app.api.v1.middleware.request_id import register_request_id_middleware
 from src.app.exceptions.base import BaseAppException
 
 pytestmark = pytest.mark.unit
@@ -32,6 +33,7 @@ async def _raising_dependency() -> int:
 def _build_app() -> FastAPI:
     app = FastAPI()
     register_exception_handlers(app)
+    register_request_id_middleware(app)
 
     class Body(BaseModel):
         number: int
@@ -110,10 +112,22 @@ def test_unhandled_exception_is_500_without_inner_details(client: TestClient) ->
 
 
 def test_app_exception_500_is_logged_with_request_id(client: TestClient, caplog: pytest.LogCaptureFixture) -> None:
-    response = client.get("/domain-500")
+    response = client.get("/domain-500", headers={"X-Request-ID": "test-request-id"})
     assert response.status_code == 500
     # the log record must carry the request context for 5xx triage
-    assert any("Application error" in record.message for record in caplog.records)
+    assert any(
+        "Application error" in record.message and getattr(record, "request_id", None) == "test-request-id"
+        for record in caplog.records
+    )
+
+
+def test_unhandled_exception_logs_request_id(client: TestClient, caplog: pytest.LogCaptureFixture) -> None:
+    response = client.get("/crash", headers={"X-Request-ID": "unhandled-request-id"})
+    assert response.status_code == 500
+    assert any(
+        "Unhandled exception" in record.message and getattr(record, "request_id", None) == "unhandled-request-id"
+        for record in caplog.records
+    )
 
 
 def test_dependency_crash_is_still_the_unified_500(client: TestClient) -> None:

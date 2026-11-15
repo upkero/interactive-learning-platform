@@ -3,7 +3,6 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 from src.app.api.v1.exception_handlers import register_exception_handlers
 from src.app.api.v1.middleware.rate_limit import register_rate_limit
@@ -12,7 +11,6 @@ from src.app.api.v1.router import api_router
 from src.app.api.v1.routers.health import router as health_router
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.core.logging import setup_logging
-from src.app.core.settings.app import get_app_settings
 from src.app.core.settings.auth import get_auth_settings
 from src.app.core.settings.logging import get_logging_settings
 
@@ -49,15 +47,6 @@ def create_app() -> FastAPI:
             {"name": "materials", "description": "Sharing materials by email."},
             {"name": "me", "description": "Profile, materials, quota."},
         ],
-    )
-
-    settings = get_app_settings()
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_allow_origins,
-        allow_credentials="*" not in settings.cors_allow_origins,
-        allow_methods=["*"],
-        allow_headers=["*"],
     )
 
     register_request_id_middleware(app)

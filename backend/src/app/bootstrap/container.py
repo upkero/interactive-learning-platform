@@ -5,6 +5,7 @@ import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from src.app.core.settings.app import get_app_settings
+from src.app.core.settings.auth import AuthSettings, get_auth_settings
 from src.app.core.settings.celery import get_celery_settings
 from src.app.core.settings.llm import get_llm_settings
 from src.app.core.settings.storage import get_storage_settings
@@ -12,11 +13,21 @@ from src.app.db.session import build_engine, build_session_factory
 from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.llm.factory import create_llm_client
+from src.app.repositories.user_repository import UserRepository
+from src.app.services.auth.auth_service import AuthService
 from src.app.storage.s3_object_storage_client import S3ObjectStorageClient, build_ping_client, build_s3_client
 from src.app.tasks.dispatcher import CeleryTaskDispatcher
 
 
 class ApplicationContainer:
+    @cached_property
+    def auth_settings(self) -> AuthSettings:
+        return get_auth_settings()
+
+    @cached_property
+    def auth_service(self) -> AuthService:
+        return AuthService(session_factory=self.session_factory, users=UserRepository, settings=self.auth_settings)
+
     @cached_property
     def llm_client(self) -> LLMClient:
         return create_llm_client(get_llm_settings())

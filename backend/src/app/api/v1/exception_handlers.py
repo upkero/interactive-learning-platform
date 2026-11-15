@@ -41,6 +41,7 @@ async def handle_app_exception(request: Request, exc: BaseAppException) -> JSONR
             request.url.path,
             exc.detail,
             exc_info=exc,
+            extra={"request_id": getattr(request.state, "request_id", "-")},
         )
     return _error_response(exc.status_code, exc.detail, exc.error_code, extra=exc.extra)
 
@@ -59,7 +60,13 @@ async def handle_http_exception(request: Request, exc: StarletteHTTPException) -
 
 
 async def handle_unexpected_exception(request: Request, exc: Exception) -> JSONResponse:
-    logger.error("Unhandled exception on %s %s", request.method, request.url.path, exc_info=exc)
+    logger.error(
+        "Unhandled exception on %s %s",
+        request.method,
+        request.url.path,
+        exc_info=exc,
+        extra={"request_id": getattr(request.state, "request_id", "-")},
+    )
     return _error_response(500, "Internal server error", "internal_server_error")
 
 

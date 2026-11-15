@@ -11,7 +11,7 @@ from uuid import UUID
 import jwt
 from pwdlib import PasswordHash
 
-from src.app.core.settings.auth import get_auth_settings
+from src.app.core.settings.auth import AuthSettings
 from src.app.exceptions.auth import NotAuthenticatedError
 
 _ALGORITHM = "HS256"
@@ -27,8 +27,7 @@ def verify_password(plain_password: str, password_hash: str) -> bool:
     return _HASHER.verify(plain_password, password_hash)
 
 
-def create_session_token(user_id: UUID) -> str:
-    settings = get_auth_settings()
+def create_session_token(user_id: UUID, settings: AuthSettings) -> str:
     now = datetime.now(UTC)
     return jwt.encode(
         {
@@ -41,9 +40,8 @@ def create_session_token(user_id: UUID) -> str:
     )
 
 
-def decode_session_token(token: str) -> UUID:
+def decode_session_token(token: str, settings: AuthSettings) -> UUID:
     """Validate signature and expiry, return the user id from ``sub``."""
-    settings = get_auth_settings()
     try:
         payload = jwt.decode(token, settings.jwt_secret.get_secret_value(), algorithms=[_ALGORITHM])
     except jwt.PyJWTError as exc:

@@ -143,6 +143,11 @@ jobs:
       - name: Mypy type check
         run: uv run mypy src tests
 
+      - name: Verify OpenAPI snapshot
+        run: |
+          uv run python -m src.cli export-openapi
+          git diff --exit-code -- openapi.json
+
       - name: Database migrations check
         run: uv run alembic upgrade head && uv run alembic downgrade base && uv run alembic upgrade head
 

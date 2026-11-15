@@ -30,8 +30,8 @@ def test_password_hash_round_trip() -> None:
 
 def test_session_token_round_trip() -> None:
     user_id = uuid4()
-    token = create_session_token(user_id)
-    assert decode_session_token(token) == user_id
+    token = create_session_token(user_id, get_auth_settings())
+    assert decode_session_token(token, get_auth_settings()) == user_id
 
 
 def test_expired_token_is_not_authenticated() -> None:
@@ -44,19 +44,19 @@ def test_expired_token_is_not_authenticated() -> None:
         algorithm="HS256",
     )
     with pytest.raises(NotAuthenticatedError):
-        decode_session_token(expired)
+        decode_session_token(expired, settings)
 
 
 def test_tampered_token_is_not_authenticated() -> None:
-    token = create_session_token(uuid4())
+    token = create_session_token(uuid4(), get_auth_settings())
     with pytest.raises(NotAuthenticatedError):
-        decode_session_token(token + "x")
+        decode_session_token(token + "x", get_auth_settings())
 
 
 def test_token_signed_with_another_secret_is_not_authenticated() -> None:
     forged = jwt.encode({"sub": str(uuid4())}, "not-the-real-secret-not-the-real-secret", algorithm="HS256")
     with pytest.raises(NotAuthenticatedError):
-        decode_session_token(forged)
+        decode_session_token(forged, get_auth_settings())
 
 
 def test_token_without_sub_is_not_authenticated() -> None:
@@ -64,4 +64,4 @@ def test_token_without_sub_is_not_authenticated() -> None:
         {"iat": datetime.now(UTC)}, get_auth_settings().jwt_secret.get_secret_value(), algorithm="HS256"
     )
     with pytest.raises(NotAuthenticatedError):
-        decode_session_token(forged)
+        decode_session_token(forged, get_auth_settings())

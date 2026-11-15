@@ -17,6 +17,7 @@ def register_request_id_middleware(app: FastAPI) -> None:
         if request.url.path in _SKIP_PATHS:
             return await call_next(request)
         request_id = request.headers.get(_HEADER) or generate_request_id()
+        request.state.request_id = request_id
         set_request_id(request_id)
         response: Response = await call_next(request)
         response.headers[_HEADER] = request_id
