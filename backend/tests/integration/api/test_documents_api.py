@@ -15,14 +15,16 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.api.v1.dependencies.services import get_task_dispatcher
 from src.app.api.v1.middleware.rate_limit import limiter
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.documents import DocumentStatus, MaterialRole, PartDraft, SourceType
+from src.app.models.document_part import DocumentPart
 from src.app.models.generation_ledger import GenerationLedger
+from src.app.models.quiz_attempt import QuizAttempt
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
 from src.app.repositories.user_material_repository import UserMaterialRepository
@@ -207,6 +209,31 @@ async def test_invalid_import_link_is_422(client: TestClient, dispatcher: FakeTa
     assert response.status_code == 422
     assert response.json()["error_code"] == "invalid_gdocs_url"
     assert dispatcher.calls == []
+
+
+async def test_quiz_attempts_are_stored(client: TestClient, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    document_id = await _new_parsed_document(client, session_factory)
+    async with session_factory() as session, session.begin():
+        parts = await DocumentPartRepository(session).list_by_document(document_id)
+        part_id = parts[0].id
+        await session.execute(
+            update(DocumentPart)
+            .where(DocumentPart.id == part_id)
+            .values(
+                status="published",
+                content={
+                    "quizzes": [{"quiz_key": "q", "type": "single_choice", "correct_answer": 1, "explanation": "yes"}]
+                },
+            )
+        )
+    for answer, expected in [(1, True), (2, False)]:
+        response = client.post(
+            "/api/v1/quiz-attempts", json={"part_id": str(part_id), "quiz_key": "q", "answer": answer}
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["is_correct"] is expected
+    async with session_factory() as session:
+        assert (await session.scalars(select(func.count()).select_from(QuizAttempt))).one() == 2
 
 
 async def test_import_counts_towards_the_processing_limit(client: TestClient) -> None:
