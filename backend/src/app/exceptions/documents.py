@@ -15,6 +15,12 @@ class DocumentNotFoundError(BaseAppException):
     default_detail = "Document not found."
 
 
+class PartNotFoundError(BaseAppException):
+    status_code = 404
+    error_code = "part_not_found"
+    default_detail = "Part not found."
+
+
 class DocumentNotReadyError(BaseAppException):
     """The document is not ready for the requested read/plan operation.
 
