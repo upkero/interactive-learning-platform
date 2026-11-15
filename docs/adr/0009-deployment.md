@@ -7,7 +7,7 @@
 
 ## Контекст
 
-Grasp состоит из нескольких сервисов (FastAPI API, Celery worker/beat, PostgreSQL 17 с pgvector, Redis, MinIO, песочница виджетов, фронтенд и widget-host). Для MVP (курсовой проект команды из 4 человек) нужен надёжный и дешёвый способ продакшн-развёртывания: один сервер, HTTP(S)-доступ снаружи, изоляция доменов (`app.`, `api.`, `widgets.`, `files.`) и безопасный выпуск TLS-сертификатов.
+Grasp состоит из нескольких сервисов (FastAPI API, Celery worker/beat, PostgreSQL 17 с pgvector, Redis, MinIO, песочница виджетов, фронтенд и widget-host). Для MVP (курсовой проект команды из 4 человек) нужен надёжный и дешёвый способ продакшн-развёртывания: один сервер, HTTP(S)-доступ снаружи, изоляция доменов (`app.`, `widgets.`, `files.`) и безопасный выпуск TLS-сертификатов.
 
 Ожидаемая нагрузка на старте: единицы пользователей, генерация конспектов LLM, SSE-стримы прогресса. Ограничения: бюджет не позволяет кластер/Kubernetes, вся эксплуатация — руками одного DevOps-инженера.
 
@@ -20,11 +20,13 @@ Grasp состоит из нескольких сервисов (FastAPI API, Ce
 
 Выбран вариант 2. Боевая конфигурация: **одна VPS с 4 vCPU и 8 GB RAM**, профиль нагрузки — несколько активных сессий, генерация конспектов вынесена в Celery (пики CPU приходятся на LLM-вызовы внешнего провайдера, сам сервер работает как оркестратор).
 
-- **Реверс-прокси** — Nginx (`nginx:1.27-alpine`, контейнер `infra/compose.prod.yml`), слушает 80/443 и маршрутизирует по доменам: `app.<домен>` → frontend, `api.<домен>` → FastAPI, `widgets.<домен>` → widget-host (iframe-изоляция виджетов), `files.<домен>` → MinIO с `proxy_set_header Host $host` (необходимо для проверки подписи presigned S3-ссылок).
+> **Решение:** API на app.<домен>/api через nginx, домен api.<домен> убран.
+
+- **Реверс-прокси** — Nginx (`nginx:1.27-alpine`, контейнер `infra/compose.prod.yml`), слушает 80/443 и маршрутизирует: `app.<домен>/api/` → FastAPI, остальные пути `app.<домен>` → frontend, `widgets.<домен>` → widget-host, `files.<домен>` → MinIO с `proxy_set_header Host $host` для подписи presigned S3-ссылок. Неизвестные HTTPS-имена отклоняются; старую DNS-запись API нужно удалить.
 - **TLS** — сертификаты Let's Encrypt выпускаются **certbot на хосте** в режиме **webroot** (`/var/www/certbot`), Nginx монтирует директорию `/etc/letsencrypt` в read-only. Продление — системный systemd-таймер `certbot.timer` дважды в сутки: после успешного продления хук перезагружает конфигурацию Nginx (`docker compose ... exec nginx nginx -s reload`). Контейнеры certbot в стеке не используются.
 - **Внутренние порты закрыты**: у `db`, `redis`, `minio`, `api`, `frontend`, `widget-host` в production-оверлее порты сброшены (`ports: !reset []`); сервисы общаются только внутри docker-сети.
 - **Файрвол (UFW)** — наружу открыты только `22` (SSH), `80` (HTTP, только для редиректа и ACME-challenge), `443` (HTTPS). Всё остальное запрещено.
-- **Лимиты** — `client_max_body_size 55m` (50 MB документ + запас на multipart-заголовки); для SSE-потоков (`/api/v1/documents/*/events`) отключена буферизация (`proxy_buffering off; proxy_read_timeout 1h;`); `/metrics` закрыт снаружи (`deny all;`).
+- **Лимиты** — `client_max_body_size 55m` (50 MB документ + запас на multipart-заголовки); для SSE-потоков (`/api/v1/documents/*/events`) отключена буферизация (`proxy_buffering off; proxy_read_timeout 10m;`); `/metrics` не проксируется в API.
 - **Обновление** — скрипт `infra/deploy.sh` (требует `IMAGE_TAG=<sha коммита>` — тег, который CI опубликовал в GHCR; `chmod 600 backend/.env`; `docker compose ... pull`; `up -d --remove-orphans`). Образы публикуются в GHCR из CI джобы `images` и скачиваются на сервере, сборка на самой VPS не выполняется.
 - **Доступ к GHCR** — пакеты приватные по умолчанию; на VPS один раз выполняется `docker login ghcr.io` (логин GitHub, пароль — personal access token со scope `read:packages`).
 

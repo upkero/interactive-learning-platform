@@ -98,6 +98,32 @@ services:
     ports: ["8000:8000"]
     depends_on: *backend-deps
 
+  # Клиент в общей сети: server-side rewrites обращаются к API по имени сервиса.
+  frontend:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+    ports: ["3000:3000"]
+    environment:
+      API_INTERNAL_URL: http://api:8000
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  widget-host:
+    build:
+      context: ..
+      dockerfile: widget-host/Dockerfile
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   # 7. Воркер фоновых задач Celery
   worker:
     <<: *backend

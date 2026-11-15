@@ -12,7 +12,7 @@
 name: grasp
 
 services:
-  # Единственная точка входа: 80 -> 443, маршрутизация по 4 поддоменам
+  # Единственная точка входа: 80 -> 443, домены app, widgets и files
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped
@@ -78,10 +78,12 @@ services:
 
   frontend:
     image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/frontend:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
+    build: !reset {}
     ports: !reset []
     restart: unless-stopped
 
   widget-host:
     image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/widget-host:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
+    build: !reset {}
     ports: !reset []
     restart: unless-stopped
