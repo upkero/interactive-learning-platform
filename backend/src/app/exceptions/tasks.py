@@ -11,5 +11,6 @@ class TaskDispatchError(TasksError):
     """The broker refused or lost a task; the client may retry later."""
 
     status_code = 503
+    public = True
     error_code = "queue_unavailable"
     default_detail = "The task queue is temporarily unavailable."

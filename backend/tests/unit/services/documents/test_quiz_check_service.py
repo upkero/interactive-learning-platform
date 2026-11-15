@@ -1,6 +1,8 @@
 """Checks of all quiz types and persistence of attempts."""
 
+import json
 from dataclasses import replace
+from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
 
@@ -9,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents import MaterialRole, PartDraft, PartStatus
 from src.app.exceptions.quizzes import InvalidQuizAnswerError
-from src.app.services.documents.quiz_check_service import QuizCheckService
+from src.app.services.documents.quiz_check_service import QuizCheckService, check_answer
 from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.repositories.documents import FakeDocumentPartRepository, FakeUserMaterialRepository
 from tests.support.fakes.repositories.quizzes import FakeQuizAttemptRepository
@@ -17,12 +19,21 @@ from tests.support.fakes.repositories.quizzes import FakeQuizAttemptRepository
 pytestmark = pytest.mark.unit
 
 
+def test_seed_quiz_uses_separate_answer_key() -> None:
+    fixture = Path(__file__).resolve().parents[3] / "support/fixtures/seed/published_part.json"
+    content = json.loads(fixture.read_text())["content"]
+    quiz = content["quizzes"][0]
+    key = content["answer_keys"][quiz["key"]]
+    assert check_answer(quiz, key, "a").is_correct
+    assert not check_answer(quiz, key, "b").is_correct
+
+
 @pytest.mark.parametrize(
     ("kind", "correct", "valid", "invalid"),
     [
-        ("single_choice", 1, 1, 2),
-        ("multiple_choice", [1, 2], [2, 1], [1]),
-        ("ordering", [1, 2], [1, 2], [2, 1]),
+        ("single_choice", "a", "a", "b"),
+        ("multiple_choice", ["a", "b"], ["b", "a"], ["a"]),
+        ("ordering", ["a", "b"], ["a", "b"], ["b", "a"]),
         ("numeric", 1.0, 1.05, 1.2),
     ],
 )
@@ -37,16 +48,21 @@ async def test_check_four_types_and_record_every_attempt(kind: str, correct: Any
         part,
         status=PartStatus.PUBLISHED,
         content={
-            "quizzes": [
-                {
-                    "quiz_key": "q",
-                    "type": kind,
-                    "correct_answer": correct,
+            "quizzes": [{"key": "q", "type": kind}],
+            "answer_keys": {
+                "q": {
+                    {
+                        "single_choice": "correct_id",
+                        "multiple_choice": "correct_ids",
+                        "ordering": "correct_order",
+                        "numeric": "answer",
+                    }[kind]: correct,
                     "tolerance": 0.1,
                     "explanation": "because",
-                    "option_explanations": ["why"],
+                    "why_wrong": {"a": "why"},
+                    "common_mistakes": ["why"],
                 }
-            ]
+            },
         },
     )
     session = FakeSession()

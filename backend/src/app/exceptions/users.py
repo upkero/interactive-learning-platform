@@ -26,5 +26,6 @@ class UserNotFoundError(UsersError):
     """The referenced user does not exist (a stale token or a deleted row)."""
 
     status_code = 401
+    public = True
     error_code = "not_authenticated"
     default_detail = "Authentication required."

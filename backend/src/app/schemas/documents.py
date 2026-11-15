@@ -18,7 +18,7 @@ class DocumentCreatedOut(BaseModel):
     status: Literal["uploaded", "parsing", "parsed", "generating", "done", "failed"]
 
 
-class DocumentImportIn(BaseModel):
+class DocumentImportRequest(BaseModel):
     """Body of ``POST /documents/import`` (story 1.4.4).
 
     The link shape is validated in the service (not by a Pydantic

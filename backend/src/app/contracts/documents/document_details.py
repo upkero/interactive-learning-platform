@@ -6,22 +6,11 @@ the ``DocumentOut`` schema.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
-from uuid import UUID
 
 from src.app.contracts.documents.document_record import DocumentRecord
 from src.app.contracts.documents.part_record import PartRecord
+from src.app.contracts.documents.shared_user_info import SharedUserInfo
 from src.app.contracts.documents.statuses import MaterialRole
-
-
-@dataclass(frozen=True, slots=True)
-class SharedUserInfo:
-    """A registered user the document was shared with."""
-
-    user_id: UUID
-    email: str
-    display_name: str | None
-    shared_at: datetime
 
 
 @dataclass(frozen=True, slots=True)

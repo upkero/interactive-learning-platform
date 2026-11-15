@@ -1,4 +1,4 @@
-"""Sharing validates ownership, identity and recipient existence."""
+"""Material sharing checks ownership and recipient identity."""
 
 from typing import cast
 from uuid import uuid4
@@ -15,6 +15,30 @@ from tests.support.fakes.repositories.documents import FakeUserMaterialRepositor
 from tests.support.fakes.repositories.users import FakeUserRepository
 
 pytestmark = pytest.mark.unit
+
+
+async def test_share_requires_owner_and_registered_distinct_recipient() -> None:
+    users, materials, session = FakeUserRepository(), FakeUserMaterialRepository(), FakeSession()
+    owner = await users.create(email="owner@example.com", password_hash="hash")
+    recipient = await users.create(email="recipient@example.com", password_hash="hash")
+    document = uuid4()
+    await materials.create(user_id=owner.id, document_id=document, role=MaterialRole.OWNER)
+    service = SharingService(
+        session_factory=cast(async_sessionmaker[AsyncSession], lambda: session),
+        users=lambda _: users,
+        materials=lambda _: materials,
+    )
+    with pytest.raises(DocumentNotFoundError):
+        await service.share(owner_id=recipient.id, document_id=document, email=owner.email)
+    with pytest.raises(RecipientNotRegisteredError):
+        await service.share(owner_id=owner.id, document_id=document, email="missing@example.com")
+    with pytest.raises(ShareWithSelfError):
+        await service.share(owner_id=owner.id, document_id=document, email=owner.email)
+    await service.share(owner_id=owner.id, document_id=document, email=" RECIPIENT@example.com ")
+    await service.share(owner_id=owner.id, document_id=document, email=recipient.email)
+    assert await materials.get_role(recipient.id, document) is MaterialRole.SHARED
+    with pytest.raises(DocumentNotFoundError):
+        await service.share(owner_id=recipient.id, document_id=document, email=owner.email)
 
 
 async def test_owner_can_share_idempotently() -> None:

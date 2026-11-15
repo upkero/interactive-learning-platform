@@ -6,8 +6,8 @@ from uuid import UUID
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.app.contracts.documents import DocumentStatus, MaterialRole, PartDraft, SourceType
-from src.app.contracts.documents.generation import GenerationAnswers
+from src.app.contracts.documents import DocumentStatus, MaterialRole, SourceType
+from src.app.contracts.documents.generation import GenerationAnswers, GenerationCommand
 from src.app.core.clock import SystemClock
 from src.app.core.settings.processing import ProcessingSettings
 from src.app.exceptions.documents import ProcessingLimitError
@@ -17,9 +17,11 @@ from src.app.repositories.generation_ledger_repository import GenerationLedgerRe
 from src.app.repositories.user_material_repository import UserMaterialRepository
 from src.app.repositories.user_repository import UserRepository
 from src.app.services.documents.generation_service import GenerationService
-from src.app.services.documents.splitting import TopicTreePlanner
+from src.app.services.documents.topic_per_part_planner import TopicPerPartPlanner
 from src.app.services.quota.quota_ledger import QuotaLedger
-from tests.support.fakes.tasks import FakeTaskDispatcher
+from src.app.storage.object_keys import parsed_markdown_key
+from tests.support.fakes.services.task_dispatcher import FakeTaskDispatcher
+from tests.support.fakes.storage.object_storage_client import FakeObjectStorageClient
 
 pytestmark = pytest.mark.integration
 
@@ -42,15 +44,14 @@ async def test_three_parallel_generations_only_two_start(session_factory: async_
             )
             await UserMaterialRepository(session).create(user_id=user.id, document_id=doc.id, role=MaterialRole.OWNER)
             await documents.set_status(doc.id, DocumentStatus.PARSED)
-            await documents.set_topic_tree(doc.id, {"topics": [{"id": "t", "title": "T", "children": []}]})
-            await DocumentPartRepository(session).add_many(
-                doc.id,
-                [
-                    PartDraft(index=0, title="T", topic_ids=["t"], source_markdown="text", token_count=1),
-                ],
-            )
+            await documents.set_topic_tree(doc.id, [{"id": "t", "title": "T", "start": 0, "end": 4, "total_tokens": 1}])
             ids.append(doc.id)
     dispatcher = FakeTaskDispatcher()
+    storage = FakeObjectStorageClient()
+    for doc_id in ids:
+        await storage.put_object(
+            bucket="documents", key=parsed_markdown_key(user.id, doc_id), data=b"text", content_type="text/markdown"
+        )
 
     async def start(doc_id: UUID) -> bool:
         service = GenerationService(
@@ -59,7 +60,8 @@ async def test_three_parallel_generations_only_two_start(session_factory: async_
             materials=UserMaterialRepository,
             parts=DocumentPartRepository,
             users=UserRepository,
-            planner=TopicTreePlanner(),
+            planner=TopicPerPartPlanner(),
+            storage=storage,
             ledger=QuotaLedger(
                 users_factory=UserRepository,
                 ledger_factory=GenerationLedgerRepository,
@@ -70,10 +72,12 @@ async def test_three_parallel_generations_only_two_start(session_factory: async_
         )
         try:
             await service.start(
-                user_id=user.id,
-                document_id=doc_id,
-                topic_ids=["t"],
-                answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+                GenerationCommand(
+                    user_id=user.id,
+                    document_id=doc_id,
+                    topic_ids=("t",),
+                    answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+                )
             )
         except ProcessingLimitError:
             return False

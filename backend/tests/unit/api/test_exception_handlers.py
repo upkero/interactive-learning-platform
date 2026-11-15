@@ -16,14 +16,10 @@ from pydantic import BaseModel
 from src.app.api.v1.exception_handlers import register_exception_handlers
 from src.app.api.v1.middleware.request_id import register_request_id_middleware
 from src.app.exceptions.base import BaseAppException
+from src.app.exceptions.documents import DocumentPartDuplicateError
+from src.app.exceptions.quota import QuotaExceededError
 
 pytestmark = pytest.mark.unit
-
-
-class FakeDomainError(BaseAppException):
-    status_code = 409
-    error_code = "domain_conflict"
-    default_detail = "Domain conflict."
 
 
 async def _raising_dependency() -> int:
@@ -40,7 +36,11 @@ def _build_app() -> FastAPI:
 
     @app.get("/domain")
     async def domain_error() -> None:
-        raise FakeDomainError(extra={"available": 3, "requested": 5})
+        raise QuotaExceededError(extra={"available": 3, "requested": 5})
+
+    @app.get("/internal")
+    async def internal_error() -> None:
+        raise DocumentPartDuplicateError(detail="secret database detail")
 
     @app.get("/domain-500")
     async def domain_500() -> None:
@@ -68,10 +68,10 @@ def client() -> TestClient:
 
 def test_domain_error_maps_status_code_and_error_code(client: TestClient) -> None:
     response = client.get("/domain")
-    assert response.status_code == 409
+    assert response.status_code == 402
     assert response.json() == {
-        "detail": "Domain conflict.",
-        "error_code": "domain_conflict",
+        "detail": "Not enough generation quota.",
+        "error_code": "quota_exceeded",
         "available": 3,
         "requested": 5,
     }
@@ -79,12 +79,18 @@ def test_domain_error_maps_status_code_and_error_code(client: TestClient) -> Non
 
 def test_domain_error_extra_is_merged_into_the_response(client: TestClient) -> None:
     response = client.get("/domain")
-    assert response.status_code == 409
+    assert response.status_code == 402
     body = response.json()
     # numbers land at the top level next to detail/error_code, e.g.
     # available/requested on quota_exceeded
     assert body["available"] == 3
     assert body["requested"] == 5
+
+
+def test_internal_error_never_exposes_details(client: TestClient) -> None:
+    response = client.get("/internal")
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Internal server error", "error_code": "internal_server_error"}
 
 
 def test_validation_error_uses_the_unified_format(client: TestClient) -> None:

@@ -1,5 +1,6 @@
 """Repository of documents."""
 
+from collections.abc import Mapping, Sequence
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -8,7 +9,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.documents.document_record import DocumentRecord
-from src.app.contracts.documents.statuses import DocumentStatus, SourceType
+from src.app.contracts.documents.statuses import DocumentErrorCode, DocumentStatus, SourceType
+from src.app.contracts.documents.topic_node import topic_roots
 from src.app.exceptions.documents import DocumentsIntegrityError
 from src.app.interfaces.repositories.documents import DocumentRepositoryProtocol
 from src.app.models.document import Document
@@ -34,8 +36,8 @@ class DocumentRepository(DocumentRepositoryProtocol):
             page_count=row.page_count,
             checksum=row.checksum,
             status=DocumentStatus(row.status),
-            topic_tree=dict(row.topic_tree) if row.topic_tree is not None else None,
-            error=row.error,
+            topic_tree=topic_roots(row.topic_tree) if row.topic_tree is not None else None,
+            error_code=DocumentErrorCode(row.error_code) if row.error_code is not None else None,
             created_at=row.created_at,
             updated_at=row.updated_at,
         )
@@ -90,23 +92,27 @@ class DocumentRepository(DocumentRepositoryProtocol):
         document_id: UUID,
         status: DocumentStatus,
         *,
-        error: str | None = None,
+        error_code: DocumentErrorCode | None = None,
     ) -> DocumentRecord | None:
         """Update the status of a document and return the fresh record."""
         row = await self._session.get(Document, document_id)
         if row is None:
             return None
         row.status = status.value
-        row.error = error
+        row.error_code = error_code.value if error_code is not None else None
         await self._session.flush()
         return self._to_record(row)
 
-    async def set_topic_tree(self, document_id: UUID, topic_tree: dict[str, Any]) -> DocumentRecord | None:
-        """Store the parsed topic tree of a document and return the fresh record."""
+    async def set_topic_tree(
+        self,
+        document_id: UUID,
+        topic_tree: Sequence[Mapping[str, Any]],
+    ) -> DocumentRecord | None:
+        """Store the parsed topic tree (a list of root nodes) and return the record."""
         row = await self._session.get(Document, document_id)
         if row is None:
             return None
-        row.topic_tree = topic_tree
+        row.topic_tree = [dict(node) for node in topic_tree]
         await self._session.flush()
         return self._to_record(row)
 

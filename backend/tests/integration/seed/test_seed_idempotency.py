@@ -45,14 +45,14 @@ async def test_seed_dev_is_idempotent(session_factory: SessionFactory) -> None:
         parsed = by_status[DocumentStatus.PARSED.value]
         owner = await session.scalar(select(User.email).where(User.id == parsed.owner_id))
         assert owner == ALICE_EMAIL
-        assert parsed.topic_tree is not None and "topics" in parsed.topic_tree
+        assert isinstance(parsed.topic_tree, list) and parsed.topic_tree
         assert parsed.source_type == SourceType.UPLOAD.value
         # Screen E6: done document holds exactly one published part with content.
         done = by_status[DocumentStatus.DONE.value]
         done_owner = await session.scalar(select(User.email).where(User.id == done.owner_id))
         assert done_owner == BOB_EMAIL
         assert done.source_type == SourceType.GDOCS.value and done.source_uri is not None
-        assert done.topic_tree is not None and "topics" in done.topic_tree
+        assert isinstance(done.topic_tree, list) and done.topic_tree
         part = (
             await session.scalars(
                 select(DocumentPart).where(

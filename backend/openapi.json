@@ -69,6 +69,166 @@
         "title": "Body_documents_upload",
         "type": "object"
       },
+      "ChoiceOption": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text"
+        ],
+        "title": "ChoiceOption",
+        "type": "object"
+      },
+      "ChoiceQuiz": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/ChoiceOption"
+            },
+            "title": "Options",
+            "type": "array"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "single_choice",
+              "multiple_choice"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "ref",
+          "type",
+          "prompt",
+          "options"
+        ],
+        "title": "ChoiceQuiz",
+        "type": "object"
+      },
+      "CodeWidget": {
+        "additionalProperties": false,
+        "properties": {
+          "compiled_js": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compiled Js"
+          },
+          "kind": {
+            "const": "code",
+            "title": "Kind",
+            "type": "string"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "object"
+          },
+          "status": {
+            "const": "ready",
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "widget_id": {
+            "format": "uuid",
+            "title": "Widget Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "kind",
+          "widget_id",
+          "title"
+        ],
+        "title": "CodeWidget",
+        "type": "object"
+      },
+      "ConfigWidget": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "config",
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Params",
+            "type": "object"
+          },
+          "primitive_id": {
+            "title": "Primitive Id",
+            "type": "string"
+          },
+          "status": {
+            "const": "ready",
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "widget_id": {
+            "format": "uuid",
+            "title": "Widget Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "kind",
+          "widget_id",
+          "title",
+          "primitive_id",
+          "mode",
+          "params"
+        ],
+        "title": "ConfigWidget",
+        "type": "object"
+      },
       "DocumentCreatedOut": {
         "description": "Body of 201 after a successful upload or import.",
         "properties": {
@@ -97,7 +257,20 @@
         "title": "DocumentCreatedOut",
         "type": "object"
       },
-      "DocumentImportIn": {
+      "DocumentErrorCode": {
+        "description": "Why a document ended up in ``failed`` (story 1.9, migration 0003).\n\nOnly the code is stored: the client translates it through its\n``errors.<code>`` dictionary, while technical details (exception\ntext) live only in server logs.",
+        "enum": [
+          "parse_failed",
+          "gdocs_not_public",
+          "gdocs_import_failed",
+          "too_many_pages",
+          "empty_document",
+          "enqueue_failed"
+        ],
+        "title": "DocumentErrorCode",
+        "type": "string"
+      },
+      "DocumentImportRequest": {
         "description": "Body of ``POST /documents/import`` (story 1.4.4).\n\nThe link shape is validated in the service (not by a Pydantic\n``HttpUrl``) so a rejected URL answers the unified 422\n``invalid_gdocs_url`` error format.",
         "properties": {
           "url": {
@@ -110,7 +283,7 @@
         "required": [
           "url"
         ],
-        "title": "DocumentImportIn",
+        "title": "DocumentImportRequest",
         "type": "object"
       },
       "DocumentOut": {
@@ -232,26 +405,7 @@
           "share_with_self",
           "invalid_quiz_answer",
           "widget_not_found",
-          "queue_unavailable",
-          "app_error",
-          "widgets_integrity_error",
-          "widget_constraint",
-          "widget_usage_duplicate",
-          "users_integrity_error",
-          "user_already_exists",
-          "quiz_integrity_error",
-          "object_storage_error",
-          "object_not_found",
-          "llm_error",
-          "llm_configuration_error",
-          "llm_input_error",
-          "llm_generation_error",
-          "quota_integrity_error",
-          "ledger_entry_duplicate",
-          "documents_integrity_error",
-          "document_part_duplicate",
-          "material_access_duplicate",
-          "upload_validation_error"
+          "queue_unavailable"
         ],
         "type": "string"
       },
@@ -288,13 +442,12 @@
           "reason": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/DocumentErrorCode"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Reason"
+            ]
           },
           "requested": {
             "anyOf": [
@@ -432,6 +585,64 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "ImageFallback": {
+        "additionalProperties": false,
+        "properties": {
+          "image_id": {
+            "title": "Image Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "image",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "image_id"
+        ],
+        "title": "ImageFallback",
+        "type": "object"
+      },
+      "ImageOut": {
+        "additionalProperties": false,
+        "properties": {
+          "caption": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caption"
+          },
+          "image_id": {
+            "format": "uuid",
+            "title": "Image Id",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "image_id"
+        ],
+        "title": "ImageOut",
+        "type": "object"
+      },
+      "JsonValue": {},
       "LastAnswersOut": {
         "properties": {
           "depth": {
@@ -668,39 +879,178 @@
         "title": "MePatch",
         "type": "object"
       },
+      "NumericQuiz": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "type": {
+            "const": "numeric",
+            "title": "Type",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "required": [
+          "key",
+          "ref",
+          "type",
+          "prompt"
+        ],
+        "title": "NumericQuiz",
+        "type": "object"
+      },
+      "OrderingQuiz": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ChoiceOption"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "type": {
+            "const": "ordering",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "ref",
+          "type",
+          "prompt",
+          "items"
+        ],
+        "title": "OrderingQuiz",
+        "type": "object"
+      },
       "PartContentOut": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "images": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ImageOut"
             },
             "title": "Images",
+            "type": "object"
+          },
+          "key_terms": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Key Terms",
             "type": "array"
           },
           "markdown": {
-            "default": "",
             "title": "Markdown",
             "type": "string"
           },
           "quizzes": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "discriminator": {
+                "mapping": {
+                  "multiple_choice": "#/components/schemas/ChoiceQuiz",
+                  "numeric": "#/components/schemas/NumericQuiz",
+                  "ordering": "#/components/schemas/OrderingQuiz",
+                  "single_choice": "#/components/schemas/ChoiceQuiz"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/ChoiceQuiz"
+                },
+                {
+                  "$ref": "#/components/schemas/OrderingQuiz"
+                },
+                {
+                  "$ref": "#/components/schemas/NumericQuiz"
+                }
+              ]
             },
             "title": "Quizzes",
             "type": "array"
           },
-          "widgets": {
+          "schema_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "sections": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/SectionOut"
+            },
+            "title": "Sections",
+            "type": "array"
+          },
+          "sources": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SourceSpan"
+            },
+            "title": "Sources",
+            "type": "object"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "widgets": {
+            "additionalProperties": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/ConfigWidget"
+                },
+                {
+                  "$ref": "#/components/schemas/CodeWidget"
+                },
+                {
+                  "$ref": "#/components/schemas/PendingWidget"
+                }
+              ]
             },
             "title": "Widgets",
-            "type": "array"
+            "type": "object"
           }
         },
+        "required": [
+          "title",
+          "markdown"
+        ],
         "title": "PartContentOut",
         "type": "object"
       },
@@ -795,6 +1145,48 @@
         "title": "PartSummaryOut",
         "type": "object"
       },
+      "PendingWidget": {
+        "additionalProperties": false,
+        "properties": {
+          "fallback": {
+            "discriminator": {
+              "mapping": {
+                "image": "#/components/schemas/ImageFallback",
+                "text": "#/components/schemas/TextFallback"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ImageFallback"
+              },
+              {
+                "$ref": "#/components/schemas/TextFallback"
+              }
+            ],
+            "title": "Fallback"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "fallback"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "title",
+          "fallback"
+        ],
+        "title": "PendingWidget",
+        "type": "object"
+      },
       "PlanRequest": {
         "description": "Body of ``POST /documents/{id}/plan`` (story 1.4.6).",
         "properties": {
@@ -860,9 +1252,23 @@
         "title": "PlannedPartOut",
         "type": "object"
       },
-      "QuizAttemptIn": {
+      "QuizAttemptRequest": {
         "properties": {
           "answer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "number"
+              }
+            ],
             "title": "Answer"
           },
           "part_id": {
@@ -882,15 +1288,37 @@
           "quiz_key",
           "answer"
         ],
-        "title": "QuizAttemptIn",
+        "title": "QuizAttemptRequest",
         "type": "object"
       },
-      "QuizAttemptOut": {
+      "QuizAttemptResponse": {
         "properties": {
           "correct_answer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "number"
+              }
+            ],
             "title": "Correct Answer"
           },
           "explanation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Explanation"
           },
           "is_correct": {
@@ -898,6 +1326,23 @@
             "type": "boolean"
           },
           "option_explanations": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Option Explanations"
           }
         },
@@ -907,7 +1352,7 @@
           "explanation",
           "option_explanations"
         ],
-        "title": "QuizAttemptOut",
+        "title": "QuizAttemptResponse",
         "type": "object"
       },
       "QuotaOut": {
@@ -975,6 +1420,45 @@
         "title": "RegisterRequest",
         "type": "object"
       },
+      "SectionOut": {
+        "additionalProperties": false,
+        "properties": {
+          "anchor": {
+            "title": "Anchor",
+            "type": "string"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          },
+          "source_span": {
+            "$ref": "#/components/schemas/SourceSpan"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "topic_id": {
+            "title": "Topic Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "anchor",
+          "topic_id",
+          "source_span"
+        ],
+        "title": "SectionOut",
+        "type": "object"
+      },
       "SessionStatusOut": {
         "properties": {
           "status": {
@@ -989,7 +1473,7 @@
         "title": "SessionStatusOut",
         "type": "object"
       },
-      "ShareMaterialIn": {
+      "ShareMaterialRequest": {
         "properties": {
           "document_id": {
             "format": "uuid",
@@ -1006,10 +1490,10 @@
           "document_id",
           "email"
         ],
-        "title": "ShareMaterialIn",
+        "title": "ShareMaterialRequest",
         "type": "object"
       },
-      "ShareMaterialOut": {
+      "ShareMaterialResponse": {
         "properties": {
           "status": {
             "default": "ok",
@@ -1017,7 +1501,7 @@
             "type": "string"
           }
         },
-        "title": "ShareMaterialOut",
+        "title": "ShareMaterialResponse",
         "type": "object"
       },
       "SharedWithOut": {
@@ -1049,6 +1533,45 @@
           "shared_at"
         ],
         "title": "SharedWithOut",
+        "type": "object"
+      },
+      "SourceSpan": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "title": "End",
+            "type": "integer"
+          },
+          "start": {
+            "title": "Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "SourceSpan",
+        "type": "object"
+      },
+      "TextFallback": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "type": {
+            "const": "text",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "text"
+        ],
+        "title": "TextFallback",
         "type": "object"
       },
       "TopicNodeOut": {
@@ -1105,7 +1628,7 @@
         "title": "TopicTreeOut",
         "type": "object"
       },
-      "WidgetReportIn": {
+      "WidgetReportRequest": {
         "properties": {
           "comment": {
             "anyOf": [
@@ -1145,10 +1668,10 @@
         "required": [
           "reason"
         ],
-        "title": "WidgetReportIn",
+        "title": "WidgetReportRequest",
         "type": "object"
       },
-      "WidgetReportOut": {
+      "WidgetReportResponse": {
         "properties": {
           "status": {
             "const": "ok",
@@ -1157,7 +1680,7 @@
             "type": "string"
           }
         },
-        "title": "WidgetReportOut",
+        "title": "WidgetReportResponse",
         "type": "object"
       }
     }
@@ -1202,56 +1725,6 @@
             },
             "description": "Unauthorized"
           },
-          "402": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Payment Required"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unsupported Media Type"
-          },
           "422": {
             "content": {
               "application/json": {
@@ -1281,16 +1754,6 @@
               }
             },
             "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
           }
         },
         "summary": "Login",
@@ -1313,86 +1776,6 @@
             },
             "description": "Successful Response"
           },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "402": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Payment Required"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
           "500": {
             "content": {
               "application/json": {
@@ -1402,16 +1785,6 @@
               }
             },
             "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
           }
         },
         "summary": "Logout",
@@ -1444,36 +1817,6 @@
             },
             "description": "Successful Response"
           },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "402": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Payment Required"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
           "409": {
             "content": {
               "application/json": {
@@ -1483,26 +1826,6 @@
               }
             },
             "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unsupported Media Type"
           },
           "422": {
             "content": {
@@ -1533,16 +1856,6 @@
               }
             },
             "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
           }
         },
         "summary": "Register",
@@ -1584,36 +1897,6 @@
               }
             },
             "description": "Unauthorized"
-          },
-          "402": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Payment Required"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
           },
           "413": {
             "content": {
@@ -1689,7 +1972,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DocumentImportIn"
+                "$ref": "#/components/schemas/DocumentImportRequest"
               }
             }
           },
@@ -1715,56 +1998,6 @@
               }
             },
             "description": "Unauthorized"
-          },
-          "402": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Payment Required"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unsupported Media Type"
           },
           "422": {
             "content": {
@@ -1849,16 +2082,6 @@
             },
             "description": "Unauthorized"
           },
-          "402": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Payment Required"
-          },
           "404": {
             "content": {
               "application/json": {
@@ -1868,36 +2091,6 @@
               }
             },
             "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unsupported Media Type"
           },
           "422": {
             "content": {
@@ -1909,16 +2102,6 @@
             },
             "description": "Unprocessable Content"
           },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
           "500": {
             "content": {
               "application/json": {
@@ -1928,16 +2111,6 @@
               }
             },
             "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
           }
         },
         "summary": "Get Document",
@@ -2021,26 +2194,6 @@
               }
             },
             "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unsupported Media Type"
           },
           "422": {
             "content": {
@@ -2135,16 +2288,6 @@
             },
             "description": "Unauthorized"
           },
-          "402": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Payment Required"
-          },
           "404": {
             "content": {
               "application/json": {
@@ -2165,26 +2308,6 @@
             },
             "description": "Conflict"
           },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unsupported Media Type"
-          },
           "422": {
             "content": {
               "application/json": {
@@ -2195,16 +2318,6 @@
             },
             "description": "Unprocessable Content"
           },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
           "500": {
             "content": {
               "application/json": {
@@ -2214,16 +2327,6 @@
               }
             },
             "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
           }
         },
         "summary": "Plan Document",
@@ -2268,16 +2371,6 @@
             },
             "description": "Unauthorized"
           },
-          "402": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Payment Required"
-          },
           "404": {
             "content": {
               "application/json": {
@@ -2298,26 +2391,6 @@
             },
             "description": "Conflict"
           },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unsupported Media Type"
-          },
           "422": {
             "content": {
               "application/json": {
@@ -2328,16 +2401,6 @@
             },
             "description": "Unprocessable Content"
           },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
           "500": {
             "content": {
               "application/json": {
@@ -2347,16 +2410,6 @@
               }
             },
             "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
           }
         },
         "summary": "Get Document Topics",
@@ -2372,7 +2425,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ShareMaterialIn"
+                "$ref": "#/components/schemas/ShareMaterialRequest"
               }
             }
           },
@@ -2383,7 +2436,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ShareMaterialOut"
+                  "$ref": "#/components/schemas/ShareMaterialResponse"
                 }
               }
             },
@@ -2399,16 +2452,6 @@
             },
             "description": "Unauthorized"
           },
-          "402": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Payment Required"
-          },
           "404": {
             "content": {
               "application/json": {
@@ -2418,36 +2461,6 @@
               }
             },
             "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unsupported Media Type"
           },
           "422": {
             "content": {
@@ -2459,16 +2472,6 @@
             },
             "description": "Unprocessable Content"
           },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
           "500": {
             "content": {
               "application/json": {
@@ -2478,16 +2481,6 @@
               }
             },
             "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
           }
         },
         "summary": "Share Material",
@@ -2520,76 +2513,6 @@
             },
             "description": "Unauthorized"
           },
-          "402": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Payment Required"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
           "500": {
             "content": {
               "application/json": {
@@ -2599,16 +2522,6 @@
               }
             },
             "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
           }
         },
         "summary": "Get Me",
@@ -2649,56 +2562,6 @@
             },
             "description": "Unauthorized"
           },
-          "402": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Payment Required"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unsupported Media Type"
-          },
           "422": {
             "content": {
               "application/json": {
@@ -2709,16 +2572,6 @@
             },
             "description": "Unprocessable Content"
           },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
           "500": {
             "content": {
               "application/json": {
@@ -2728,16 +2581,6 @@
               }
             },
             "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
           }
         },
         "summary": "Patch Me",
@@ -2790,56 +2633,6 @@
             },
             "description": "Unauthorized"
           },
-          "402": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Payment Required"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unsupported Media Type"
-          },
           "422": {
             "content": {
               "application/json": {
@@ -2850,16 +2643,6 @@
             },
             "description": "Unprocessable Content"
           },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
           "500": {
             "content": {
               "application/json": {
@@ -2869,16 +2652,6 @@
               }
             },
             "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
           }
         },
         "summary": "List Materials",
@@ -2911,76 +2684,6 @@
             },
             "description": "Unauthorized"
           },
-          "402": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Payment Required"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unsupported Media Type"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
           "500": {
             "content": {
               "application/json": {
@@ -2990,16 +2693,6 @@
               }
             },
             "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
           }
         },
         "summary": "Get Quota",
@@ -3044,16 +2737,6 @@
             },
             "description": "Unauthorized"
           },
-          "402": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Payment Required"
-          },
           "404": {
             "content": {
               "application/json": {
@@ -3063,36 +2746,6 @@
               }
             },
             "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unsupported Media Type"
           },
           "422": {
             "content": {
@@ -3104,16 +2757,6 @@
             },
             "description": "Unprocessable Content"
           },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
           "500": {
             "content": {
               "application/json": {
@@ -3123,16 +2766,6 @@
               }
             },
             "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
           }
         },
         "summary": "Get Part",
@@ -3148,7 +2781,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/QuizAttemptIn"
+                "$ref": "#/components/schemas/QuizAttemptRequest"
               }
             }
           },
@@ -3159,7 +2792,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/QuizAttemptOut"
+                  "$ref": "#/components/schemas/QuizAttemptResponse"
                 }
               }
             },
@@ -3175,16 +2808,6 @@
             },
             "description": "Unauthorized"
           },
-          "402": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Payment Required"
-          },
           "404": {
             "content": {
               "application/json": {
@@ -3194,36 +2817,6 @@
               }
             },
             "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unsupported Media Type"
           },
           "422": {
             "content": {
@@ -3235,16 +2828,6 @@
             },
             "description": "Unprocessable Content"
           },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
           "500": {
             "content": {
               "application/json": {
@@ -3254,16 +2837,6 @@
               }
             },
             "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
           }
         },
         "summary": "Create Attempt",
@@ -3291,7 +2864,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/WidgetReportIn"
+                "$ref": "#/components/schemas/WidgetReportRequest"
               }
             }
           },
@@ -3302,7 +2875,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WidgetReportOut"
+                  "$ref": "#/components/schemas/WidgetReportResponse"
                 }
               }
             },
@@ -3318,16 +2891,6 @@
             },
             "description": "Unauthorized"
           },
-          "402": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Payment Required"
-          },
           "404": {
             "content": {
               "application/json": {
@@ -3337,36 +2900,6 @@
               }
             },
             "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Content Too Large"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unsupported Media Type"
           },
           "422": {
             "content": {
@@ -3378,16 +2911,6 @@
             },
             "description": "Unprocessable Content"
           },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
           "500": {
             "content": {
               "application/json": {
@@ -3397,16 +2920,6 @@
               }
             },
             "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
           }
         },
         "summary": "Report Widget",

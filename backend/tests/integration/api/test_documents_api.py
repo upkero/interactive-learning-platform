@@ -21,9 +21,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.api.v1.middleware.rate_limit import limiter
 from src.app.bootstrap.container import ApplicationContainer
-from src.app.contracts.documents import DocumentStatus, MaterialRole, PartDraft, SourceType
+from src.app.contracts.documents import DocumentErrorCode, DocumentStatus, MaterialRole, PartDraft, SourceType
 from src.app.contracts.quota import LedgerOp
 from src.app.contracts.widgets import UsageStatus, WidgetKind, WidgetUsageDraft
+from src.app.exceptions.tasks import TaskDispatchError
+from src.app.models.document import Document
 from src.app.models.document_part import DocumentPart
 from src.app.models.generation_ledger import GenerationLedger
 from src.app.models.quiz_attempt import QuizAttempt
@@ -35,8 +37,9 @@ from src.app.repositories.user_material_repository import UserMaterialRepository
 from src.app.repositories.user_repository import UserRepository
 from src.app.repositories.widget_repository import WidgetRepository
 from src.app.repositories.widget_usage_repository import WidgetUsageRepository
+from src.app.storage.object_keys import parsed_markdown_key
 from src.main import create_app
-from tests.support.fakes.tasks import FakeTaskDispatcher
+from tests.support.fakes.services.task_dispatcher import FakeTaskDispatcher
 
 pytestmark = pytest.mark.integration
 
@@ -172,6 +175,45 @@ async def test_unknown_document_is_404(client: TestClient) -> None:
     assert shown.json()["error_code"] == "document_not_found"
 
 
+@pytest.mark.parametrize(
+    ("method", "path", "body", "error_code"),
+    [
+        ("GET", "/api/v1/documents/{id}", None, "document_not_found"),
+        ("GET", "/api/v1/documents/{id}/topics", None, "document_not_found"),
+        ("POST", "/api/v1/documents/{id}/plan", {"topic_ids": ["1"]}, "document_not_found"),
+        (
+            "POST",
+            "/api/v1/documents/{id}/generate",
+            {"topic_ids": ["1"], "answers": {"level": "novice", "goal": "exam", "depth": "standard"}},
+            "document_not_found",
+        ),
+        ("GET", "/api/v1/parts/{id}", None, "part_not_found"),
+        ("POST", "/api/v1/quiz-attempts", {"part_id": "{id}", "quiz_key": "q", "answer": "a"}, "quiz_not_found"),
+        (
+            "POST",
+            "/api/v1/materials/share",
+            {"document_id": "{id}", "email": "other@example.com"},
+            "document_not_found",
+        ),
+        ("POST", "/api/v1/widgets/{id}/reports", {"reason": "wrong"}, "widget_not_found"),
+    ],
+)
+async def test_missing_resources_return_domain_404(
+    client: TestClient,
+    session_factory: async_sessionmaker[AsyncSession],
+    method: str,
+    path: str,
+    body: dict[str, object] | None,
+    error_code: str,
+) -> None:
+    _register(client)
+    missing = str(uuid4())
+    request_body = {key: missing if value == "{id}" else value for key, value in body.items()} if body else None
+    response = client.request(method, path.format(id=missing), json=request_body)
+    assert response.status_code == 404, response.text
+    assert response.json()["error_code"] == error_code
+
+
 async def test_upload_without_a_cookie_is_401(client: TestClient) -> None:
     response = _upload(client)
     assert response.status_code == 401
@@ -199,6 +241,27 @@ async def test_import_creates_document_and_dispatches(client: TestClient, dispat
     assert body["role"] == "owner"
     # for gdocs the source link is the original import link
     assert body["source_url"] == "https://docs.google.com/document/d/1AbC_dEf-123/edit"
+
+
+@pytest.mark.parametrize("imported", [False, True])
+async def test_queue_failure_releases_document_capacity(
+    client: TestClient,
+    dispatcher: FakeTaskDispatcher,
+    session_factory: async_sessionmaker[AsyncSession],
+    imported: bool,
+) -> None:
+    _register(client)
+    dispatcher.fail_with = TaskDispatchError()
+    if imported:
+        response = client.post("/api/v1/documents/import", json={"url": "https://docs.google.com/document/d/abc/edit"})
+    else:
+        response = _upload(client)
+    assert response.status_code == 503 and response.json()["error_code"] == "queue_unavailable"
+    async with session_factory() as session:
+        document = (await session.scalars(select(Document))).one()
+        assert document.status == "failed" and document.error_code == "enqueue_failed"
+    dispatcher.fail_with = None
+    assert _upload(client).status_code == 201
 
 
 @pytest.mark.parametrize(
@@ -230,16 +293,21 @@ async def test_quiz_attempts_are_stored(client: TestClient, session_factory: asy
             .values(
                 status="published",
                 content={
-                    "quizzes": [{"quiz_key": "q", "type": "single_choice", "correct_answer": 1, "explanation": "yes"}]
+                    "quizzes": [{"key": "q", "type": "single_choice"}],
+                    "answer_keys": {"q": {"correct_id": "a", "explanation": "yes"}},
                 },
             )
         )
-    for answer, expected in [(1, True), (2, False)]:
+    for answer, expected in [("a", True), ("b", False)]:
         response = client.post(
             "/api/v1/quiz-attempts", json={"part_id": str(part_id), "quiz_key": "q", "answer": answer}
         )
         assert response.status_code == 200, response.text
         assert response.json()["is_correct"] is expected
+    invalid = client.post("/api/v1/quiz-attempts", json={"part_id": str(part_id), "quiz_key": "q", "answer": ["a"]})
+    assert invalid.status_code == 422 and invalid.json()["error_code"] == "invalid_quiz_answer"
+    missing = client.post("/api/v1/quiz-attempts", json={"part_id": str(part_id), "quiz_key": "missing", "answer": "a"})
+    assert missing.status_code == 404 and missing.json()["error_code"] == "quiz_not_found"
     async with session_factory() as session:
         assert (await session.scalars(select(func.count()).select_from(QuizAttempt))).one() == 2
 
@@ -358,18 +426,27 @@ async def test_topics_tree_of_a_parsed_document(
     # simulate the finished parse: parsed status, topic tree and parts
     async with session_factory() as session, session.begin():
         documents = DocumentRepository(session)
+        document = await documents.get(document_id)
+        assert document is not None
         await documents.set_status(document_id, DocumentStatus.PARSED)
         await documents.set_topic_tree(
             document_id,
-            {
-                "topics": [
-                    {
-                        "id": "topic-adaptive",
-                        "title": "Adaptive learning",
-                        "children": [{"id": "topic-chunking", "title": "Semantic chunking", "children": []}],
-                    }
-                ]
-            },
+            [
+                {
+                    "id": "topic-adaptive",
+                    "title": "Adaptive learning",
+                    "total_tokens": 320,
+                    "children": [
+                        {
+                            "id": "topic-chunking",
+                            "title": "Semantic chunking",
+                            "level": 2,
+                            "total_tokens": 178,
+                            "children": [],
+                        }
+                    ],
+                }
+            ],
         )
         await DocumentPartRepository(session).add_many(
             document_id,
@@ -402,7 +479,7 @@ async def test_topics_tree_of_a_parsed_document(
     child = topics[0]["children"][0]
     assert child["id"] == "topic-chunking"
     assert child["level"] == 2
-    assert child["tokens"] == 320
+    assert child["tokens"] == 178
 
 
 async def test_topics_of_a_parsing_document_is_409(
@@ -428,7 +505,9 @@ async def test_topics_of_a_failed_document_carries_the_parse_error(
     created = _upload(client)
     document_id = UUID(created.json()["id"])
     async with session_factory() as session, session.begin():
-        await DocumentRepository(session).set_status(document_id, DocumentStatus.FAILED, error="parse_failed")
+        await DocumentRepository(session).set_status(
+            document_id, DocumentStatus.FAILED, error_code=DocumentErrorCode.PARSE_FAILED
+        )
 
     shown = client.get(f"/api/v1/documents/{document_id}/topics")
     assert shown.status_code == 409
@@ -456,7 +535,7 @@ async def test_plan_preview_is_stable_and_leaves_the_quota_journal_untouched(
     _register(client)
     created = _upload(client, filename="lecture.pdf")
     document_id = UUID(created.json()["id"])
-    await _make_parsed(document_id, session_factory)
+    await _make_parsed(document_id, session_factory, client)
 
     first = client.post(
         f"/api/v1/documents/{document_id}/plan",
@@ -472,8 +551,8 @@ async def test_plan_preview_is_stable_and_leaves_the_quota_journal_untouched(
     assert first.json() == second.json()
 
     body = first.json()
-    assert body["cost"] == len(body["parts"]) == 1
-    assert body["parts"][0]["tokens"] == 416  # 142 + 178 + 96
+    assert body["cost"] == len(body["parts"]) == 2
+    assert body["parts"][0]["tokens"] == 320
     assert body["available"] == 20  # default monthly limit
 
     # the journal is untouched: nothing was reserved by the preview
@@ -506,7 +585,7 @@ async def _new_parsed_document(
             checksum="d" * 64,
         )
         await UserMaterialRepository(session).create(user_id=user.id, document_id=document.id, role=MaterialRole.OWNER)
-    await _make_parsed(document.id, session_factory)
+    await _make_parsed(document.id, session_factory, client)
     return document.id
 
 
@@ -528,10 +607,34 @@ async def test_generate_reserves_creates_parts_and_dispatches(
         part = await DocumentPartRepository(session).get(part_id)
         document = await DocumentRepository(session).get(document_id)
         entries = (await session.scalars(select(GenerationLedger))).all()
-    assert part is not None and part.index == 3 and part.source_markdown == "part one\n\npart two"
+    assert part is not None and part.index == 3 and part.source_markdown == "a" * 1200
     assert part.profile == {"level": "novice", "goal": "exam", "depth": "standard"}
     assert document is not None and document.status is DocumentStatus.GENERATING
     assert [(entry.op, entry.delta) for entry in entries] == [("reserve", -1)]
+
+
+async def test_upload_parse_topics_plan_generate_without_existing_parts(
+    client: TestClient, dispatcher: FakeTaskDispatcher, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    _register(client)
+    uploaded = _upload(client, filename="lecture.pdf")
+    assert uploaded.status_code == 201
+    document_id = UUID(uploaded.json()["id"])
+    await _make_parsed(document_id, session_factory, client, seed_parts=False)
+    topics = client.get(f"/api/v1/documents/{document_id}/topics")
+    assert topics.status_code == 200 and topics.json()["topics"][0]["tokens"] == 320
+    preview = client.post(f"/api/v1/documents/{document_id}/plan", json={"topic_ids": ["topic-adaptive"]})
+    assert preview.status_code == 200 and preview.json()["cost"] == 1
+    generated = client.post(
+        f"/api/v1/documents/{document_id}/generate",
+        json={"topic_ids": ["topic-adaptive"], "answers": {"level": "novice", "goal": "exam", "depth": "standard"}},
+    )
+    assert generated.status_code == 202, generated.text
+    part_id = UUID(generated.json()["part_ids"][0])
+    assert dispatcher.calls[-1] == ("enqueue_part", (part_id, True))
+    async with session_factory() as session:
+        part = await DocumentPartRepository(session).get(part_id)
+    assert part is not None and part.index == 0 and part.source_markdown == "a" * 1200
 
 
 async def test_generate_insufficient_quota_leaves_no_changes(
@@ -544,6 +647,7 @@ async def test_generate_insufficient_quota_leaves_no_changes(
     )
     assert response.status_code == 402, response.text
     assert response.json()["error_code"] == "quota_exceeded"
+    assert response.json()["available"] == 0
     async with session_factory() as session:
         parts = await DocumentPartRepository(session).list_by_document(document_id)
         document = await DocumentRepository(session).get(document_id)
@@ -560,7 +664,7 @@ async def test_plan_rejects_empty_and_unknown_selections(
     _register(client)
     created = _upload(client)
     document_id = UUID(created.json()["id"])
-    await _make_parsed(document_id, session_factory)
+    await _make_parsed(document_id, session_factory, client)
 
     empty = client.post(f"/api/v1/documents/{document_id}/plan", json={"topic_ids": []})
     assert empty.status_code == 422
@@ -590,65 +694,129 @@ async def test_shared_user_cannot_plan(client: TestClient, session_factory: asyn
     _register(client, f"owner-{uuid4()}@example.com")
     created = _upload(client)
     document_id = UUID(created.json()["id"])
-    await _make_parsed(document_id, session_factory)
+    await _make_parsed(document_id, session_factory, client)
 
     client.cookies.clear()
     _register(client, f"stranger-{uuid4()}@example.com")
+    shared_user_id = UUID(client.get("/api/v1/me").json()["id"])
+    async with session_factory() as session, session.begin():
+        await UserMaterialRepository(session).create(
+            user_id=shared_user_id, document_id=document_id, role=MaterialRole.SHARED
+        )
     response = client.post(f"/api/v1/documents/{document_id}/plan", json={"topic_ids": ["topic-adaptive"]})
     assert response.status_code == 404
     assert response.json()["error_code"] == "document_not_found"
+    generated = client.post(
+        f"/api/v1/documents/{document_id}/generate",
+        json={"topic_ids": ["topic-adaptive"], "answers": {"level": "novice", "goal": "exam", "depth": "standard"}},
+    )
+    assert generated.status_code == 404
+    async with session_factory() as session:
+        part = (await DocumentPartRepository(session).list_by_document(document_id))[0]
+    assert client.get(f"/api/v1/parts/{part.id}").status_code == 200
 
 
-async def _make_parsed(document_id: UUID, session_factory: async_sessionmaker[AsyncSession]) -> None:
+async def _make_parsed(
+    document_id: UUID, session_factory: async_sessionmaker[AsyncSession], client: TestClient, *, seed_parts: bool = True
+) -> None:
     """Simulate a finished parse: parsed status, tree and parts (dev seed shape)."""
     async with session_factory() as session, session.begin():
         documents = DocumentRepository(session)
+        document = await documents.get(document_id)
+        assert document is not None
         await documents.set_status(document_id, DocumentStatus.PARSED)
         await documents.set_topic_tree(
             document_id,
-            {
-                "topics": [
-                    {
-                        "id": "topic-adaptive",
-                        "title": "Adaptive learning",
-                        "children": [
-                            {"id": "topic-chunking", "title": "Semantic chunking", "children": []},
-                            {"id": "topic-tree", "title": "Topic tree", "children": []},
-                        ],
-                    },
-                    {"id": "topic-quota", "title": "Quota and generation pipeline", "children": []},
-                ]
-            },
-        )
-        await DocumentPartRepository(session).add_many(
-            document_id,
             [
-                PartDraft(
-                    index=0,
-                    title="What adaptive learning is",
-                    topic_ids=["topic-adaptive", "topic-chunking"],
-                    source_markdown="part one",
-                    token_count=142,
-                    profile={},
-                ),
-                PartDraft(
-                    index=1,
-                    title="Topic tree and semantic chunks",
-                    topic_ids=["topic-chunking", "topic-tree"],
-                    source_markdown="part two",
-                    token_count=178,
-                    profile={},
-                ),
-                PartDraft(
-                    index=2,
-                    title="Quota and generation pipeline",
-                    topic_ids=["topic-quota"],
-                    source_markdown="part three",
-                    token_count=96,
-                    profile={},
-                ),
+                {
+                    "id": "topic-adaptive",
+                    "title": "Adaptive learning",
+                    "level": 1,
+                    "start": 0,
+                    "end": 1200,
+                    "own_tokens": 142,
+                    "total_tokens": 320,
+                    "page": 1,
+                    "image_ids": [],
+                    "children": [
+                        {
+                            "id": "topic-chunking",
+                            "title": "Semantic chunking",
+                            "level": 2,
+                            "start": 0,
+                            "end": 600,
+                            "own_tokens": 178,
+                            "total_tokens": 178,
+                            "page": 1,
+                            "image_ids": [],
+                            "children": [],
+                        },
+                        {
+                            "id": "topic-tree",
+                            "title": "Topic tree",
+                            "level": 2,
+                            "start": 600,
+                            "end": 1200,
+                            "own_tokens": 0,
+                            "total_tokens": 0,
+                            "page": 1,
+                            "image_ids": [],
+                            "children": [],
+                        },
+                    ],
+                },
+                {
+                    "id": "topic-quota",
+                    "title": "Quota and generation pipeline",
+                    "level": 1,
+                    "start": 1200,
+                    "end": 1800,
+                    "own_tokens": 96,
+                    "total_tokens": 96,
+                    "page": 2,
+                    "image_ids": [],
+                    "children": [],
+                },
             ],
         )
+        if seed_parts:
+            await DocumentPartRepository(session).add_many(
+                document_id,
+                [
+                    PartDraft(
+                        index=0,
+                        title="What adaptive learning is",
+                        topic_ids=["topic-adaptive", "topic-chunking"],
+                        source_markdown="part one",
+                        token_count=142,
+                        profile={},
+                    ),
+                    PartDraft(
+                        index=1,
+                        title="Topic tree and semantic chunks",
+                        topic_ids=["topic-chunking", "topic-tree"],
+                        source_markdown="part two",
+                        token_count=178,
+                        profile={},
+                    ),
+                    PartDraft(
+                        index=2,
+                        title="Quota and generation pipeline",
+                        topic_ids=["topic-quota"],
+                        source_markdown="part three",
+                        token_count=96,
+                        profile={},
+                    ),
+                ],
+            )
+
+    container = cast(ApplicationContainer, cast(FastAPI, client.app).state.container)
+    await container.object_storage.put_object(
+        bucket="documents",
+        key=parsed_markdown_key(document.owner_id, document_id),
+        data=("a" * 1200 + "b" * 600).encode(),
+        content_type="text/markdown",
+    )
 
 
 async def test_the_third_upload_in_processing_is_429(

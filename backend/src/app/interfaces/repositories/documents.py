@@ -1,10 +1,9 @@
 """Protocols of the document aggregate repositories."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 from uuid import UUID
 
-from src.app.contracts.documents.document_details import SharedUserInfo
 from src.app.contracts.documents.document_record import DocumentRecord
 from src.app.contracts.documents.image_draft import ImageDraft
 from src.app.contracts.documents.image_record import ImageRecord
@@ -12,7 +11,14 @@ from src.app.contracts.documents.material_details import MaterialDetails
 from src.app.contracts.documents.material_record import MaterialRecord
 from src.app.contracts.documents.part_draft import PartDraft
 from src.app.contracts.documents.part_record import PartRecord
-from src.app.contracts.documents.statuses import DocumentStatus, MaterialRole, PartStatus, SourceType
+from src.app.contracts.documents.shared_user_info import SharedUserInfo
+from src.app.contracts.documents.statuses import (
+    DocumentErrorCode,
+    DocumentStatus,
+    MaterialRole,
+    PartStatus,
+    SourceType,
+)
 
 
 class DocumentRepositoryProtocol(Protocol):
@@ -42,10 +48,14 @@ class DocumentRepositoryProtocol(Protocol):
         document_id: UUID,
         status: DocumentStatus,
         *,
-        error: str | None = None,
+        error_code: DocumentErrorCode | None = None,
     ) -> DocumentRecord | None: ...
 
-    async def set_topic_tree(self, document_id: UUID, topic_tree: dict[str, Any]) -> DocumentRecord | None: ...
+    async def set_topic_tree(
+        self,
+        document_id: UUID,
+        topic_tree: Sequence[Mapping[str, Any]],
+    ) -> DocumentRecord | None: ...
 
     async def count_active(self, owner_id: UUID, *, exclude: UUID | None = None) -> int: ...
 

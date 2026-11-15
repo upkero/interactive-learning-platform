@@ -9,6 +9,7 @@ class WidgetsError(BaseAppException):
 
 class WidgetNotFoundError(WidgetsError):
     status_code = 404
+    public = True
     error_code = "widget_not_found"
     default_detail = "Widget not found."
 

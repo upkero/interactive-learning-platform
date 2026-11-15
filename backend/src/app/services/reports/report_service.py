@@ -6,7 +6,6 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.widgets import ReportReason
-from src.app.core.decision_log import DecisionLog
 from src.app.core.settings.reports import ReportsSettings
 from src.app.exceptions.widgets import WidgetNotFoundError
 from src.app.interfaces.repositories.widgets import (
@@ -14,6 +13,7 @@ from src.app.interfaces.repositories.widgets import (
     WidgetRepositoryProtocol,
     WidgetUsageRepositoryProtocol,
 )
+from src.app.observability.decision_log import DecisionLog
 
 
 class ReportService:
@@ -63,7 +63,7 @@ class ReportService:
             if count >= threshold:
                 excluded = await self._widgets(session).exclude_if_active(widget_id)
         if excluded:
-            self._decision_log.widget_excluded(widget_id=widget_id, reporters=count, threshold=threshold)
+            self._decision_log.widget_excluded(widget_id=str(widget_id), reporters=count, threshold=threshold)
 
 
 __all__ = ["ReportService"]

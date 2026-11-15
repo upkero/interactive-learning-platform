@@ -1,0 +1,51 @@
+[
+    {
+        "id": "topic-adaptive",
+        "title": "Adaptive learning",
+        "level": 1,
+        "start": 0,
+        "end": 1200,
+        "own_tokens": 142,
+        "total_tokens": 320,
+        "page": 1,
+        "image_ids": [],
+        "children": [
+            {
+                "id": "topic-chunking",
+                "title": "Semantic chunking",
+                "level": 2,
+                "start": 0,
+                "end": 600,
+                "own_tokens": 178,
+                "total_tokens": 178,
+                "page": 1,
+                "image_ids": [],
+                "children": []
+            },
+            {
+                "id": "topic-tree",
+                "title": "Topic tree",
+                "level": 2,
+                "start": 600,
+                "end": 1200,
+                "own_tokens": 0,
+                "total_tokens": 0,
+                "page": 1,
+                "image_ids": [],
+                "children": []
+            }
+        ]
+    },
+    {
+        "id": "topic-quota",
+        "title": "Quota and generation pipeline",
+        "level": 1,
+        "start": 1200,
+        "end": 1800,
+        "own_tokens": 96,
+        "total_tokens": 96,
+        "page": 2,
+        "image_ids": [],
+        "children": []
+    }
+]

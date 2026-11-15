@@ -1,7 +1,6 @@
 """Distinct concurrent reports exclude a widget and hide it from search."""
 
 import asyncio
-from unittest.mock import Mock
 from uuid import UUID
 
 import pytest
@@ -9,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents import MaterialRole, PartDraft, SourceType
 from src.app.contracts.widgets import ReportReason, UsageStatus, WidgetKind, WidgetStatus, WidgetUsageDraft
-from src.app.core.decision_log import DecisionLog
 from src.app.core.settings.reports import ReportsSettings
+from src.app.observability.decision_log import DecisionLog
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
 from src.app.repositories.report_repository import ReportRepository
@@ -21,6 +20,7 @@ from src.app.repositories.widget_repository import WidgetRepository
 from src.app.repositories.widget_usage_repository import WidgetUsageRepository
 from src.app.services.reports.report_service import ReportService
 from src.app.services.widgets.widget_search import WidgetSearch
+from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
 
 pytestmark = pytest.mark.integration
 
@@ -65,7 +65,8 @@ async def test_three_concurrent_reports_exclude_widget(session_factory: async_se
             is_paraphrase=False,
             embedding=embedding,
         )
-    decisions = Mock(spec=DecisionLog)
+    metrics = RecordingMetricsCollector()
+    decisions = DecisionLog(metrics=metrics)
 
     async def report(user_id: UUID) -> None:
         service = ReportService(
@@ -92,4 +93,4 @@ async def test_three_concurrent_reports_exclude_widget(session_factory: async_se
         assert result is not None and result.status is WidgetStatus.EXCLUDED
         assert await WidgetSearch(WidgetRepository(session)).search(embedding) == []
         assert await ReportRepository(session).count_by_widget(widget.id) == 3
-    decisions.widget_excluded.assert_called_once_with(widget_id=widget.id, reporters=3, threshold=3)
+    assert metrics.counters == ["widgets.excluded"]

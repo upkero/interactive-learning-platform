@@ -1,4 +1,4 @@
-"""Profile updates preserve fields that were not provided."""
+"""Profile updates affect only the authenticated account."""
 
 from typing import cast
 from uuid import uuid4
@@ -13,6 +13,20 @@ from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.repositories.users import FakeUserRepository
 
 pytestmark = pytest.mark.unit
+
+
+async def test_profile_updates_only_provided_fields_and_rejects_deleted_user() -> None:
+    users = FakeUserRepository()
+    user = await users.create(email="profile@example.com", password_hash="hash", display_name="Before")
+    session = FakeSession()
+    service = ProfileService(
+        session_factory=cast(async_sessionmaker[AsyncSession], lambda: session), users=lambda _: users
+    )
+    updated = await service.update(user.id, ProfileUpdate(provided=frozenset({"display_name"}), display_name=None))
+    assert updated.display_name is None and updated.locale == user.locale
+    with pytest.raises(NotAuthenticatedError):
+        await service.update(uuid4(), ProfileUpdate(provided=frozenset()))
+    assert session.committed == 1
 
 
 async def test_patch_changes_only_provided_field() -> None:

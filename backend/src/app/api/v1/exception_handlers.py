@@ -43,6 +43,14 @@ async def handle_app_exception(request: Request, exc: BaseAppException) -> JSONR
             exc_info=exc,
             extra={"request_id": getattr(request.state, "request_id", "-")},
         )
+    if not type(exc).public or exc.error_code != type(exc).error_code:
+        if exc.status_code < 500:
+            logger.error(
+                "Internal application error",
+                exc_info=exc,
+                extra={"request_id": getattr(request.state, "request_id", "-")},
+            )
+        return _error_response(500, "Internal server error", "internal_server_error")
     return _error_response(exc.status_code, exc.detail, exc.error_code, extra=exc.extra)
 
 

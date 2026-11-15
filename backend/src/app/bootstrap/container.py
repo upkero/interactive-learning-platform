@@ -5,7 +5,6 @@ import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from src.app.core.clock import SystemClock
-from src.app.core.decision_log import DecisionLog
 from src.app.core.settings.app import get_app_settings
 from src.app.core.settings.auth import AuthSettings, get_auth_settings
 from src.app.core.settings.celery import get_celery_settings
@@ -18,6 +17,8 @@ from src.app.db.session import build_engine, build_session_factory
 from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.llm.factory import create_llm_client
+from src.app.observability.decision_log import DecisionLog
+from src.app.observability.noop_metrics_collector import NoopMetricsCollector
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
 from src.app.repositories.generation_ledger_repository import GenerationLedgerRepository
@@ -36,7 +37,7 @@ from src.app.services.documents.import_service import ImportService
 from src.app.services.documents.material_query_service import MaterialQueryService
 from src.app.services.documents.part_query_service import PartQueryService
 from src.app.services.documents.quiz_check_service import QuizCheckService
-from src.app.services.documents.splitting import TopicTreePlanner
+from src.app.services.documents.topic_per_part_planner import TopicPerPartPlanner
 from src.app.services.documents.upload_service import UploadService
 from src.app.services.quota.quota_ledger import QuotaLedger
 from src.app.services.quota.quota_service import QuotaService
@@ -140,7 +141,8 @@ class ApplicationContainer:
             materials=UserMaterialRepository,
             parts=DocumentPartRepository,
             users=UserRepository,
-            planner=TopicTreePlanner(),
+            planner=TopicPerPartPlanner(),
+            storage=self.object_storage,
             ledger=self.quota_ledger,
             dispatcher=self.task_dispatcher,
             settings=self.processing_settings,
@@ -173,7 +175,7 @@ class ApplicationContainer:
             reports=ReportRepository,
             usages=WidgetUsageRepository,
             widgets=WidgetRepository,
-            decision_log=DecisionLog(),
+            decision_log=DecisionLog(metrics=NoopMetricsCollector()),
             settings=self.reports_settings,
         )
 

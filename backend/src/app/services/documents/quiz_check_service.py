@@ -1,6 +1,7 @@
 """Check and persist answers to published quizzes."""
 
 from collections.abc import Callable
+from math import isclose
 from typing import Any
 from uuid import UUID
 
@@ -13,26 +14,33 @@ from src.app.interfaces.repositories.documents import DocumentPartRepositoryProt
 from src.app.interfaces.repositories.quizzes import QuizAttemptRepositoryProtocol
 
 
-def check_answer(quiz: dict[str, Any], answer: Any) -> QuizCheckResult:
-    kind = quiz.get("type", "single_choice" if "correct_index" in quiz else None)
-    correct = quiz.get("correct_answer", quiz.get("correct_index"))
+def check_answer(quiz: dict[str, Any], key: dict[str, Any], answer: Any) -> QuizCheckResult:
+    kind = quiz.get("type")
     if kind == "single_choice":
-        if type(answer) not in (str, int):
+        correct = key.get("correct_id")
+        if not isinstance(correct, str):
+            raise QuizNotFoundError()
+        if type(answer) is not str:
             raise InvalidQuizAnswerError()
         is_correct = answer == correct
     elif kind in ("multiple_choice", "ordering"):
-        if not isinstance(answer, list) or any(type(item) not in (str, int) for item in answer):
+        if not isinstance(answer, list) or any(type(item) is not str for item in answer):
             raise InvalidQuizAnswerError()
-        expected = quiz.get("correct_order", correct)
-        is_correct = answer == expected if kind == "ordering" else set(answer) == set(expected or [])
+        if len(set(answer)) != len(answer):
+            raise InvalidQuizAnswerError()
+        correct = key.get("correct_order" if kind == "ordering" else "correct_ids")
+        if not isinstance(correct, list) or any(not isinstance(item, str) for item in correct):
+            raise QuizNotFoundError()
+        is_correct = answer == correct if kind == "ordering" else set(answer) == set(correct)
     elif kind == "numeric":
+        correct = key.get("answer")
         if type(answer) not in (int, float) or not isinstance(correct, int | float):
             raise InvalidQuizAnswerError()
-        tolerance = quiz.get("tolerance", 0.01)
-        is_correct = abs(answer - float(correct)) <= tolerance + 1e-9
+        is_correct = isclose(answer, float(correct), rel_tol=key.get("tolerance", 0.01), abs_tol=1e-9)
     else:
         raise InvalidQuizAnswerError()
-    return QuizCheckResult(is_correct, correct, quiz.get("explanation"), quiz.get("option_explanations"))
+    explanations = key.get("why_wrong") if kind in ("single_choice", "multiple_choice") else key.get("common_mistakes")
+    return QuizCheckResult(is_correct, correct, key.get("explanation"), explanations)
 
 
 class QuizCheckService:
@@ -56,10 +64,11 @@ class QuizCheckService:
                 raise QuizNotFoundError()
             if part.status is not PartStatus.PUBLISHED or part.content is None:
                 raise QuizNotFoundError()
-            quiz = next((item for item in part.content.get("quizzes", []) if item.get("quiz_key") == quiz_key), None)
-            if quiz is None:
+            quiz = next((item for item in part.content.get("quizzes", []) if item.get("key") == quiz_key), None)
+            key = part.content.get("answer_keys", {}).get(quiz_key)
+            if quiz is None or not isinstance(key, dict):
                 raise QuizNotFoundError()
-            result = check_answer(quiz, answer)
+            result = check_answer(quiz, key, answer)
             await self._attempts(session).create(
                 user_id=user_id,
                 part_id=part_id,

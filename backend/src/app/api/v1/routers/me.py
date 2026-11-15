@@ -10,6 +10,7 @@ from src.app.api.v1.dependencies.services import (
     ProfileServiceDep,
     QuotaServiceDep,
 )
+from src.app.api.v1.responses import error_responses
 from src.app.contracts.documents import MaterialRole
 from src.app.contracts.users import UserRecord
 from src.app.contracts.users.profile_update import ProfileUpdate
@@ -30,12 +31,14 @@ def _me(user: UserRecord) -> MeOut:
     )
 
 
-@router.get("", response_model=MeOut, status_code=200, operation_id="me_get")
+@router.get("", response_model=MeOut, status_code=200, operation_id="me_get", responses=error_responses(401, 500))
 async def get_me(user: CurrentUserDep) -> MeOut:
     return _me(user)
 
 
-@router.patch("", response_model=MeOut, status_code=200, operation_id="me_patch")
+@router.patch(
+    "", response_model=MeOut, status_code=200, operation_id="me_patch", responses=error_responses(401, 422, 500)
+)
 async def patch_me(body: MePatch, user: CurrentUserDep, service: ProfileServiceDep) -> MeOut:
     command = ProfileUpdate(
         provided=frozenset(body.model_fields_set),
@@ -46,7 +49,9 @@ async def patch_me(body: MePatch, user: CurrentUserDep, service: ProfileServiceD
     return _me(await service.update(user.id, command))
 
 
-@router.get("/quota", response_model=QuotaOut, status_code=200, operation_id="me_quota")
+@router.get(
+    "/quota", response_model=QuotaOut, status_code=200, operation_id="me_quota", responses=error_responses(401, 500)
+)
 async def get_quota(user: CurrentUserDep, service: QuotaServiceDep) -> QuotaOut:
     state = await service.current(user.id)
     return QuotaOut(
@@ -57,7 +62,13 @@ async def get_quota(user: CurrentUserDep, service: QuotaServiceDep) -> QuotaOut:
     )
 
 
-@router.get("/materials", response_model=list[MaterialOut], status_code=200, operation_id="me_materials")
+@router.get(
+    "/materials",
+    response_model=list[MaterialOut],
+    status_code=200,
+    operation_id="me_materials",
+    responses=error_responses(401, 422, 500),
+)
 async def list_materials(
     user: CurrentUserDep,
     service: MaterialQueryServiceDep,

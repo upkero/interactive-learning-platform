@@ -1,12 +1,11 @@
 """In-memory fakes of the document aggregate repositories."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from src.app.contracts.documents.document_details import SharedUserInfo
 from src.app.contracts.documents.document_record import DocumentRecord
 from src.app.contracts.documents.image_draft import ImageDraft
 from src.app.contracts.documents.image_record import ImageRecord
@@ -14,7 +13,15 @@ from src.app.contracts.documents.material_details import MaterialDetails
 from src.app.contracts.documents.material_record import MaterialRecord
 from src.app.contracts.documents.part_draft import PartDraft
 from src.app.contracts.documents.part_record import PartRecord
-from src.app.contracts.documents.statuses import DocumentStatus, MaterialRole, PartStatus, SourceType
+from src.app.contracts.documents.shared_user_info import SharedUserInfo
+from src.app.contracts.documents.statuses import (
+    DocumentErrorCode,
+    DocumentStatus,
+    MaterialRole,
+    PartStatus,
+    SourceType,
+)
+from src.app.contracts.documents.topic_node import topic_roots
 from src.app.interfaces.repositories.documents import (
     DocumentPartRepositoryProtocol,
     DocumentRepositoryProtocol,
@@ -79,7 +86,7 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
             checksum=checksum,
             status=DocumentStatus.UPLOADED,
             topic_tree=None,
-            error=None,
+            error_code=None,
             created_at=timestamp,
             updated_at=timestamp,
         )
@@ -92,19 +99,23 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
         document_id: UUID,
         status: DocumentStatus,
         *,
-        error: str | None = None,
+        error_code: DocumentErrorCode | None = None,
     ) -> DocumentRecord | None:
         row = self._documents.get(document_id)
         if row is not None:
-            updated = replace(row, status=status, error=error, updated_at=now())
+            updated = replace(row, status=status, error_code=error_code, updated_at=now())
             self._documents[document_id] = updated
             return updated
         return None
 
-    async def set_topic_tree(self, document_id: UUID, topic_tree: dict[str, Any]) -> DocumentRecord | None:
+    async def set_topic_tree(
+        self,
+        document_id: UUID,
+        topic_tree: Sequence[Mapping[str, Any]],
+    ) -> DocumentRecord | None:
         row = self._documents.get(document_id)
         if row is not None:
-            updated = replace(row, topic_tree=topic_tree, updated_at=now())
+            updated = replace(row, topic_tree=topic_roots(topic_tree), updated_at=now())
             self._documents[document_id] = updated
             return updated
         return None

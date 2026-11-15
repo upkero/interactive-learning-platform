@@ -17,6 +17,14 @@ class GenerationAnswers:
 
 
 @dataclass(frozen=True, slots=True)
+class GenerationCommand:
+    user_id: UUID
+    document_id: UUID
+    topic_ids: tuple[str, ...]
+    answers: GenerationAnswers
+
+
+@dataclass(frozen=True, slots=True)
 class GenerationStarted:
     document_id: UUID
     part_ids: tuple[UUID, ...]

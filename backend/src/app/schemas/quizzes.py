@@ -1,19 +1,18 @@
 """HTTP schemas for checking quiz answers."""
 
-from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictFloat, StrictStr
 
 
-class QuizAttemptIn(BaseModel):
+class QuizAttemptRequest(BaseModel):
     part_id: UUID
     quiz_key: str = Field(min_length=1, max_length=12)
-    answer: Any
+    answer: StrictStr | list[StrictStr] | StrictFloat
 
 
-class QuizAttemptOut(BaseModel):
+class QuizAttemptResponse(BaseModel):
     is_correct: bool
-    correct_answer: Any
-    explanation: Any
-    option_explanations: Any
+    correct_answer: str | list[str] | float
+    explanation: str | None
+    option_explanations: dict[str, str] | list[str] | None

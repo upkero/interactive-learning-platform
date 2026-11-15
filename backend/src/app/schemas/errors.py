@@ -4,6 +4,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
+from src.app.contracts.documents import DocumentErrorCode
+
 type ErrorCode = Literal[
     "request_validation_error",
     "not_authenticated",
@@ -29,25 +31,6 @@ type ErrorCode = Literal[
     "invalid_quiz_answer",
     "widget_not_found",
     "queue_unavailable",
-    "app_error",
-    "widgets_integrity_error",
-    "widget_constraint",
-    "widget_usage_duplicate",
-    "users_integrity_error",
-    "user_already_exists",
-    "quiz_integrity_error",
-    "object_storage_error",
-    "object_not_found",
-    "llm_error",
-    "llm_configuration_error",
-    "llm_input_error",
-    "llm_generation_error",
-    "quota_integrity_error",
-    "ledger_entry_duplicate",
-    "documents_integrity_error",
-    "document_part_duplicate",
-    "material_access_duplicate",
-    "upload_validation_error",
 ]
 
 
@@ -59,4 +42,4 @@ class ErrorResponse(BaseModel):
     requested: int | None = None
     status: str | None = None
     limit: int | None = None
-    reason: str | None = None
+    reason: DocumentErrorCode | None = None

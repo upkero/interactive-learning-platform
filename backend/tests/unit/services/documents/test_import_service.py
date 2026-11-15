@@ -6,9 +6,10 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.app.contracts.documents import DocumentStatus, MaterialRole, SourceType
+from src.app.contracts.documents import DocumentErrorCode, DocumentStatus, MaterialRole, SourceType
 from src.app.core.settings.processing import ProcessingSettings
 from src.app.exceptions.documents import InvalidGdocsUrlError, ProcessingLimitError
+from src.app.exceptions.tasks import TaskDispatchError
 from src.app.services.documents.import_service import ImportService, extract_gdocs_id
 from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.repositories.documents import (
@@ -16,8 +17,8 @@ from tests.support.fakes.repositories.documents import (
     FakeUserMaterialRepository,
 )
 from tests.support.fakes.repositories.users import FakeUserRepository
+from tests.support.fakes.services.task_dispatcher import FakeTaskDispatcher
 from tests.support.fakes.storage.object_storage_client import FakeObjectStorageClient
-from tests.support.fakes.tasks import FakeTaskDispatcher
 
 pytestmark = pytest.mark.unit
 
@@ -99,6 +100,19 @@ async def test_valid_link_creates_rows_and_dispatches() -> None:
     # the API must not touch the network or the object storage
     assert not storage.put_object_calls
     assert not storage.delete_object_calls
+
+
+async def test_failed_dispatch_marks_import_failed_and_releases_capacity() -> None:
+    service, documents, _materials, _storage, dispatcher = _service()
+    owner = uuid4()
+    dispatcher.fail_with = TaskDispatchError()
+    with pytest.raises(TaskDispatchError):
+        await service.import_document(owner_id=owner, url=_VALID_URL)
+    (document,) = documents._documents.values()
+    assert document.status is DocumentStatus.FAILED
+    assert document.error_code is DocumentErrorCode.ENQUEUE_FAILED
+    dispatcher.fail_with = None
+    assert (await service.import_document(owner_id=owner, url=_VALID_URL)).status is DocumentStatus.UPLOADED
 
 
 async def test_invalid_link_creates_nothing() -> None:

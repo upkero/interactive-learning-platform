@@ -8,10 +8,11 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.app.contracts.documents import DocumentStatus, MaterialRole, SourceType
+from src.app.contracts.documents import DocumentErrorCode, DocumentStatus, MaterialRole, SourceType
 from src.app.core.settings.processing import ProcessingSettings
 from src.app.core.settings.upload import get_upload_settings
 from src.app.exceptions.documents import ProcessingLimitError
+from src.app.exceptions.tasks import TaskDispatchError
 from src.app.services.documents.file_inspector import FileInspector
 from src.app.services.documents.upload_service import UploadService
 from tests.support.fakes.db.session import FakeSession
@@ -20,8 +21,8 @@ from tests.support.fakes.repositories.documents import (
     FakeUserMaterialRepository,
 )
 from tests.support.fakes.repositories.users import FakeUserRepository
+from tests.support.fakes.services.task_dispatcher import FakeTaskDispatcher
 from tests.support.fakes.storage.object_storage_client import FakeObjectStorageClient
-from tests.support.fakes.tasks import FakeTaskDispatcher
 
 pytestmark = pytest.mark.unit
 
@@ -137,6 +138,21 @@ async def test_db_failure_deletes_the_uploaded_object() -> None:
     assert not documents._documents
     assert dispatcher.calls == []
     assert session.rolled_back == 1
+
+
+async def test_queue_failure_keeps_object_and_releases_upload_capacity() -> None:
+    service, documents, _materials, storage, dispatcher, _session = _service()
+    owner = uuid4()
+    dispatcher.fail_with = TaskDispatchError()
+    with pytest.raises(TaskDispatchError):
+        await service.upload(owner_id=owner, filename="lecture.pdf", title=None, stream=_Stream(_PDF_BYTES))
+    (document,) = documents._documents.values()
+    assert document.status is DocumentStatus.FAILED and document.error_code is DocumentErrorCode.ENQUEUE_FAILED
+    assert storage.delete_object_calls == []
+    dispatcher.fail_with = None
+    assert (
+        await service.upload(owner_id=owner, filename="lecture.pdf", title=None, stream=_Stream(_PDF_BYTES))
+    ).status == DocumentStatus.UPLOADED
 
 
 async def test_third_document_in_processing_is_rejected() -> None:

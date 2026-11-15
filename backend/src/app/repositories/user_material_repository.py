@@ -7,9 +7,9 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.app.contracts.documents.document_details import SharedUserInfo
 from src.app.contracts.documents.material_details import MaterialDetails
 from src.app.contracts.documents.material_record import MaterialRecord
+from src.app.contracts.documents.shared_user_info import SharedUserInfo
 from src.app.contracts.documents.statuses import MaterialRole
 from src.app.exceptions.documents import DocumentsIntegrityError, MaterialAccessDuplicateError
 from src.app.interfaces.repositories.documents import UserMaterialRepositoryProtocol

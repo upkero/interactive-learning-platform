@@ -3,12 +3,13 @@
 from collections.abc import Callable
 from contextlib import suppress
 from copy import deepcopy
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents.part_details import PartDetails
+from src.app.contracts.documents.public_part_content import PublicPartContent
 from src.app.contracts.documents.statuses import PartStatus
 from src.app.exceptions.documents import PartNotFoundError
 from src.app.interfaces.repositories.documents import (
@@ -20,29 +21,13 @@ from src.app.interfaces.repositories.widgets import WidgetRepositoryProtocol
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.services.documents.image_url_resolver import ImageUrlResolver
 
-_SECRET_QUIZ_FIELDS = frozenset(
-    {
-        "correct",
-        "correct_index",
-        "correct_indices",
-        "correct_answer",
-        "correct_answers",
-        "explanation",
-        "option_explanations",
-        "is_correct",
-        "answer",
-        "answers",
-        "tolerance",
-    }
-)
 
-
-def _public_quiz(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {k: _public_quiz(v) for k, v in value.items() if k not in _SECRET_QUIZ_FIELDS}
-    if isinstance(value, list):
-        return [_public_quiz(v) for v in value]
-    return value
+def _public_quiz(quiz: dict[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {key: quiz[key] for key in ("key", "ref", "type", "prompt", "unit") if key in quiz}
+    for field in ("options", "items"):
+        if field in quiz:
+            result[field] = [{key: option[key] for key in ("id", "text") if key in option} for option in quiz[field]]
+    return result
 
 
 def _collect_image_ids(value: Any) -> set[UUID]:
@@ -88,13 +73,16 @@ class PartQueryService:
                 return PartDetails(part=part, content=None)
 
             content = deepcopy(part.content)
-            content["quizzes"] = _public_quiz(content.get("quizzes", []))
+            content.pop("answer_keys", None)
+            content["quizzes"] = [_public_quiz(quiz) for quiz in content.get("quizzes", [])]
             await self._fill_widgets(content, self._widgets(session))
             await self._fill_images(content, self._images(session))
-            return PartDetails(part=part, content=content)
+            # Stored pipeline JSON is checked against the HTTP whitelist at the boundary.
+            return PartDetails(part=part, content=cast(PublicPartContent, content))
 
     async def _fill_widgets(self, content: dict[str, Any], widgets: WidgetRepositoryProtocol) -> None:
-        directives = [d for d in content.get("widgets", []) if d.get("widget_id") is not None]
+        slots = content.get("widgets", {})
+        directives = [d for d in slots.values() if d.get("status") == "ready" and d.get("widget_id") is not None]
         if not directives:
             return
         widget_ids = [UUID(str(d["widget_id"])) for d in directives]

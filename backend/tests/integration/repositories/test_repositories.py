@@ -125,9 +125,7 @@ async def test_document_repository_roundtrip(session_factory: SessionFactory) ->
         parsed = await repository.set_status(document_id, DocumentStatus.PARSED)
         assert parsed is not None and parsed.status is DocumentStatus.PARSED
 
-        with_tree = await repository.set_topic_tree(
-            document_id, {"topics": [{"id": "t1", "title": "T", "children": []}]}
-        )
+        with_tree = await repository.set_topic_tree(document_id, [{"id": "t1", "title": "T", "children": []}])
         assert with_tree is not None and with_tree.topic_tree is not None
 
         # uploaded, parsing and generating count as in processing (1.4.13);

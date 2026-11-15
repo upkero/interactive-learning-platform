@@ -12,7 +12,9 @@ DB write fails, the MinIO object is deleted":
    and ``user_materials`` with ``role='owner'``;
 4. only after the transaction — ``enqueue_parse`` through the
    TaskDispatcher;
-5. any failure in step 3 deletes the just-uploaded object.
+5. any failure in step 3 deletes the just-uploaded object; a broker
+   failure in step 4 keeps the object (a retry needs it) and moves the
+   document to ``failed``/``enqueue_failed`` before the 503 is raised.
 """
 
 import logging
@@ -23,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents import DocumentRecord, MaterialRole, SourceType
 from src.app.core.settings.processing import ProcessingSettings
+from src.app.exceptions.tasks import TaskDispatchError
 from src.app.interfaces.repositories.documents import (
     DocumentRepositoryProtocol,
     UserMaterialRepositoryProtocol,
@@ -30,6 +33,7 @@ from src.app.interfaces.repositories.documents import (
 from src.app.interfaces.repositories.users import UserRepositoryProtocol
 from src.app.interfaces.services.task_dispatcher import TaskDispatcher
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
+from src.app.services.documents.document_failure import mark_enqueue_failed
 from src.app.services.documents.file_inspector import FileInspector, InspectedFile, UploadStream
 from src.app.services.documents.processing_capacity import assert_processing_capacity
 from src.app.storage.object_keys import source_key
@@ -112,7 +116,19 @@ class UploadService:
                 logger.warning("Failed to delete an orphaned upload object.", extra={"object_key": object_key})
             raise
         # network call after the transaction, never inside it
-        await self._dispatcher.enqueue_parse(document.id)
+        try:
+            await self._dispatcher.enqueue_parse(document.id)
+        except TaskDispatchError as exc:
+            # the row is committed, so the document must not hang in
+            # "uploaded": failed/enqueue_failed releases the limit slot and
+            # lets the client retry. The stored object stays for that retry.
+            await mark_enqueue_failed(
+                session_factory=self._session_factory,
+                documents=self._documents,
+                document_id=document.id,
+                error_detail=str(exc),
+            )
+            raise
         return document
 
     @staticmethod

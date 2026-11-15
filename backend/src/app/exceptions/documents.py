@@ -15,12 +15,14 @@ class DocumentNotFoundError(DocumentsError):
     """
 
     status_code = 404
+    public = True
     error_code = "document_not_found"
     default_detail = "Document not found."
 
 
 class PartNotFoundError(DocumentsError):
     status_code = 404
+    public = True
     error_code = "part_not_found"
     default_detail = "Part not found."
 
@@ -34,6 +36,7 @@ class DocumentNotReadyError(DocumentsError):
     """
 
     status_code = 409
+    public = True
     error_code = "document_not_ready"
     default_detail = "The document is not parsed yet."
 
@@ -42,6 +45,7 @@ class ProcessingLimitError(DocumentsError):
     """The user already has the maximum number of documents in processing."""
 
     status_code = 429
+    public = True
     error_code = "processing_limit_reached"
     default_detail = "Too many documents are currently being processed."
 
@@ -80,6 +84,7 @@ class UnsupportedFileTypeError(UploadValidationError):
     """Content does not match a supported type (PDF/DOCX/Markdown) or is broken."""
 
     status_code = 415
+    public = True
     error_code = "unsupported_file_type"
     default_detail = "Unsupported file type."
 
@@ -88,6 +93,7 @@ class FileTooLargeError(UploadValidationError):
     """The file exceeds its size limit (413)."""
 
     status_code = 413
+    public = True
     error_code = "file_too_large"
     default_detail = "The file is too large."
 
@@ -96,6 +102,7 @@ class TooManyPagesError(UploadValidationError):
     """The PDF exceeds the page limit (422)."""
 
     status_code = 422
+    public = True
     error_code = "too_many_pages"
     default_detail = "The document has too many pages."
 
@@ -109,6 +116,7 @@ class InvalidGdocsUrlError(DocumentsError):
     """
 
     status_code = 422
+    public = True
     error_code = "invalid_gdocs_url"
     default_detail = "The URL must point to a Google Docs document."
 
@@ -117,6 +125,7 @@ class EmptyTopicSelectionError(DocumentsError):
     """The plan/generate request selected no topics (422)."""
 
     status_code = 422
+    public = True
     error_code = "empty_topic_selection"
     default_detail = "Select at least one topic."
 
@@ -125,5 +134,6 @@ class UnknownTopicError(DocumentsError):
     """A selected topic id does not exist in the document's tree (422)."""
 
     status_code = 422
+    public = True
     error_code = "unknown_topic"
     default_detail = "The topic is not part of this document."

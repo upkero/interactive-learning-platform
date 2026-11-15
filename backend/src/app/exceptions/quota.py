@@ -24,5 +24,6 @@ class LedgerEntryDuplicateError(QuotaIntegrityError):
 
 class QuotaExceededError(QuotaError):
     status_code = 402
+    public = True
     error_code = "quota_exceeded"
     default_detail = "Not enough generation quota."

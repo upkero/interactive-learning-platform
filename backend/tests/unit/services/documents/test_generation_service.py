@@ -8,13 +8,15 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents import DocumentStatus, MaterialRole, PartDraft, SourceType
-from src.app.contracts.documents.generation import GenerationAnswers
+from src.app.contracts.documents.generation import GenerationAnswers, GenerationCommand
 from src.app.core.clock import Clock
 from src.app.core.settings.processing import ProcessingSettings
 from src.app.exceptions.documents import DocumentNotFoundError, DocumentNotReadyError
 from src.app.exceptions.quota import QuotaExceededError
+from src.app.exceptions.tasks import TaskDispatchError
+from src.app.interfaces.storage.object_storage_client import StorageBucket
 from src.app.services.documents.generation_service import GenerationService
-from src.app.services.documents.splitting import TopicTreePlanner
+from src.app.services.documents.topic_per_part_planner import TopicPerPartPlanner
 from src.app.services.quota.quota_ledger import QuotaLedger
 from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.repositories.documents import (
@@ -24,20 +26,55 @@ from tests.support.fakes.repositories.documents import (
 )
 from tests.support.fakes.repositories.quota import FakeGenerationLedgerRepository
 from tests.support.fakes.repositories.users import FakeUserRepository
-from tests.support.fakes.tasks import FakeTaskDispatcher
+from tests.support.fakes.services.task_dispatcher import FakeTaskDispatcher
+from tests.support.fakes.storage.object_storage_client import FakeObjectStorageClient
 
 pytestmark = pytest.mark.unit
 
-_TREE = {
-    "topics": [
-        {
-            "id": "topic-adaptive",
-            "title": "Adaptive learning",
-            "children": [{"id": "topic-chunking", "title": "Semantic chunking", "children": []}],
-        },
-        {"id": "topic-quota", "title": "Quota and generation pipeline", "children": []},
-    ]
-}
+_TREE: list[dict[str, object]] = [
+    {
+        "id": "topic-adaptive",
+        "title": "Adaptive learning",
+        "level": 1,
+        "start": 0,
+        "end": 1200,
+        "own_tokens": 142,
+        "total_tokens": 320,
+        "page": 1,
+        "image_ids": [],
+        "children": [
+            {
+                "id": "topic-chunking",
+                "title": "Semantic chunking",
+                "level": 2,
+                "start": 0,
+                "end": 600,
+                "own_tokens": 178,
+                "total_tokens": 178,
+                "page": 1,
+                "image_ids": [],
+                "children": [],
+            }
+        ],
+    },
+    {
+        "id": "topic-quota",
+        "title": "Quota and generation pipeline",
+        "level": 1,
+        "start": 1200,
+        "end": 1800,
+        "own_tokens": 96,
+        "total_tokens": 96,
+        "page": 2,
+        "image_ids": [],
+        "children": [],
+    },
+]
+
+
+class _ParsedStorage(FakeObjectStorageClient):
+    async def get_object(self, *, bucket: StorageBucket, key: str) -> bytes:
+        return ("a" * 1200 + "b" * 600).encode()
 
 
 class _FixedClock(Clock):
@@ -77,7 +114,8 @@ def _service() -> tuple[
         materials=lambda _: materials,
         parts=lambda _: parts,
         users=lambda _: users,
-        planner=TopicTreePlanner(),
+        planner=TopicPerPartPlanner(),
+        storage=_ParsedStorage(),
         ledger=_ledger(users, ledger_repo),
         dispatcher=FakeTaskDispatcher(),
         settings=ProcessingSettings(max_active_documents=2),
@@ -150,9 +188,9 @@ async def test_plan_returns_preview_cost_and_available() -> None:
 
     # adaptive: 142+178 (each part counted once per subtree); quota: 96.
     # The short quota part (< 5000) is glued to the previous one (1.10.1)
-    assert [(p.index, p.tokens) for p in plan.parts] == [(0, 416)]
-    assert plan.parts[0].title == "Adaptive learning, Quota and generation pipeline"
-    assert len(plan.parts) == 1
+    assert [(p.index, p.tokens) for p in plan.parts] == [(0, 320), (1, 96)]
+    assert plan.parts[0].title == "Adaptive learning"
+    assert len(plan.parts) == 2
     assert available == 20  # default monthly limit, nothing reserved
 
     # the plan is a pure read: the journal is untouched
@@ -225,16 +263,19 @@ async def test_start_reserves_and_dispatches_after_commit() -> None:
         materials=lambda _: materials,
         parts=lambda _: parts,
         users=lambda _: users,
-        planner=TopicTreePlanner(),
+        planner=TopicPerPartPlanner(),
+        storage=_ParsedStorage(),
         ledger=_ledger(users, ledger_repo),
         dispatcher=dispatcher,
         settings=ProcessingSettings(max_active_documents=2),
     )
     started = await service.start(
-        user_id=owner,
-        document_id=document_id,
-        topic_ids=["topic-adaptive"],
-        answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+        GenerationCommand(
+            user_id=owner,
+            document_id=document_id,
+            topic_ids=("topic-adaptive",),
+            answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+        )
     )
     assert session.committed == 1
     assert started.cost == 1
@@ -244,8 +285,69 @@ async def test_start_reserves_and_dispatches_after_commit() -> None:
     part = await parts.get(started.part_ids[0])
     assert part is not None
     assert part.index == 3
-    assert part.source_markdown == "part one\n\npart two"
+    assert part.source_markdown == "a" * 1200
     assert (await users.get(owner)).profile["last_answers"]["goal"] == "exam"  # type: ignore[union-attr]
+
+
+async def test_generate_fresh_parsed_document_without_existing_parts() -> None:
+    service, documents, materials, parts, _ledger, users = _service()
+    owner = await users.create(email="fresh@example.com", password_hash="hash")
+    document = await documents.create(
+        owner_id=owner.id,
+        title="Fresh",
+        source_type=SourceType.UPLOAD,
+        object_key="source.md",
+        mime_type="text/markdown",
+        size_bytes=1,
+        checksum="a" * 64,
+    )
+    await documents.set_status(document.id, DocumentStatus.PARSED)
+    await documents.set_topic_tree(document.id, _TREE)
+    await materials.create(user_id=owner.id, document_id=document.id, role=MaterialRole.OWNER)
+    preview, _ = await service.plan(
+        user_id=owner.id, document_id=document.id, topic_ids=["topic-adaptive", "topic-chunking"]
+    )
+    started = await service.start(
+        GenerationCommand(
+            user_id=owner.id,
+            document_id=document.id,
+            topic_ids=("topic-adaptive", "topic-chunking"),
+            answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+        )
+    )
+    assert started.cost == len(preview.parts) == 1
+    part = await parts.get(started.part_ids[0])
+    assert part is not None and part.source_markdown == "a" * 1200
+
+
+async def test_queue_failure_keeps_committed_parts_and_reservation() -> None:
+    _, documents, materials, parts, ledger_repo, users = _service()
+    owner, document_id = await _parsed_document(users, documents, materials, parts)
+    session = FakeSession()
+    service = GenerationService(
+        session_factory=_factory(session),
+        documents=lambda _: documents,
+        materials=lambda _: materials,
+        parts=lambda _: parts,
+        users=lambda _: users,
+        planner=TopicPerPartPlanner(),
+        storage=_ParsedStorage(),
+        ledger=_ledger(users, ledger_repo),
+        dispatcher=FakeTaskDispatcher(fail_with=TaskDispatchError()),
+        settings=ProcessingSettings(max_active_documents=2),
+    )
+    with pytest.raises(TaskDispatchError):
+        await service.start(
+            GenerationCommand(
+                user_id=owner,
+                document_id=document_id,
+                topic_ids=("topic-adaptive",),
+                answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+            )
+        )
+    assert session.committed == 1
+    assert len(await parts.list_by_document(document_id)) == 4
+    assert ledger_repo._entries[0].delta == -1
 
 
 async def test_start_rejects_insufficient_quota_without_writes() -> None:
@@ -262,17 +364,20 @@ async def test_start_rejects_insufficient_quota_without_writes() -> None:
         materials=lambda _: materials,
         parts=lambda _: parts,
         users=lambda _: users,
-        planner=TopicTreePlanner(),
+        planner=TopicPerPartPlanner(),
+        storage=_ParsedStorage(),
         ledger=_ledger(users, ledger_repo),
         dispatcher=dispatcher,
         settings=ProcessingSettings(max_active_documents=2),
     )
     with pytest.raises(QuotaExceededError) as error:
         await service.start(
-            user_id=owner,
-            document_id=document_id,
-            topic_ids=["topic-adaptive"],
-            answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+            GenerationCommand(
+                user_id=owner,
+                document_id=document_id,
+                topic_ids=("topic-adaptive",),
+                answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+            )
         )
     assert error.value.extra == {"available": 0, "requested": 1}
     assert len(await parts.list_by_document(document_id)) == 3
@@ -304,17 +409,20 @@ async def test_start_requires_owner_even_when_processing_limit_is_full() -> None
         materials=lambda _: materials,
         parts=lambda _: parts,
         users=lambda _: users,
-        planner=TopicTreePlanner(),
+        planner=TopicPerPartPlanner(),
+        storage=_ParsedStorage(),
         ledger=_ledger(users, ledger_repo),
         dispatcher=FakeTaskDispatcher(),
         settings=ProcessingSettings(max_active_documents=2),
     )
     with pytest.raises(DocumentNotFoundError):
         await service.start(
-            user_id=stranger.id,
-            document_id=document_id,
-            topic_ids=["topic-adaptive"],
-            answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+            GenerationCommand(
+                user_id=stranger.id,
+                document_id=document_id,
+                topic_ids=("topic-adaptive",),
+                answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+            )
         )
     assert (await documents.get(document_id)).owner_id == owner  # type: ignore[union-attr]
     assert ledger_repo._entries == []

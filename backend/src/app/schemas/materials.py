@@ -5,10 +5,10 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr
 
 
-class ShareMaterialIn(BaseModel):
+class ShareMaterialRequest(BaseModel):
     document_id: UUID
     email: EmailStr
 
 
-class ShareMaterialOut(BaseModel):
+class ShareMaterialResponse(BaseModel):
     status: str = "ok"

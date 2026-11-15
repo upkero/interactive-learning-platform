@@ -9,12 +9,14 @@ class QuizzesError(BaseAppException):
 
 class QuizNotFoundError(QuizzesError):
     status_code = 404
+    public = True
     error_code = "quiz_not_found"
     default_detail = "Quiz not found."
 
 
 class InvalidQuizAnswerError(QuizzesError):
     status_code = 422
+    public = True
     error_code = "invalid_quiz_answer"
     default_detail = "Answer has an invalid format."
 

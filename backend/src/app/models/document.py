@@ -7,6 +7,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, String, Text, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.app.models.base import Base
@@ -29,6 +30,12 @@ class Document(Base):
             "status IN ('uploaded', 'parsing', 'parsed', 'generating', 'done', 'failed')",
             name="ck_documents_status",
         ),
+        CheckConstraint(
+            "error_code IS NULL OR error_code IN ("
+            "'parse_failed', 'gdocs_not_public', 'gdocs_import_failed', "
+            "'too_many_pages', 'empty_document', 'enqueue_failed')",
+            name="ck_documents_error_code",
+        ),
         Index("ix_documents_owner_id", "owner_id"),
     )
 
@@ -43,7 +50,7 @@ class Document(Base):
     page_count: Mapped[int | None]
     checksum: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(16), server_default="uploaded")
-    topic_tree: Mapped[dict[str, Any] | None]
-    error: Mapped[str | None] = mapped_column(Text)
+    topic_tree: Mapped[list[dict[str, Any]] | dict[str, Any] | None] = mapped_column(JSONB)
+    error_code: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
