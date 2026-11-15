@@ -22,4 +22,5 @@ class UsageStatus(StrEnum):
 class ReportReason(StrEnum):
     WRONG = "wrong"
     BROKEN = "broken"
+    UGLY = "ugly"
     OTHER = "other"

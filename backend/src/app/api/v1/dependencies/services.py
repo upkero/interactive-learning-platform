@@ -20,9 +20,11 @@ from src.app.repositories.document_repository import DocumentRepository
 from src.app.repositories.generation_ledger_repository import GenerationLedgerRepository
 from src.app.repositories.image_repository import ImageRepository
 from src.app.repositories.quiz_attempt_repository import QuizAttemptRepository
+from src.app.repositories.report_repository import ReportRepository
 from src.app.repositories.user_material_repository import UserMaterialRepository
 from src.app.repositories.user_repository import UserRepository
 from src.app.repositories.widget_repository import WidgetRepository
+from src.app.repositories.widget_usage_repository import WidgetUsageRepository
 from src.app.services.documents.document_query_service import DocumentQueryService
 from src.app.services.documents.file_inspector import FileInspector
 from src.app.services.documents.generation_service import GenerationService
@@ -33,6 +35,7 @@ from src.app.services.documents.quiz_check_service import QuizCheckService
 from src.app.services.documents.splitting import TopicTreePlanner
 from src.app.services.documents.upload_service import UploadService
 from src.app.services.quota.ledger import QuotaLedger
+from src.app.services.reports.report_service import ReportService
 
 
 def get_task_dispatcher(container: ContainerDep) -> TaskDispatcher:
@@ -149,6 +152,13 @@ def get_quiz_check_service(session: DBSessionDep) -> QuizCheckService:
 
 
 QuizCheckServiceDep = Annotated[QuizCheckService, Depends(get_quiz_check_service)]
+
+
+def get_report_service(session: DBSessionDep) -> ReportService:
+    return ReportService(session=session, reports=ReportRepository(session), usages=WidgetUsageRepository(session))
+
+
+ReportServiceDep = Annotated[ReportService, Depends(get_report_service)]
 
 
 __all__ = [

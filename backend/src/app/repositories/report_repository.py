@@ -28,6 +28,7 @@ class ReportRepository(ReportRepositoryProtocol):
             part_id=row.part_id,
             reason=ReportReason(row.reason),
             created_at=row.created_at,
+            comment=row.comment,
         )
 
     async def get_by_widget_and_user(self, widget_id: UUID, user_id: UUID) -> ReportRecord | None:
@@ -43,6 +44,7 @@ class ReportRepository(ReportRepositoryProtocol):
         user_id: UUID,
         reason: ReportReason,
         part_id: UUID | None = None,
+        comment: str | None = None,
     ) -> ReportRecord | None:
         """Insert a report unless the same user already reported the widget.
 
@@ -56,6 +58,7 @@ class ReportRepository(ReportRepositoryProtocol):
                 user_id=user_id,
                 part_id=part_id,
                 reason=reason.value,
+                comment=comment,
             )
             .on_conflict_do_nothing(index_elements=[Report.widget_id, Report.user_id])
             .returning(Report)

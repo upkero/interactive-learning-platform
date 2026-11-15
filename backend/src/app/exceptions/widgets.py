@@ -3,6 +3,12 @@
 from src.app.exceptions.base import BaseAppException
 
 
+class WidgetNotFoundError(BaseAppException):
+    status_code = 404
+    error_code = "widget_not_found"
+    default_detail = "Widget not found."
+
+
 class WidgetsIntegrityError(BaseAppException):
     """Base exception for widget integrity violations."""
 

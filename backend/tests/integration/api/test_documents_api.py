@@ -22,13 +22,17 @@ from src.app.api.v1.dependencies.services import get_task_dispatcher
 from src.app.api.v1.middleware.rate_limit import limiter
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.documents import DocumentStatus, MaterialRole, PartDraft, SourceType
+from src.app.contracts.widgets import UsageStatus, WidgetKind, WidgetUsageDraft
 from src.app.models.document_part import DocumentPart
 from src.app.models.generation_ledger import GenerationLedger
 from src.app.models.quiz_attempt import QuizAttempt
+from src.app.models.report import Report
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
 from src.app.repositories.user_material_repository import UserMaterialRepository
 from src.app.repositories.user_repository import UserRepository
+from src.app.repositories.widget_repository import WidgetRepository
+from src.app.repositories.widget_usage_repository import WidgetUsageRepository
 from src.main import create_app
 from tests.support.fakes.tasks import FakeTaskDispatcher
 
@@ -234,6 +238,33 @@ async def test_quiz_attempts_are_stored(client: TestClient, session_factory: asy
         assert response.json()["is_correct"] is expected
     async with session_factory() as session:
         assert (await session.scalars(select(func.count()).select_from(QuizAttempt))).one() == 2
+
+
+async def test_widget_reports_require_access_and_are_idempotent(
+    client: TestClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    document_id = await _new_parsed_document(client, session_factory)
+    async with session_factory() as session, session.begin():
+        part = (await DocumentPartRepository(session).list_by_document(document_id))[0]
+        widget = await WidgetRepository(session).create(kind=WidgetKind.CODE, source_tsx="x", compiled_js="x")
+        await WidgetUsageRepository(session).add_many(
+            part.id,
+            [
+                WidgetUsageDraft(
+                    widget_id=widget.id, directive_ref="slot", position=0, params=None, status=UsageStatus.READY
+                )
+            ],
+        )
+    url = f"/api/v1/widgets/{widget.id}/reports"
+    body = {"part_id": str(part.id), "reason": "ugly", "comment": "first"}
+    assert client.post(url, json=body).status_code == 200
+    assert client.post(url, json={**body, "comment": "duplicate"}).status_code == 200
+    client.cookies.clear()
+    _register(client)
+    assert client.post(url, json=body).status_code == 404
+    async with session_factory() as session:
+        records = (await session.scalars(select(Report))).all()
+    assert len(records) == 1 and records[0].comment == "first"
 
 
 async def test_import_counts_towards_the_processing_limit(client: TestClient) -> None:

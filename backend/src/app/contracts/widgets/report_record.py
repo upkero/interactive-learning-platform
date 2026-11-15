@@ -15,3 +15,4 @@ class ReportRecord:
     part_id: UUID | None
     reason: ReportReason
     created_at: datetime
+    comment: str | None = None

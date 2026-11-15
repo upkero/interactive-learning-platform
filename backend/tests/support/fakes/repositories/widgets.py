@@ -137,9 +137,22 @@ class FakeWidgetUsageRepository(WidgetUsageRepositoryProtocol):
 
     def __init__(self) -> None:
         self._usages: dict[UUID, WidgetUsageRecord] = {}
+        self.accessible_parts: set[tuple[UUID, UUID]] = set()
 
     async def get(self, usage_id: UUID) -> WidgetUsageRecord | None:
         return self._usages.get(usage_id)
+
+    async def find_accessible_part(self, widget_id: UUID, user_id: UUID, part_id: UUID | None) -> UUID | None:
+        return next(
+            (
+                usage.part_id
+                for usage in self._usages.values()
+                if usage.widget_id == widget_id
+                and (user_id, usage.part_id) in self.accessible_parts
+                and (part_id is None or part_id == usage.part_id)
+            ),
+            None,
+        )
 
     async def add_many(self, part_id: UUID, usages: Sequence[WidgetUsageDraft]) -> list[WidgetUsageRecord]:
         created: list[WidgetUsageRecord] = []
@@ -183,6 +196,7 @@ class FakeReportRepository(ReportRepositoryProtocol):
         user_id: UUID,
         reason: ReportReason,
         part_id: UUID | None = None,
+        comment: str | None = None,
     ) -> ReportRecord | None:
         if await self.get_by_widget_and_user(widget_id, user_id) is not None:
             return None
@@ -193,6 +207,7 @@ class FakeReportRepository(ReportRepositoryProtocol):
             part_id=part_id,
             reason=reason,
             created_at=now(),
+            comment=comment,
         )
         self._reports[record.id] = record
         return record

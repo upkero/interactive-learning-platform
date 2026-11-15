@@ -3,12 +3,15 @@
 from collections.abc import Sequence
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.widgets import UsageStatus, WidgetUsageDraft, WidgetUsageRecord
 from src.app.exceptions.widgets import WidgetsIntegrityError, WidgetUsageDuplicateError
 from src.app.interfaces.repositories.widgets import WidgetUsageRepositoryProtocol
+from src.app.models.document_part import DocumentPart
+from src.app.models.user_material import UserMaterial
 from src.app.models.widget_usage import WidgetUsage
 from src.app.repositories._errors import constraint_name
 
@@ -37,6 +40,17 @@ class WidgetUsageRepository(WidgetUsageRepositoryProtocol):
     async def get(self, usage_id: UUID) -> WidgetUsageRecord | None:
         row = await self._session.get(WidgetUsage, usage_id)
         return self._to_record(row) if row is not None else None
+
+    async def find_accessible_part(self, widget_id: UUID, user_id: UUID, part_id: UUID | None) -> UUID | None:
+        stmt = (
+            select(WidgetUsage.part_id)
+            .join(DocumentPart, DocumentPart.id == WidgetUsage.part_id)
+            .join(UserMaterial, UserMaterial.document_id == DocumentPart.document_id)
+            .where(WidgetUsage.widget_id == widget_id, UserMaterial.user_id == user_id)
+        )
+        if part_id is not None:
+            stmt = stmt.where(WidgetUsage.part_id == part_id)
+        return (await self._session.scalars(stmt.limit(1))).first()
 
     async def add_many(self, part_id: UUID, usages: Sequence[WidgetUsageDraft]) -> list[WidgetUsageRecord]:
         """Insert new usages; only flush, never commit."""
