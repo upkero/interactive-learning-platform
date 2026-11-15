@@ -2,15 +2,19 @@
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.documents.document_details import SharedUserInfo
+from src.app.contracts.documents.material_details import MaterialDetails
 from src.app.contracts.documents.material_record import MaterialRecord
 from src.app.contracts.documents.statuses import MaterialRole
 from src.app.exceptions.documents import DocumentsIntegrityError, MaterialAccessDuplicateError
 from src.app.interfaces.repositories.documents import UserMaterialRepositoryProtocol
+from src.app.models.document import Document
+from src.app.models.document_part import DocumentPart
 from src.app.models.user import User
 from src.app.models.user_material import UserMaterial
 from src.app.repositories._errors import constraint_name
@@ -59,6 +63,54 @@ class UserMaterialRepository(UserMaterialRepositoryProtocol):
     async def list_by_user(self, user_id: UUID) -> list[MaterialRecord]:
         rows = await self._session.scalars(select(UserMaterial).where(UserMaterial.user_id == user_id))
         return [self._to_record(row) for row in rows.all()]
+
+    async def share_if_absent(self, user_id: UUID, document_id: UUID, shared_by: UUID) -> None:
+        statement = (
+            insert(UserMaterial)
+            .values(
+                user_id=user_id,
+                document_id=document_id,
+                role=MaterialRole.SHARED.value,
+                shared_by=shared_by,
+            )
+            .on_conflict_do_nothing(index_elements=[UserMaterial.user_id, UserMaterial.document_id])
+        )
+        await self._session.execute(statement)
+
+    async def list_details(self, user_id: UUID, role: MaterialRole) -> list[MaterialDetails]:
+        stmt = (
+            select(
+                Document,
+                UserMaterial.role,
+                User.email,
+                func.count(DocumentPart.id),
+                func.count(DocumentPart.id).filter(DocumentPart.status == "published"),
+                func.count(DocumentPart.id).filter(DocumentPart.status == "failed"),
+            )
+            .join(UserMaterial, UserMaterial.document_id == Document.id)
+            .outerjoin(User, User.id == UserMaterial.shared_by)
+            .outerjoin(DocumentPart, DocumentPart.document_id == Document.id)
+            .where(UserMaterial.user_id == user_id, UserMaterial.role == role.value)
+            .group_by(Document.id, UserMaterial.role, User.email)
+            .order_by(Document.updated_at.desc())
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return [
+            MaterialDetails(
+                document_id=doc.id,
+                title=doc.title,
+                source_type=doc.source_type,
+                mime_type=doc.mime_type,
+                status=doc.status,
+                role=material_role,
+                shared_by_email=email,
+                parts_total=total,
+                parts_published=published,
+                parts_failed=failed,
+                updated_at=doc.updated_at,
+            )
+            for doc, material_role, email, total, published, failed in rows
+        ]
 
     async def list_shared_with(self, document_id: UUID) -> list[SharedUserInfo]:
         """Users with the shared role on the document, oldest share first."""

@@ -30,12 +30,14 @@ from src.app.services.documents.file_inspector import FileInspector
 from src.app.services.documents.generation_service import GenerationService
 from src.app.services.documents.image_url_resolver import ImageUrlResolver
 from src.app.services.documents.import_service import ImportService
+from src.app.services.documents.material_query_service import MaterialQueryService
 from src.app.services.documents.part_query_service import PartQueryService
 from src.app.services.documents.quiz_check_service import QuizCheckService
 from src.app.services.documents.splitting import TopicTreePlanner
 from src.app.services.documents.upload_service import UploadService
 from src.app.services.quota.ledger import QuotaLedger
 from src.app.services.reports.report_service import ReportService
+from src.app.services.sharing.sharing_service import SharingService
 
 
 def get_task_dispatcher(container: ContainerDep) -> TaskDispatcher:
@@ -159,6 +161,20 @@ def get_report_service(session: DBSessionDep) -> ReportService:
 
 
 ReportServiceDep = Annotated[ReportService, Depends(get_report_service)]
+
+
+def get_sharing_service(session: DBSessionDep) -> SharingService:
+    return SharingService(session=session, materials=UserMaterialRepository(session), users=UserRepository(session))
+
+
+SharingServiceDep = Annotated[SharingService, Depends(get_sharing_service)]
+
+
+def get_material_query_service(session: DBSessionDep) -> MaterialQueryService:
+    return MaterialQueryService(UserMaterialRepository(session))
+
+
+MaterialQueryServiceDep = Annotated[MaterialQueryService, Depends(get_material_query_service)]
 
 
 __all__ = [

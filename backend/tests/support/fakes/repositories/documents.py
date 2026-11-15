@@ -10,6 +10,7 @@ from src.app.contracts.documents.document_details import SharedUserInfo
 from src.app.contracts.documents.document_record import DocumentRecord
 from src.app.contracts.documents.image_draft import ImageDraft
 from src.app.contracts.documents.image_record import ImageRecord
+from src.app.contracts.documents.material_details import MaterialDetails
 from src.app.contracts.documents.material_record import MaterialRecord
 from src.app.contracts.documents.part_draft import PartDraft
 from src.app.contracts.documents.part_record import PartRecord
@@ -214,6 +215,7 @@ class FakeUserMaterialRepository(UserMaterialRepositoryProtocol):
 
     def __init__(self) -> None:
         self._materials: dict[tuple[UUID, UUID], MaterialRecord] = {}
+        self.details: list[MaterialDetails] = []
         # email/display_name are not part of MaterialRecord; tests register
         # the user info alongside shared materials
         self._user_info: dict[UUID, tuple[str, str | None]] = {}
@@ -235,6 +237,17 @@ class FakeUserMaterialRepository(UserMaterialRepositoryProtocol):
     async def get_role(self, user_id: UUID, document_id: UUID) -> MaterialRole | None:
         row = self._materials.get((user_id, document_id))
         return row.role if row is not None else None
+
+    async def share_if_absent(self, user_id: UUID, document_id: UUID, shared_by: UUID) -> None:
+        if (user_id, document_id) not in self._materials:
+            await self.create(user_id=user_id, document_id=document_id, role=MaterialRole.SHARED, shared_by=shared_by)
+
+    async def list_details(self, user_id: UUID, role: MaterialRole) -> list[MaterialDetails]:
+        return [
+            detail
+            for detail in self.details
+            if (user_id, detail.document_id) in self._materials and detail.role == role.value
+        ]
 
     async def create(
         self,

@@ -8,6 +8,7 @@ from src.app.contracts.documents.document_details import SharedUserInfo
 from src.app.contracts.documents.document_record import DocumentRecord
 from src.app.contracts.documents.image_draft import ImageDraft
 from src.app.contracts.documents.image_record import ImageRecord
+from src.app.contracts.documents.material_details import MaterialDetails
 from src.app.contracts.documents.material_record import MaterialRecord
 from src.app.contracts.documents.part_draft import PartDraft
 from src.app.contracts.documents.part_record import PartRecord
@@ -95,6 +96,10 @@ class UserMaterialRepositoryProtocol(Protocol):
     ) -> MaterialRecord: ...
 
     async def list_by_user(self, user_id: UUID) -> list[MaterialRecord]: ...
+
+    async def share_if_absent(self, user_id: UUID, document_id: UUID, shared_by: UUID) -> None: ...
+
+    async def list_details(self, user_id: UUID, role: MaterialRole) -> list[MaterialDetails]: ...
 
     async def list_shared_with(self, document_id: UUID) -> list[SharedUserInfo]:
         """Users with the shared role on the document, oldest share first."""

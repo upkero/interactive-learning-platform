@@ -267,6 +267,30 @@ async def test_widget_reports_require_access_and_are_idempotent(
     assert len(records) == 1 and records[0].comment == "first"
 
 
+async def test_share_material_shows_for_recipient_without_spending_quota(
+    client: TestClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    email = f"recipient-{uuid4()}@example.com"
+    _register(client, email)
+    recipient_cookie = client.cookies.get("grasp_session")
+    assert recipient_cookie is not None
+    client.cookies.clear()
+    document_id = await _new_parsed_document(client, session_factory)
+    body = {"document_id": str(document_id), "email": email}
+    missing = client.post("/api/v1/materials/share", json={**body, "email": "missing@example.com"})
+    assert missing.status_code == 422 and missing.json()["error_code"] == "recipient_not_registered"
+    assert client.post("/api/v1/materials/share", json=body).status_code == 200
+    assert client.post("/api/v1/materials/share", json=body).status_code == 200
+    client.cookies.clear()
+    client.cookies.set("grasp_session", recipient_cookie)
+    listed = client.get("/api/v1/me/materials?filter=shared")
+    assert listed.status_code == 200, listed.text
+    assert [item["document_id"] for item in listed.json()] == [str(document_id)]
+    assert client.post("/api/v1/materials/share", json=body).status_code == 404
+    async with session_factory() as session:
+        assert (await session.scalars(select(func.count()).select_from(GenerationLedger))).one() == 0
+
+
 async def test_import_counts_towards_the_processing_limit(client: TestClient) -> None:
     _register(client)
     first = client.post("/api/v1/documents/import", json={"url": "https://docs.google.com/document/d/first/edit"})
