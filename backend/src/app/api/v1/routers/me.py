@@ -1,13 +1,18 @@
-"""Material listing needed by sharing."""
+"""Profile, quota and material listing endpoints (stories 1.4.11, 1.4.14)."""
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from src.app.api.v1.dependencies.auth import CurrentUserDep
-from src.app.api.v1.dependencies.services import MaterialQueryServiceDep, ProfileServiceDep, QuotaLedgerDep
+from src.app.api.v1.dependencies.services import (
+    MaterialQueryServiceDep,
+    ProfileServiceDep,
+    QuotaServiceDep,
+)
 from src.app.contracts.documents import MaterialRole
 from src.app.contracts.users import UserRecord
+from src.app.contracts.users.profile_update import ProfileUpdate
 from src.app.schemas.me import LastAnswersOut, MaterialOut, MeOut, MePatch, QuotaOut
 
 router = APIRouter(prefix="/me", tags=["me"])
@@ -32,21 +37,23 @@ async def get_me(user: CurrentUserDep) -> MeOut:
 
 @router.patch("", response_model=MeOut, status_code=200, operation_id="me_patch")
 async def patch_me(body: MePatch, user: CurrentUserDep, service: ProfileServiceDep) -> MeOut:
-    fields = body.model_dump(exclude_unset=True)
-    for key in ("locale", "notify_email"):
-        if fields.get(key, True) is None:
-            fields.pop(key)
-    return _me(await service.update(user.id, fields))
+    command = ProfileUpdate(
+        provided=frozenset(body.model_fields_set),
+        display_name=body.display_name,
+        locale=body.locale,
+        notify_email=body.notify_email,
+    )
+    return _me(await service.update(user.id, command))
 
 
 @router.get("/quota", response_model=QuotaOut, status_code=200, operation_id="me_quota")
-async def get_quota(user: CurrentUserDep, ledger: QuotaLedgerDep) -> QuotaOut:
-    status = await ledger.status(user.id)
+async def get_quota(user: CurrentUserDep, service: QuotaServiceDep) -> QuotaOut:
+    state = await service.current(user.id)
     return QuotaOut(
-        monthly_limit=status.monthly_limit,
-        available=status.available,
-        period_start=status.period_start,
-        period_end=status.period_end,
+        monthly_limit=state.monthly_limit,
+        available=state.available,
+        period_start=state.period.start,
+        period_end=state.period.end,
     )
 
 
@@ -54,35 +61,22 @@ async def get_quota(user: CurrentUserDep, ledger: QuotaLedgerDep) -> QuotaOut:
 async def list_materials(
     user: CurrentUserDep,
     service: MaterialQueryServiceDep,
-    filter: Literal["mine", "shared"] = "mine",
+    role_filter: Annotated[Literal["mine", "shared"], Query(alias="filter")] = "mine",
 ) -> list[MaterialOut]:
-    role = MaterialRole.OWNER if filter == "mine" else MaterialRole.SHARED
+    role = MaterialRole.OWNER if role_filter == "mine" else MaterialRole.SHARED
     records = await service.list_materials(user.id, role)
-    result = []
-    for record in records:
-        source_type = (
-            "gdocs"
-            if record.source_type == "gdocs"
-            else (
-                "pdf"
-                if record.mime_type == "application/pdf"
-                else "docx"
-                if record.mime_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                else "md"
-            )
+    return [
+        MaterialOut(
+            document_id=record.document_id,
+            title=record.title,
+            source_type=record.source_kind,
+            status=record.status,
+            role=role.value,
+            shared_by_email=record.shared_by_email,
+            parts_total=record.parts_total,
+            parts_published=record.parts_published,
+            parts_failed=record.parts_failed,
+            updated_at=record.updated_at,
         )
-        result.append(
-            MaterialOut(
-                document_id=record.document_id,
-                title=record.title,
-                source_type=source_type,
-                status=record.status,
-                role=role.value,
-                shared_by_email=record.shared_by_email,
-                parts_total=record.parts_total,
-                parts_published=record.parts_published,
-                parts_failed=record.parts_failed,
-                updated_at=record.updated_at,
-            )
-        )
-    return result
+        for record in records
+    ]

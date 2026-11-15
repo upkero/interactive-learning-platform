@@ -1,9 +1,10 @@
 """Unit tests 1.4.5: the topic tree read with token sums."""
 
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents import (
     DocumentStatus,
@@ -14,6 +15,7 @@ from src.app.contracts.documents import (
 )
 from src.app.exceptions.documents import DocumentNotFoundError, DocumentNotReadyError
 from src.app.services.documents.document_query_service import DocumentQueryService
+from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.repositories.documents import (
     FakeDocumentPartRepository,
     FakeDocumentRepository,
@@ -48,10 +50,13 @@ def _service() -> tuple[
     documents = FakeDocumentRepository()
     materials = FakeUserMaterialRepository()
     parts = FakeDocumentPartRepository()
+    session = FakeSession()
+    factory = cast(async_sessionmaker[AsyncSession], lambda: session)
     service = DocumentQueryService(
-        documents=documents,
-        materials=materials,
-        parts=parts,
+        session_factory=factory,
+        documents=lambda _: documents,
+        materials=lambda _: materials,
+        parts=lambda _: parts,
         storage=FakeObjectStorageClient(),
     )
     return service, documents, materials, parts
@@ -160,7 +165,7 @@ async def test_failed_document_answers_409_with_the_parse_error() -> None:
 
     with pytest.raises(DocumentNotReadyError) as exc_info:
         await service.get_topic_tree(user_id=owner, document_id=document_id)
-    assert exc_info.value.detail == "parse_failed"
+    assert exc_info.value.extra == {"status": "failed", "reason": "parse_failed"}
 
 
 async def test_no_access_is_404() -> None:

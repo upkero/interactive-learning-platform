@@ -7,11 +7,13 @@ identifier, not from the user string, which closes SSRF.
 """
 
 import re
-from uuid import UUID
+from collections.abc import Callable
+from uuid import UUID, uuid4
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents import DocumentRecord, MaterialRole, SourceType
+from src.app.core.settings.processing import ProcessingSettings
 from src.app.exceptions.documents import InvalidGdocsUrlError
 from src.app.interfaces.repositories.documents import (
     DocumentRepositoryProtocol,
@@ -19,13 +21,17 @@ from src.app.interfaces.repositories.documents import (
 )
 from src.app.interfaces.repositories.users import UserRepositoryProtocol
 from src.app.interfaces.services.task_dispatcher import TaskDispatcher
-from src.app.services.documents.processing_limits import assert_processing_capacity
+from src.app.services.documents.processing_capacity import assert_processing_capacity
 
 # `https://docs.google.com/document/d/{id}/...`: the identifier is the
 # opaque segment right after ``/document/d/``; Sheets/Slides and other
-# domains do not match. A trailing path (``/edit``, ``/export``) is
-# allowed, the bare id link is not part of the contract.
-_GDOCS_URL_RE = re.compile(r"^https://docs\.google\.com/document/d/([A-Za-z0-9_-]+)(/[^\s]*)?$")
+# domains do not match. The optional ``u/<n>/`` account prefix and a
+# query string are tolerated, the bare id link is not part of the
+# contract. The first character must be alphanumeric: ``/d/e/2PACX-...``
+# is the Drive "export token" form, not a document id.
+_GDOCS_URL_RE = re.compile(
+    r"^https://docs\.google\.com/document/(?:u/\d+/)?d/(?!e/)([A-Za-z0-9][A-Za-z0-9_-]*)(/[^?\s]*)?(?:\?[^\s]*)?$"
+)
 
 # a stable placeholder for the not-yet-exported source object; the
 # worker addresses the export by the identifier in source_uri
@@ -38,7 +44,7 @@ def extract_gdocs_id(url: str) -> str:
     """Return the document identifier of a Google Docs link or raise 422."""
     match = _GDOCS_URL_RE.match(url.strip())
     if match is None:
-        raise InvalidGdocsUrlError(extra={"url": url})
+        raise InvalidGdocsUrlError()
     return match.group(1)
 
 
@@ -46,48 +52,48 @@ class ImportService:
     def __init__(
         self,
         *,
-        session: AsyncSession,
+        session_factory: async_sessionmaker[AsyncSession],
         dispatcher: TaskDispatcher,
-        documents: DocumentRepositoryProtocol,
-        materials: UserMaterialRepositoryProtocol,
-        users: UserRepositoryProtocol,
+        documents: Callable[[AsyncSession], DocumentRepositoryProtocol],
+        materials: Callable[[AsyncSession], UserMaterialRepositoryProtocol],
+        users: Callable[[AsyncSession], UserRepositoryProtocol],
+        settings: ProcessingSettings,
     ) -> None:
-        self._session = session
+        self._session_factory = session_factory
         self._dispatcher = dispatcher
         self._documents = documents
         self._materials = materials
         self._users = users
+        self._settings = settings
 
     async def import_document(self, *, owner_id: UUID, url: str) -> DocumentRecord:
         # validation happens before the transaction: a bad link must not
         # even open one
         gdocs_id = extract_gdocs_id(url)
-        try:
+        async with self._session_factory() as session, session.begin():
             await assert_processing_capacity(
-                users=self._users,
-                documents=self._documents,
+                users=self._users(session),
+                documents=self._documents(session),
                 owner_id=owner_id,
+                limit=self._settings.max_active_documents,
             )
-            document = await self._documents.create(
+            document = await self._documents(session).create(
+                id=uuid4(),
                 owner_id=owner_id,
                 # the real title is fetched by the worker during export
                 title="Untitled",
                 source_type=SourceType.GDOCS,
-                source_uri=url,
+                source_uri=url.strip(),
                 object_key=f"{GDOCS_OBJECT_KEY_PREFIX}/{gdocs_id}",
                 mime_type=GDOCS_MIME_TYPE,
                 size_bytes=0,
                 checksum=f"{GDOCS_OBJECT_KEY_PREFIX}:{gdocs_id}"[:64],
             )
-            await self._materials.create(
+            await self._materials(session).create(
                 user_id=owner_id,
                 document_id=document.id,
                 role=MaterialRole.OWNER,
             )
-            await self._session.commit()
-        except Exception:
-            await self._session.rollback()
-            raise
-        # network call after commit, never inside the transaction
+        # network call after the transaction, never inside it
         await self._dispatcher.enqueue_parse(document.id)
         return document

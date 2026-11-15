@@ -6,13 +6,15 @@ from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents import DocumentStatus, MaterialRole, SourceType
+from src.app.core.settings.processing import ProcessingSettings
 from src.app.core.settings.upload import get_upload_settings
 from src.app.exceptions.documents import ProcessingLimitError
 from src.app.services.documents.file_inspector import FileInspector
 from src.app.services.documents.upload_service import UploadService
+from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.repositories.documents import (
     FakeDocumentRepository,
     FakeUserMaterialRepository,
@@ -26,25 +28,6 @@ pytestmark = pytest.mark.unit
 # a real (tiny but valid) PDF from the story 1.3 fixtures
 _PDF_PATH = Path(__file__).resolve().parents[3] / "support" / "fixtures" / "files" / "sample.pdf"
 _PDF_BYTES = _PDF_PATH.read_bytes()
-
-
-class _FakeSession:
-    def __init__(self) -> None:
-        self.committed = False
-        self.rolled_back = False
-        self._rollback_targets: list[object] = []
-
-    def on_rollback(self, *targets: object) -> None:
-        self._rollback_targets.extend(targets)
-
-    async def commit(self) -> None:
-        self.committed = True
-        self._rollback_targets.clear()
-
-    async def rollback(self) -> None:
-        self.rolled_back = True
-        for target in self._rollback_targets:
-            target.rollback()  # type: ignore[attr-defined]
 
 
 class _Stream:
@@ -71,22 +54,25 @@ def _service(
     FakeUserMaterialRepository,
     FakeObjectStorageClient,
     FakeTaskDispatcher,
-    _FakeSession,
+    FakeSession,
 ]:
-    session = _FakeSession()
+    session = FakeSession()
     documents = documents or FakeDocumentRepository()
     materials = materials or FakeUserMaterialRepository()
     storage = FakeObjectStorageClient()
     dispatcher = FakeTaskDispatcher()
+    session.on_commit(documents, materials)
     session.on_rollback(documents, materials)
+    factory = cast(async_sessionmaker[AsyncSession], lambda: session)
     service = UploadService(
-        session=cast(AsyncSession, session),
+        session_factory=factory,
         inspector=FileInspector(get_upload_settings()),
         storage=storage,
         dispatcher=dispatcher,
-        documents=documents,
-        materials=materials,
-        users=FakeUserRepository(),
+        documents=lambda _: documents,
+        materials=lambda _: materials,
+        users=lambda _: FakeUserRepository(),
+        settings=ProcessingSettings(max_active_documents=2),
     )
     return service, documents, materials, storage, dispatcher, session
 
@@ -112,14 +98,15 @@ async def test_pdf_upload_stores_object_and_creates_rows_and_dispatches() -> Non
     assert len(storage.put_object_calls) == 1
     bucket, key, data, content_type = storage.put_object_calls[0]
     assert bucket == "documents"
-    assert key.startswith("docs/") and key.endswith(".pdf")
+    # the key is built from the ids, never from the user file name
+    assert key == f"{owner}/{document.id}/source.pdf"
     assert key == document.object_key
     assert data == _PDF_BYTES
     assert content_type == "application/pdf"
 
     assert await documents.get(document.id) is not None
     assert await materials.get_role(owner, document.id) is MaterialRole.OWNER
-    assert session.committed is True
+    assert session.committed == 1
     assert dispatcher.calls == [("enqueue_parse", (document.id,))]
 
 
@@ -149,7 +136,7 @@ async def test_db_failure_deletes_the_uploaded_object() -> None:
     assert storage.delete_object_calls == [(uploaded_bucket, uploaded_key)]
     assert not documents._documents
     assert dispatcher.calls == []
-    assert session.rolled_back is True
+    assert session.rolled_back == 1
 
 
 async def test_third_document_in_processing_is_rejected() -> None:
@@ -166,6 +153,7 @@ async def test_third_document_in_processing_is_rejected() -> None:
             checksum="c" * 64,
         )
         await documents.set_status(record.id, status)
+    documents.checkpoint()
 
     service, _documents, _materials, storage, dispatcher, _session = _service(documents=documents)
     with pytest.raises(ProcessingLimitError) as exc_info:

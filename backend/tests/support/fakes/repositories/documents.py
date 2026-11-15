@@ -54,6 +54,7 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
     async def create(
         self,
         *,
+        id: UUID | None = None,
         owner_id: UUID,
         title: str,
         source_type: SourceType,
@@ -66,7 +67,7 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
     ) -> DocumentRecord:
         timestamp = now()
         record = DocumentRecord(
-            id=uuid4(),
+            id=id or uuid4(),
             owner_id=owner_id,
             title=title,
             source_type=source_type,
@@ -108,9 +109,11 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
             return updated
         return None
 
-    async def count_active(self, owner_id: UUID) -> int:
+    async def count_active(self, owner_id: UUID, *, exclude: UUID | None = None) -> int:
         active = {DocumentStatus.UPLOADED, DocumentStatus.PARSING, DocumentStatus.GENERATING}
-        return sum(1 for d in self._documents.values() if d.owner_id == owner_id and d.status in active)
+        return sum(
+            1 for d in self._documents.values() if d.owner_id == owner_id and d.status in active and d.id != exclude
+        )
 
 
 class FakeDocumentPartRepository(DocumentPartRepositoryProtocol):

@@ -1,7 +1,7 @@
 """Repository of documents."""
 
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -55,6 +55,7 @@ class DocumentRepository(DocumentRepositoryProtocol):
     async def create(
         self,
         *,
+        id: UUID | None = None,
         owner_id: UUID,
         title: str,
         source_type: SourceType,
@@ -66,6 +67,7 @@ class DocumentRepository(DocumentRepositoryProtocol):
         page_count: int | None = None,
     ) -> DocumentRecord:
         row = Document(
+            id=id or uuid4(),
             owner_id=owner_id,
             title=title,
             source_type=source_type.value,
@@ -108,7 +110,7 @@ class DocumentRepository(DocumentRepositoryProtocol):
         await self._session.flush()
         return self._to_record(row)
 
-    async def count_active(self, owner_id: UUID) -> int:
+    async def count_active(self, owner_id: UUID, *, exclude: UUID | None = None) -> int:
         """Count documents of an owner that are still in processing.
 
         Processing means the pipeline still has to do something with the
@@ -116,19 +118,21 @@ class DocumentRepository(DocumentRepositoryProtocol):
         or ``generating`` (story 1.4.13). A parsed document waits idle
         for the user's plan/generate and does not hold pipeline capacity,
         so it does not count.
+
+        ``exclude`` skips the document that is being started right now:
+        it may already be ``generating`` from a previous start.
         """
-        stmt = (
-            select(func.count())
-            .select_from(Document)
-            .where(
-                Document.owner_id == owner_id,
-                Document.status.in_(
-                    [
-                        DocumentStatus.UPLOADED.value,
-                        DocumentStatus.PARSING.value,
-                        DocumentStatus.GENERATING.value,
-                    ]
-                ),
-            )
-        )
+        conditions = [
+            Document.owner_id == owner_id,
+            Document.status.in_(
+                [
+                    DocumentStatus.UPLOADED.value,
+                    DocumentStatus.PARSING.value,
+                    DocumentStatus.GENERATING.value,
+                ]
+            ),
+        ]
+        if exclude is not None:
+            conditions.append(Document.id != exclude)
+        stmt = select(func.count()).select_from(Document).where(*conditions)
         return int((await self._session.scalars(stmt)).one())

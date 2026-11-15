@@ -1,9 +1,13 @@
-"""Integrity errors of the quota area (mapped from DB IntegrityError)."""
+"""Errors of the quota area."""
 
 from src.app.exceptions.base import BaseAppException
 
 
-class QuotaIntegrityError(BaseAppException):
+class QuotaError(BaseAppException):
+    """Base class of every quota area error."""
+
+
+class QuotaIntegrityError(QuotaError):
     """Base exception for quota ledger integrity violations."""
 
     error_code = "quota_integrity_error"
@@ -18,7 +22,7 @@ class LedgerEntryDuplicateError(QuotaIntegrityError):
     default_detail = "A ledger entry for this part and operation already exists."
 
 
-class QuotaExceededError(BaseAppException):
+class QuotaExceededError(QuotaError):
     status_code = 402
     error_code = "quota_exceeded"
     default_detail = "Not enough generation quota."

@@ -1,5 +1,6 @@
 """Repository of widgets."""
 
+from collections.abc import Sequence
 from typing import Any
 from uuid import UUID
 
@@ -43,6 +44,14 @@ class WidgetRepository(WidgetRepositoryProtocol):
     async def get(self, widget_id: UUID) -> WidgetRecord | None:
         row = await self._session.get(Widget, widget_id)
         return self._to_record(row) if row is not None else None
+
+    async def get_many(self, widget_ids: Sequence[UUID]) -> list[WidgetRecord]:
+        """All existing widgets of the ids in one statement; order preserved."""
+        if not widget_ids:
+            return []
+        rows = await self._session.scalars(select(Widget).where(Widget.id.in_(widget_ids)))
+        by_id = {row.id: self._to_record(row) for row in rows.all()}
+        return [by_id[widget_id] for widget_id in dict.fromkeys(widget_ids) if widget_id in by_id]
 
     async def lock_for_update(self, widget_id: UUID) -> WidgetRecord | None:
         row = (await self._session.scalars(select(Widget).where(Widget.id == widget_id).with_for_update())).first()

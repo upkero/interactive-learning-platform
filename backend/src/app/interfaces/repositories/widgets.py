@@ -41,6 +41,8 @@ class WidgetRepositoryProtocol(Protocol):
 
     async def get(self, widget_id: UUID) -> WidgetRecord | None: ...
 
+    async def get_many(self, widget_ids: Sequence[UUID]) -> list[WidgetRecord]: ...
+
     async def create(
         self,
         *,

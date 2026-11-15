@@ -1,17 +1,18 @@
 """Part access and safe public content."""
 
 from dataclasses import replace
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents import ImageDraft, MaterialRole, PartDraft, PartStatus
 from src.app.contracts.widgets import WidgetKind
 from src.app.exceptions.documents import PartNotFoundError
 from src.app.schemas.parts import PartContentOut
-from src.app.services.documents.image_url_resolver import ImageUrlResolver
 from src.app.services.documents.part_query_service import PartQueryService
+from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.repositories.documents import (
     FakeDocumentPartRepository,
     FakeImageRepository,
@@ -21,6 +22,26 @@ from tests.support.fakes.repositories.widgets import FakeWidgetRepository
 from tests.support.fakes.storage.object_storage_client import FakeObjectStorageClient
 
 pytestmark = pytest.mark.unit
+
+
+def _service(
+    *,
+    parts: FakeDocumentPartRepository,
+    images: FakeImageRepository,
+    materials: FakeUserMaterialRepository,
+    widgets: FakeWidgetRepository,
+    storage: FakeObjectStorageClient,
+) -> PartQueryService:
+    session = FakeSession()
+    factory = cast(async_sessionmaker[AsyncSession], lambda: session)
+    return PartQueryService(
+        session_factory=factory,
+        parts=lambda _: parts,
+        materials=lambda _: materials,
+        images=lambda _: images,
+        widgets=lambda _: widgets,
+        storage=storage,
+    )
 
 
 async def test_part_content_is_safe_and_resolves_three_directives() -> None:
@@ -45,13 +66,12 @@ async def test_part_content_is_safe_and_resolves_three_directives() -> None:
         "quizzes": [{"quiz_key": "q", "correct_index": 0, "explanation": "secret", "options": [{"is_correct": True}]}],
     }
     parts._parts[part.id] = replace(part, status=PartStatus.PUBLISHED, content=original)
-    storage = FakeObjectStorageClient()
-    service = PartQueryService(
+    service = _service(
         parts=parts,
-        materials=materials,
         images=images,
+        materials=materials,
         widgets=widgets,
-        resolver=ImageUrlResolver(image_repository=images, object_storage=storage),
+        storage=FakeObjectStorageClient(),
     )
     details = await service.get(user_id=user, part_id=part.id)
     assert details.content is not None
@@ -72,12 +92,11 @@ async def test_unpublished_part_has_no_content() -> None:
     (part,) = await parts.add_many(
         doc, [PartDraft(index=0, title="Page", topic_ids=[], source_markdown="x", token_count=1)]
     )
-    storage = FakeObjectStorageClient()
-    service = PartQueryService(
+    service = _service(
         parts=parts,
-        materials=materials,
         images=images,
+        materials=materials,
         widgets=FakeWidgetRepository(),
-        resolver=ImageUrlResolver(image_repository=images, object_storage=storage),
+        storage=FakeObjectStorageClient(),
     )
     assert (await service.get(user_id=user, part_id=part.id)).content is None

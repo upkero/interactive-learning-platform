@@ -8,6 +8,7 @@ from typing import Any, Protocol
 from uuid import UUID
 
 from src.app.contracts.users import UserRecord
+from src.app.contracts.users.profile_update import ProfileUpdate
 
 
 class UserRepositoryProtocol(Protocol):
@@ -31,4 +32,4 @@ class UserRepositoryProtocol(Protocol):
 
     async def save_last_answers(self, user_id: UUID, answers: dict[str, Any]) -> None: ...
 
-    async def update_profile_fields(self, user_id: UUID, fields: dict[str, Any]) -> UserRecord | None: ...
+    async def update_profile_fields(self, user_id: UUID, fields: ProfileUpdate) -> UserRecord | None: ...

@@ -69,6 +69,9 @@ class FakeWidgetRepository(WidgetRepositoryProtocol):
     async def get(self, widget_id: UUID) -> WidgetRecord | None:
         return self._widgets.get(widget_id)
 
+    async def get_many(self, widget_ids: Sequence[UUID]) -> list[WidgetRecord]:
+        return [record for widget_id in dict.fromkeys(widget_ids) if (record := self._widgets.get(widget_id))]
+
     async def lock_for_update(self, widget_id: UUID) -> WidgetRecord | None:
         return self._widgets.get(widget_id)
 

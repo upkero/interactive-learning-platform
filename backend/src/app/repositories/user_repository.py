@@ -8,7 +8,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.users import UserRecord
-from src.app.exceptions.users import UserAlreadyExistsError, UsersIntegrityError
+from src.app.contracts.users.profile_update import ProfileUpdate
+from src.app.exceptions.users import UserAlreadyExistsError, UserNotFoundError, UsersIntegrityError
 from src.app.interfaces.repositories.users import UserRepositoryProtocol
 from src.app.models.user import User
 from src.app.repositories._errors import constraint_name
@@ -78,16 +79,18 @@ class UserRepository(UserRepositoryProtocol):
     async def save_last_answers(self, user_id: UUID, answers: dict[str, Any]) -> None:
         row = await self._session.get(User, user_id)
         if row is None:
-            raise KeyError(user_id)
+            raise UserNotFoundError()
         row.profile = {**row.profile, "last_answers": answers}
         await self._session.flush()
 
-    async def update_profile_fields(self, user_id: UUID, fields: dict[str, Any]) -> UserRecord | None:
+    async def update_profile_fields(self, user_id: UUID, fields: ProfileUpdate) -> UserRecord | None:
         row = await self._session.get(User, user_id)
         if row is None:
             return None
         for key in ("display_name", "locale", "notify_email"):
-            if key in fields:
-                setattr(row, key, fields[key])
+            if key in fields.provided:
+                value = getattr(fields, key)
+                if key == "display_name" or value is not None:
+                    setattr(row, key, value)
         await self._session.flush()
         return self._to_record(row)

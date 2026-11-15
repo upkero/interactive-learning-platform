@@ -2,15 +2,15 @@
 
 from dataclasses import replace
 from typing import Any, cast
-from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents import MaterialRole, PartDraft, PartStatus
 from src.app.exceptions.quizzes import InvalidQuizAnswerError
 from src.app.services.documents.quiz_check_service import QuizCheckService
+from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.repositories.documents import FakeDocumentPartRepository, FakeUserMaterialRepository
 from tests.support.fakes.repositories.quizzes import FakeQuizAttemptRepository
 
@@ -49,14 +49,20 @@ async def test_check_four_types_and_record_every_attempt(kind: str, correct: Any
             ]
         },
     )
-    session = AsyncMock(spec=AsyncSession)
-    service = QuizCheckService(session=cast(AsyncSession, session), parts=parts, materials=materials, attempts=attempts)
+    session = FakeSession()
+    factory = cast(async_sessionmaker[AsyncSession], lambda: session)
+    service = QuizCheckService(
+        session_factory=factory,
+        parts=lambda _: parts,
+        materials=lambda _: materials,
+        attempts=lambda _: attempts,
+    )
     first = await service.check(user_id=user, part_id=part.id, quiz_key="q", answer=valid)
     second = await service.check(user_id=user, part_id=part.id, quiz_key="q", answer=invalid)
     assert first.is_correct is True and second.is_correct is False
     assert first.correct_answer == correct
     assert first.explanation == "because"
     assert len(await attempts.list_by_part(part.id)) == 2
-    assert session.commit.await_count == 2
+    assert session.committed == 2
     with pytest.raises(InvalidQuizAnswerError):
         await service.check(user_id=user, part_id=part.id, quiz_key="q", answer={})

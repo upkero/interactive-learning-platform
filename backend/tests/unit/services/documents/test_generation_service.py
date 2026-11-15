@@ -2,20 +2,21 @@
 
 from datetime import date
 from typing import cast
-from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents import DocumentStatus, MaterialRole, PartDraft, SourceType
 from src.app.contracts.documents.generation import GenerationAnswers
 from src.app.core.clock import Clock
+from src.app.core.settings.processing import ProcessingSettings
 from src.app.exceptions.documents import DocumentNotFoundError, DocumentNotReadyError
 from src.app.exceptions.quota import QuotaExceededError
 from src.app.services.documents.generation_service import GenerationService
 from src.app.services.documents.splitting import TopicTreePlanner
-from src.app.services.quota.ledger import QuotaLedger
+from src.app.services.quota.quota_ledger import QuotaLedger
+from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.repositories.documents import (
     FakeDocumentPartRepository,
     FakeDocumentRepository,
@@ -44,6 +45,18 @@ class _FixedClock(Clock):
         return date(2026, 11, 14)
 
 
+def _factory(session: FakeSession) -> async_sessionmaker[AsyncSession]:
+    return cast(async_sessionmaker[AsyncSession], lambda: session)
+
+
+def _ledger(users: FakeUserRepository, ledger_repo: FakeGenerationLedgerRepository) -> QuotaLedger:
+    return QuotaLedger(
+        users_factory=lambda _: users,
+        ledger_factory=lambda _: ledger_repo,
+        clock=_FixedClock(),
+    )
+
+
 def _service() -> tuple[
     GenerationService,
     FakeDocumentRepository,
@@ -57,12 +70,17 @@ def _service() -> tuple[
     parts = FakeDocumentPartRepository()
     ledger_repo = FakeGenerationLedgerRepository()
     users = FakeUserRepository()
+    session = FakeSession()
     service = GenerationService(
-        documents=documents,
-        materials=materials,
-        parts=parts,
+        session_factory=_factory(session),
+        documents=lambda _: documents,
+        materials=lambda _: materials,
+        parts=lambda _: parts,
+        users=lambda _: users,
         planner=TopicTreePlanner(),
-        ledger=QuotaLedger(users=users, ledger=ledger_repo, clock=_FixedClock()),
+        ledger=_ledger(users, ledger_repo),
+        dispatcher=FakeTaskDispatcher(),
+        settings=ProcessingSettings(max_active_documents=2),
     )
     return service, documents, materials, parts, ledger_repo, users
 
@@ -192,23 +210,25 @@ async def test_parsing_document_is_409() -> None:
 async def test_start_reserves_and_dispatches_after_commit() -> None:
     _, documents, materials, parts, ledger_repo, users = _service()
     owner, document_id = await _parsed_document(users, documents, materials, parts)
-    session = AsyncMock(spec=AsyncSession)
+    session = FakeSession()
 
     class CommitCheckingDispatcher(FakeTaskDispatcher):
         async def enqueue_part(self, part_id: UUID, *, high: bool = False) -> None:
-            session.commit.assert_awaited_once()
+            # the task is dispatched only after the transaction committed
+            assert session.committed == 1
             await super().enqueue_part(part_id, high=high)
 
     dispatcher = CommitCheckingDispatcher()
     service = GenerationService(
-        documents=documents,
-        materials=materials,
-        parts=parts,
+        session_factory=_factory(session),
+        documents=lambda _: documents,
+        materials=lambda _: materials,
+        parts=lambda _: parts,
+        users=lambda _: users,
         planner=TopicTreePlanner(),
-        ledger=QuotaLedger(users=users, ledger=ledger_repo, clock=_FixedClock()),
-        users=users,
-        session=cast(AsyncSession, session),
+        ledger=_ledger(users, ledger_repo),
         dispatcher=dispatcher,
+        settings=ProcessingSettings(max_active_documents=2),
     )
     started = await service.start(
         user_id=owner,
@@ -216,7 +236,7 @@ async def test_start_reserves_and_dispatches_after_commit() -> None:
         topic_ids=["topic-adaptive"],
         answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
     )
-    session.commit.assert_awaited_once()
+    assert session.committed == 1
     assert started.cost == 1
     assert started.available == 19
     assert dispatcher.calls == [("enqueue_part", (started.part_ids[0], True))]
@@ -234,17 +254,18 @@ async def test_start_rejects_insufficient_quota_without_writes() -> None:
     from dataclasses import replace
 
     users._users[owner] = replace(users._users[owner], monthly_limit=0)
-    session = AsyncMock(spec=AsyncSession)
+    session = FakeSession()
     dispatcher = FakeTaskDispatcher()
     service = GenerationService(
-        documents=documents,
-        materials=materials,
-        parts=parts,
+        session_factory=_factory(session),
+        documents=lambda _: documents,
+        materials=lambda _: materials,
+        parts=lambda _: parts,
+        users=lambda _: users,
         planner=TopicTreePlanner(),
-        ledger=QuotaLedger(users=users, ledger=ledger_repo, clock=_FixedClock()),
-        users=users,
-        session=cast(AsyncSession, session),
+        ledger=_ledger(users, ledger_repo),
         dispatcher=dispatcher,
+        settings=ProcessingSettings(max_active_documents=2),
     )
     with pytest.raises(QuotaExceededError) as error:
         await service.start(
@@ -257,8 +278,8 @@ async def test_start_rejects_insufficient_quota_without_writes() -> None:
     assert len(await parts.list_by_document(document_id)) == 3
     assert ledger_repo._entries == []
     assert dispatcher.calls == []
-    session.rollback.assert_awaited_once()
-    session.commit.assert_not_awaited()
+    assert session.rolled_back == 1
+    assert session.committed == 0
 
 
 async def test_start_requires_owner_even_when_processing_limit_is_full() -> None:
@@ -276,16 +297,17 @@ async def test_start_requires_owner_even_when_processing_limit_is_full() -> None
             size_bytes=1,
             checksum="a" * 64,
         )
-    session = AsyncMock(spec=AsyncSession)
+    session = FakeSession()
     service = GenerationService(
-        documents=documents,
-        materials=materials,
-        parts=parts,
+        session_factory=_factory(session),
+        documents=lambda _: documents,
+        materials=lambda _: materials,
+        parts=lambda _: parts,
+        users=lambda _: users,
         planner=TopicTreePlanner(),
-        ledger=QuotaLedger(users=users, ledger=ledger_repo, clock=_FixedClock()),
-        users=users,
-        session=cast(AsyncSession, session),
+        ledger=_ledger(users, ledger_repo),
         dispatcher=FakeTaskDispatcher(),
+        settings=ProcessingSettings(max_active_documents=2),
     )
     with pytest.raises(DocumentNotFoundError):
         await service.start(

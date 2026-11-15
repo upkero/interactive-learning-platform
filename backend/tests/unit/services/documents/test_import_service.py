@@ -4,11 +4,13 @@ from typing import cast
 from uuid import uuid4
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents import DocumentStatus, MaterialRole, SourceType
+from src.app.core.settings.processing import ProcessingSettings
 from src.app.exceptions.documents import InvalidGdocsUrlError, ProcessingLimitError
 from src.app.services.documents.import_service import ImportService, extract_gdocs_id
+from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.repositories.documents import (
     FakeDocumentRepository,
     FakeUserMaterialRepository,
@@ -22,14 +24,6 @@ pytestmark = pytest.mark.unit
 _VALID_URL = "https://docs.google.com/document/d/1AbC_dEf-123/edit"
 
 
-class _FakeSession:
-    async def commit(self) -> None:
-        return None
-
-    async def rollback(self) -> None:
-        return None
-
-
 def _service(
     *,
     documents: FakeDocumentRepository | None = None,
@@ -40,16 +34,21 @@ def _service(
     FakeObjectStorageClient,
     FakeTaskDispatcher,
 ]:
+    session = FakeSession()
     documents = documents or FakeDocumentRepository()
     materials = FakeUserMaterialRepository()
     storage = FakeObjectStorageClient()
     dispatcher = FakeTaskDispatcher()
+    session.on_commit(documents, materials)
+    session.on_rollback(documents, materials)
+    factory = cast(async_sessionmaker[AsyncSession], lambda: session)
     service = ImportService(
-        session=cast(AsyncSession, _FakeSession()),
+        session_factory=factory,
         dispatcher=dispatcher,
-        documents=documents,
-        materials=materials,
-        users=FakeUserRepository(),
+        documents=lambda _: documents,
+        materials=lambda _: materials,
+        users=lambda _: FakeUserRepository(),
+        settings=ProcessingSettings(max_active_documents=2),
     )
     return service, documents, materials, storage, dispatcher
 
@@ -59,6 +58,11 @@ def test_extract_gdocs_id_accepts_document_links_with_any_trailing_path() -> Non
     assert extract_gdocs_id("https://docs.google.com/document/d/xyz987/view") == "xyz987"
 
 
+def test_extract_gdocs_id_tolerates_account_prefix_and_query_string() -> None:
+    assert extract_gdocs_id("https://docs.google.com/document/u/1/d/abc123/edit") == "abc123"
+    assert extract_gdocs_id("https://docs.google.com/document/d/abc123/edit?usp=sharing") == "abc123"
+
+
 @pytest.mark.parametrize(
     "url",
     [
@@ -66,6 +70,7 @@ def test_extract_gdocs_id_accepts_document_links_with_any_trailing_path() -> Non
         "https://docs.google.com/spreadsheets/d/1AbC/edit",  # Sheets
         "https://docs.google.com/presentation/d/1AbC/edit",  # Slides
         "https://docs.google.com/document/edit/1AbC",  # no /d/ segment
+        "https://docs.google.com/document/d/e/2PACX-1v-abc/pub",  # export token, not an id
         "http://docs.google.com/document/d/1AbC/edit",  # not https
         "just a phrase",
         "",
@@ -81,12 +86,13 @@ async def test_valid_link_creates_rows_and_dispatches() -> None:
     service, _documents, materials, storage, dispatcher = _service()
     owner = uuid4()
 
-    document = await service.import_document(owner_id=owner, url=_VALID_URL)
+    document = await service.import_document(owner_id=owner, url=f"  {_VALID_URL}  ")
 
     assert document.status is DocumentStatus.UPLOADED
     assert document.source_type is SourceType.GDOCS
     assert document.source_uri == _VALID_URL
     assert document.title == "Untitled"
+    assert document.object_key == "gdocs/1AbC_dEf-123"
 
     assert await materials.get_role(owner, document.id) is MaterialRole.OWNER
     assert dispatcher.calls == [("enqueue_parse", (document.id,))]

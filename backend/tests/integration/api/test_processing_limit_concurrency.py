@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents import DocumentStatus, MaterialRole, PartDraft, SourceType
 from src.app.contracts.documents.generation import GenerationAnswers
+from src.app.core.clock import SystemClock
+from src.app.core.settings.processing import ProcessingSettings
 from src.app.exceptions.documents import ProcessingLimitError
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
@@ -16,7 +18,7 @@ from src.app.repositories.user_material_repository import UserMaterialRepository
 from src.app.repositories.user_repository import UserRepository
 from src.app.services.documents.generation_service import GenerationService
 from src.app.services.documents.splitting import TopicTreePlanner
-from src.app.services.quota.ledger import QuotaLedger
+from src.app.services.quota.quota_ledger import QuotaLedger
 from tests.support.fakes.tasks import FakeTaskDispatcher
 
 pytestmark = pytest.mark.integration
@@ -51,28 +53,31 @@ async def test_three_parallel_generations_only_two_start(session_factory: async_
     dispatcher = FakeTaskDispatcher()
 
     async def start(doc_id: UUID) -> bool:
-        async with session_factory() as session:
-            users = UserRepository(session)
-            service = GenerationService(
-                documents=DocumentRepository(session),
-                materials=UserMaterialRepository(session),
-                parts=DocumentPartRepository(session),
-                planner=TopicTreePlanner(),
-                ledger=QuotaLedger(users=users, ledger=GenerationLedgerRepository(session)),
-                session=session,
-                users=users,
-                dispatcher=dispatcher,
+        service = GenerationService(
+            session_factory=session_factory,
+            documents=DocumentRepository,
+            materials=UserMaterialRepository,
+            parts=DocumentPartRepository,
+            users=UserRepository,
+            planner=TopicTreePlanner(),
+            ledger=QuotaLedger(
+                users_factory=UserRepository,
+                ledger_factory=GenerationLedgerRepository,
+                clock=SystemClock(),
+            ),
+            dispatcher=dispatcher,
+            settings=ProcessingSettings(max_active_documents=2),
+        )
+        try:
+            await service.start(
+                user_id=user.id,
+                document_id=doc_id,
+                topic_ids=["t"],
+                answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
             )
-            try:
-                await service.start(
-                    user_id=user.id,
-                    document_id=doc_id,
-                    topic_ids=["t"],
-                    answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
-                )
-            except ProcessingLimitError:
-                return False
-            return True
+        except ProcessingLimitError:
+            return False
+        return True
 
     results = await asyncio.gather(*(start(doc_id) for doc_id in ids))
     assert sorted(results) == [False, True, True]

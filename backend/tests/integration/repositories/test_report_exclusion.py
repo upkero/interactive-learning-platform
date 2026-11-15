@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from src.app.contracts.documents import MaterialRole, PartDraft, SourceType
 from src.app.contracts.widgets import ReportReason, UsageStatus, WidgetKind, WidgetStatus, WidgetUsageDraft
 from src.app.core.decision_log import DecisionLog
+from src.app.core.settings.reports import ReportsSettings
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
 from src.app.repositories.report_repository import ReportRepository
@@ -67,21 +68,21 @@ async def test_three_concurrent_reports_exclude_widget(session_factory: async_se
     decisions = Mock(spec=DecisionLog)
 
     async def report(user_id: UUID) -> None:
-        async with session_factory() as session:
-            service = ReportService(
-                session=session,
-                reports=ReportRepository(session),
-                usages=WidgetUsageRepository(session),
-                widgets=WidgetRepository(session),
-                decision_log=decisions,
-            )
-            await service.report(
-                user_id=user_id,
-                widget_id=widget.id,
-                part_id=part.id,
-                reason=ReportReason.WRONG,
-                comment=None,
-            )
+        service = ReportService(
+            session_factory=session_factory,
+            reports=ReportRepository,
+            usages=WidgetUsageRepository,
+            widgets=WidgetRepository,
+            decision_log=decisions,
+            settings=ReportsSettings(exclude_threshold=3),
+        )
+        await service.report(
+            user_id=user_id,
+            widget_id=widget.id,
+            part_id=part.id,
+            reason=ReportReason.WRONG,
+            comment=None,
+        )
 
     async with session_factory() as session:
         assert len(await WidgetSearch(WidgetRepository(session)).search(embedding)) == 1

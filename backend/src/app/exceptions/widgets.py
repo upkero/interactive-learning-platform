@@ -1,15 +1,19 @@
-"""Integrity errors of the widgets area (mapped from DB IntegrityError)."""
+"""Errors of the widgets area."""
 
 from src.app.exceptions.base import BaseAppException
 
 
-class WidgetNotFoundError(BaseAppException):
+class WidgetsError(BaseAppException):
+    """Base class of every widgets area error."""
+
+
+class WidgetNotFoundError(WidgetsError):
     status_code = 404
     error_code = "widget_not_found"
     default_detail = "Widget not found."
 
 
-class WidgetsIntegrityError(BaseAppException):
+class WidgetsIntegrityError(WidgetsError):
     """Base exception for widget integrity violations."""
 
     error_code = "widgets_integrity_error"

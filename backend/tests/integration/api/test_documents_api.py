@@ -19,7 +19,6 @@ from fastapi.testclient import TestClient
 from sqlalchemy import event, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.app.api.v1.dependencies.services import get_task_dispatcher
 from src.app.api.v1.middleware.rate_limit import limiter
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.documents import DocumentStatus, MaterialRole, PartDraft, SourceType
@@ -57,7 +56,9 @@ def client(dispatcher: FakeTaskDispatcher) -> Iterator[TestClient]:
     limiter.reset()
     with TestClient(create_app(), raise_server_exceptions=False) as test_client:
         app = cast(FastAPI, test_client.app)
-        app.dependency_overrides[get_task_dispatcher] = lambda: dispatcher
+        container = cast(ApplicationContainer, app.state.container)
+        # the real dispatcher would need a broker; services take it from here
+        container.__dict__["task_dispatcher"] = dispatcher
         yield test_client
 
 
@@ -112,7 +113,7 @@ async def test_upload_creates_minio_object_db_row_and_dispatches(
     assert record.mime_type == "application/pdf"
     assert record.page_count is not None
     assert record.checksum
-    assert record.object_key.startswith("docs/")
+    assert record.object_key == f"{record.owner_id}/{document_id}/source.pdf"
     assert record.object_key.endswith(".pdf")
 
     # the object really is in the documents bucket
@@ -433,7 +434,9 @@ async def test_topics_of_a_failed_document_carries_the_parse_error(
     assert shown.status_code == 409
     body = shown.json()
     assert body["error_code"] == "document_not_ready"
-    assert body["detail"] == "parse_failed"
+    # the client translates the code; the human text stays generic
+    assert body["status"] == "failed"
+    assert body["reason"] == "parse_failed"
 
 
 async def test_topics_of_a_foreign_document_is_404(client: TestClient) -> None:

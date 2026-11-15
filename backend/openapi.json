@@ -921,6 +921,7 @@
             "type": "integer"
           },
           "period_end": {
+            "description": "Exclusive bound: the first day of the next period.",
             "format": "date",
             "title": "Period End",
             "type": "string"

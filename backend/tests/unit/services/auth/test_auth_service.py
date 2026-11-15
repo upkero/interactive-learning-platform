@@ -10,26 +10,14 @@ from src.app.core.settings.auth import get_auth_settings
 from src.app.exceptions.auth import EmailTakenError, InvalidCredentialsError
 from src.app.exceptions.users import UserAlreadyExistsError
 from src.app.services.auth.auth_service import AuthService
+from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.repositories.users import FakeUserRepository
 
 pytestmark = pytest.mark.unit
 
 
-class _FakeSession:
-    committed: bool = False
-
-    async def __aenter__(self) -> "_FakeSession":
-        return self
-
-    async def __aexit__(self, exc_type: object, exc: object, tb: object) -> None:
-        self.committed = exc_type is None
-
-    def begin(self) -> "_FakeSession":
-        return self
-
-
-def _service() -> tuple[AuthService, FakeUserRepository, _FakeSession]:
-    session = _FakeSession()
+def _service() -> tuple[AuthService, FakeUserRepository, FakeSession]:
+    session = FakeSession()
     users = FakeUserRepository()
     factory = cast(async_sessionmaker[AsyncSession], lambda: session)
     return AuthService(session_factory=factory, users=lambda _: users, settings=get_auth_settings()), users, session
@@ -46,7 +34,7 @@ async def test_register_normalizes_email_and_hashes_password() -> None:
     assert user.email == "alice@example.com"
     assert user.password_hash.startswith("$argon2")
     assert user.password_hash != "long-enough-password"
-    assert getattr(session, "committed", False) is True
+    assert session.committed == 1
 
 
 async def test_register_same_email_in_any_case_is_email_taken() -> None:
@@ -91,7 +79,7 @@ async def test_repository_conflict_maps_to_email_taken() -> None:
             raise UserAlreadyExistsError
 
     users = ConflictingRepository()
-    factory = cast(async_sessionmaker[AsyncSession], lambda: _FakeSession())
+    factory = cast(async_sessionmaker[AsyncSession], FakeSession)
     service = AuthService(session_factory=factory, users=lambda _: users, settings=get_auth_settings())
     with pytest.raises(EmailTakenError):
         await service.register(email="x@example.com", password="long-enough-password")

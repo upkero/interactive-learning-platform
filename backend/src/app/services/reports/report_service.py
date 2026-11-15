@@ -1,12 +1,13 @@
 """Idempotent reporting of widgets in accessible parts."""
 
+from collections.abc import Callable
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.widgets import ReportReason
 from src.app.core.decision_log import DecisionLog
-from src.app.core.settings.reports import get_reports_settings
+from src.app.core.settings.reports import ReportsSettings
 from src.app.exceptions.widgets import WidgetNotFoundError
 from src.app.interfaces.repositories.widgets import (
     ReportRepositoryProtocol,
@@ -19,17 +20,19 @@ class ReportService:
     def __init__(
         self,
         *,
-        session: AsyncSession,
-        reports: ReportRepositoryProtocol,
-        usages: WidgetUsageRepositoryProtocol,
-        widgets: WidgetRepositoryProtocol,
+        session_factory: async_sessionmaker[AsyncSession],
+        reports: Callable[[AsyncSession], ReportRepositoryProtocol],
+        usages: Callable[[AsyncSession], WidgetUsageRepositoryProtocol],
+        widgets: Callable[[AsyncSession], WidgetRepositoryProtocol],
         decision_log: DecisionLog,
+        settings: ReportsSettings,
     ) -> None:
-        self._session = session
+        self._session_factory = session_factory
         self._reports = reports
         self._usages = usages
         self._widgets = widgets
         self._decision_log = decision_log
+        self._settings = settings
 
     async def report(
         self,
@@ -40,28 +43,27 @@ class ReportService:
         reason: ReportReason,
         comment: str | None,
     ) -> None:
-        accessible_part = await self._usages.find_accessible_part(widget_id, user_id, part_id)
-        if accessible_part is None:
-            raise WidgetNotFoundError()
+        threshold = self._settings.exclude_threshold
         excluded = False
         count = 0
-        threshold = get_reports_settings().exclude_threshold
-        try:
-            if await self._widgets.lock_for_update(widget_id) is None:
+        async with self._session_factory() as session, session.begin():
+            accessible_part = await self._usages(session).find_accessible_part(widget_id, user_id, part_id)
+            if accessible_part is None:
                 raise WidgetNotFoundError()
-            await self._reports.create_if_not_exists(
+            if await self._widgets(session).lock_for_update(widget_id) is None:
+                raise WidgetNotFoundError()
+            await self._reports(session).create_if_not_exists(
                 widget_id=widget_id,
                 user_id=user_id,
                 part_id=accessible_part,
                 reason=reason,
                 comment=comment,
             )
-            count = await self._reports.count_by_widget(widget_id)
+            count = await self._reports(session).count_by_widget(widget_id)
             if count >= threshold:
-                excluded = await self._widgets.exclude_if_active(widget_id)
-            await self._session.commit()
-        except Exception:
-            await self._session.rollback()
-            raise
+                excluded = await self._widgets(session).exclude_if_active(widget_id)
         if excluded:
             self._decision_log.widget_excluded(widget_id=widget_id, reporters=count, threshold=threshold)
+
+
+__all__ = ["ReportService"]

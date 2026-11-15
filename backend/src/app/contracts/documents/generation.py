@@ -11,6 +11,10 @@ class GenerationAnswers:
     goal: Literal["exam", "understand", "refresh"]
     depth: Literal["overview", "standard", "deep"]
 
+    def as_dict(self) -> dict[str, str]:
+        """The profile stored on every part and in ``users.last_answers``."""
+        return {"level": self.level, "goal": self.goal, "depth": self.depth}
+
 
 @dataclass(frozen=True, slots=True)
 class GenerationStarted:

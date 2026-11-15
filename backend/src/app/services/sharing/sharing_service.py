@@ -1,9 +1,10 @@
 """Grant registered users shared access to owned materials."""
 
 import logging
+from collections.abc import Callable
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents import MaterialRole
 from src.app.exceptions.documents import DocumentNotFoundError
@@ -18,26 +19,23 @@ class SharingService:
     def __init__(
         self,
         *,
-        session: AsyncSession,
-        materials: UserMaterialRepositoryProtocol,
-        users: UserRepositoryProtocol,
+        session_factory: async_sessionmaker[AsyncSession],
+        materials: Callable[[AsyncSession], UserMaterialRepositoryProtocol],
+        users: Callable[[AsyncSession], UserRepositoryProtocol],
     ) -> None:
-        self._session = session
+        self._session_factory = session_factory
         self._materials = materials
         self._users = users
 
     async def share(self, *, owner_id: UUID, document_id: UUID, email: str) -> None:
-        if await self._materials.get_role(owner_id, document_id) is not MaterialRole.OWNER:
-            raise DocumentNotFoundError()
-        recipient = await self._users.get_by_email(email.strip().lower())
-        if recipient is None:
-            raise RecipientNotRegisteredError()
-        if recipient.id == owner_id:
-            raise ShareWithSelfError()
-        try:
-            await self._materials.share_if_absent(recipient.id, document_id, owner_id)
-            await self._session.commit()
-        except Exception:
-            await self._session.rollback()
-            raise
-        logger.info("material.shared document_id=%s recipient_id=%s", document_id, recipient.id)
+        async with self._session_factory() as session, session.begin():
+            materials = self._materials(session)
+            if await materials.get_role(owner_id, document_id) is not MaterialRole.OWNER:
+                raise DocumentNotFoundError()
+            recipient = await self._users(session).get_by_email(email.strip().lower())
+            if recipient is None:
+                raise RecipientNotRegisteredError()
+            if recipient.id == owner_id:
+                raise ShareWithSelfError()
+            await materials.share_if_absent(recipient.id, document_id, owner_id)
+        logger.info("Material shared.", extra={"document_id": str(document_id), "recipient_id": str(recipient.id)})

@@ -11,8 +11,11 @@ with a token sum per node: a node counts each part once even when the
 part belongs to several topics of the subtree.
 """
 
+from collections.abc import Callable
 from typing import Any
 from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents import (
     DocumentDetails,
@@ -40,25 +43,29 @@ class DocumentQueryService:
     def __init__(
         self,
         *,
-        documents: DocumentRepositoryProtocol,
-        materials: UserMaterialRepositoryProtocol,
-        parts: DocumentPartRepositoryProtocol,
+        session_factory: async_sessionmaker[AsyncSession],
+        documents: Callable[[AsyncSession], DocumentRepositoryProtocol],
+        materials: Callable[[AsyncSession], UserMaterialRepositoryProtocol],
+        parts: Callable[[AsyncSession], DocumentPartRepositoryProtocol],
         storage: ObjectStorageClient,
     ) -> None:
+        self._session_factory = session_factory
         self._documents = documents
         self._materials = materials
         self._parts = parts
         self._storage = storage
 
     async def get_document(self, *, user_id: UUID, document_id: UUID) -> DocumentDetails:
-        role = await self._materials.get_role(user_id, document_id)
-        if role is None:
-            raise DocumentNotFoundError()
-        document = await self._documents.get(document_id)
-        if document is None:  # a dangling material row must not crash the read
-            raise DocumentNotFoundError()
-        parts = await self._parts.list_by_document(document_id)
-        shared_with = tuple(await self._materials.list_shared_with(document_id)) if role is MaterialRole.OWNER else ()
+        async with self._session_factory() as session:
+            materials = self._materials(session)
+            role = await materials.get_role(user_id, document_id)
+            if role is None:
+                raise DocumentNotFoundError()
+            document = await self._documents(session).get(document_id)
+            if document is None:  # a dangling material row must not crash the read
+                raise DocumentNotFoundError()
+            parts = await self._parts(session).list_by_document(document_id)
+            shared_with = tuple(await materials.list_shared_with(document_id)) if role is MaterialRole.OWNER else ()
         return DocumentDetails(
             document=document,
             role=role,
@@ -73,35 +80,31 @@ class DocumentQueryService:
         return self._storage.presign_get_url(bucket="documents", key=document.object_key)
 
     async def get_topic_tree(self, *, user_id: UUID, document_id: UUID) -> dict[str, Any]:
-        """The parsed topic tree of an accessible document (story 1.4.5).
-
-        Returns ``{"topics": [node, ...]}`` where every node carries
-        ``{id, title, level, tokens, children}`` and ``tokens`` is the
-        token sum of the parts in the whole subtree (a part is counted
-        once even when it belongs to several topics of the subtree).
-        Raises ``DocumentNotReadyError`` (409) while the document is
-        still processing, with the current status in ``extra`` — or,
-        for ``failed`` documents, with the parse error as the detail.
-        """
-        role = await self._materials.get_role(user_id, document_id)
-        if role is None:
-            raise DocumentNotFoundError()
-        document = await self._documents.get(document_id)
-        if document is None:  # a dangling material row must not crash the read
-            raise DocumentNotFoundError()
-
-        self._assert_parsed(document)
-
-        tree = document.topic_tree or {"topics": []}
-        parts = await self._parts.list_by_document(document_id)
+        """The parsed topic tree of an accessible document (story 1.4.5)."""
+        async with self._session_factory() as session:
+            role = await self._materials(session).get_role(user_id, document_id)
+            if role is None:
+                raise DocumentNotFoundError()
+            document = await self._documents(session).get(document_id)
+            if document is None:  # a dangling material row must not crash the read
+                raise DocumentNotFoundError()
+            self._assert_parsed(document)
+            tree = document.topic_tree or {"topics": []}
+            parts = await self._parts(session).list_by_document(document_id)
         readable = [part for part in parts if part.status is not PartStatus.FAILED]
         nodes = [_build_node(node, readable, level=1)[0] for node in tree["topics"]]
         return {"topics": nodes}
 
     @staticmethod
     def _assert_parsed(document: DocumentRecord) -> None:
+        """Refuse the tree of a document that has none (409).
+
+        ``failed`` documents carry the parse error code in ``extra`` under
+        the unified error format (review 1.4): the client translates the
+        code, never the human text.
+        """
         if document.status is DocumentStatus.FAILED:
-            raise DocumentNotReadyError(detail=document.error or "The document parsing failed.")
+            raise DocumentNotReadyError(extra={"status": "failed", "reason": document.error or "parse_failed"})
         if document.status not in _READABLE_STATUSES:
             raise DocumentNotReadyError(extra={"status": document.status.value})
 

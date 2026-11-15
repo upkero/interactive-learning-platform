@@ -25,6 +25,7 @@ class DocumentRepositoryProtocol(Protocol):
     async def create(
         self,
         *,
+        id: UUID | None = None,
         owner_id: UUID,
         title: str,
         source_type: SourceType,
@@ -46,7 +47,7 @@ class DocumentRepositoryProtocol(Protocol):
 
     async def set_topic_tree(self, document_id: UUID, topic_tree: dict[str, Any]) -> DocumentRecord | None: ...
 
-    async def count_active(self, owner_id: UUID) -> int: ...
+    async def count_active(self, owner_id: UUID, *, exclude: UUID | None = None) -> int: ...
 
 
 class DocumentPartRepositoryProtocol(Protocol):

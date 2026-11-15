@@ -5,6 +5,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from src.app.contracts.users import UserRecord
+from src.app.contracts.users.profile_update import ProfileUpdate
 from src.app.exceptions.users import UserAlreadyExistsError
 from src.app.interfaces.repositories.users import UserRepositoryProtocol
 from tests.support.time import now
@@ -56,11 +57,15 @@ class FakeUserRepository(UserRepositoryProtocol):
         user = self._users[user_id]
         self._users[user_id] = replace(user, profile={**user.profile, "last_answers": answers})
 
-    async def update_profile_fields(self, user_id: UUID, fields: dict[str, Any]) -> UserRecord | None:
+    async def update_profile_fields(self, user_id: UUID, fields: ProfileUpdate) -> UserRecord | None:
         user = self._users.get(user_id)
         if user is None:
             return None
-        allowed = {key: value for key, value in fields.items() if key in {"display_name", "locale", "notify_email"}}
+        allowed = {
+            key: getattr(fields, key)
+            for key in ("display_name", "locale", "notify_email")
+            if key in fields.provided and (key == "display_name" or getattr(fields, key) is not None)
+        }
         updated = replace(user, **allowed)
         self._users[user_id] = updated
         return updated

@@ -32,7 +32,7 @@ class QuotaOut(BaseModel):
     monthly_limit: int
     available: int
     period_start: date
-    period_end: date
+    period_end: date = Field(description="Exclusive bound: the first day of the next period.")
 
 
 class MaterialOut(BaseModel):
