@@ -3,9 +3,9 @@
 from collections.abc import Callable
 from contextlib import suppress
 from copy import deepcopy
-from typing import Any, cast
 from uuid import UUID
 
+from pydantic import TypeAdapter
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents.part_details import PartDetails
@@ -21,16 +21,21 @@ from src.app.interfaces.repositories.widgets import WidgetRepositoryProtocol
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.services.documents.image_url_resolver import ImageUrlResolver
 
+_PUBLIC_CONTENT = TypeAdapter(PublicPartContent)
 
-def _public_quiz(quiz: dict[str, Any]) -> dict[str, Any]:
-    result: dict[str, Any] = {key: quiz[key] for key in ("key", "ref", "type", "prompt", "unit") if key in quiz}
+
+def _public_quiz(quiz: dict[str, object]) -> dict[str, object]:
+    result: dict[str, object] = {key: quiz[key] for key in ("key", "ref", "type", "prompt", "unit") if key in quiz}
     for field in ("options", "items"):
         if field in quiz:
-            result[field] = [{key: option[key] for key in ("id", "text") if key in option} for option in quiz[field]]
+            options = quiz[field]
+            if not isinstance(options, list) or any(not isinstance(option, dict) for option in options):
+                raise ValueError("Invalid quiz options in published content")
+            result[field] = [{key: option[key] for key in ("id", "text") if key in option} for option in options]
     return result
 
 
-def _collect_image_ids(value: Any) -> set[UUID]:
+def _collect_image_ids(value: object) -> set[UUID]:
     """Every ``image_id`` referenced by the content, in one walk."""
     found: set[UUID] = set()
     if isinstance(value, dict):
@@ -72,16 +77,22 @@ class PartQueryService:
             if part.status is not PartStatus.PUBLISHED or part.content is None:
                 return PartDetails(part=part, content=None)
 
-            content = deepcopy(part.content)
+            content: dict[str, object] = deepcopy(part.content)
             content.pop("answer_keys", None)
-            content["quizzes"] = [_public_quiz(quiz) for quiz in content.get("quizzes", [])]
+            quizzes = content.get("quizzes", [])
+            if not isinstance(quizzes, list) or any(not isinstance(quiz, dict) for quiz in quizzes):
+                raise ValueError("Invalid quizzes in published content")
+            content["quizzes"] = [_public_quiz(quiz) for quiz in quizzes]
             await self._fill_widgets(content, self._widgets(session))
             await self._fill_images(content, self._images(session))
-            # Stored pipeline JSON is checked against the HTTP whitelist at the boundary.
-            return PartDetails(part=part, content=cast(PublicPartContent, content))
+            return PartDetails(part=part, content=_PUBLIC_CONTENT.validate_python(content))
 
-    async def _fill_widgets(self, content: dict[str, Any], widgets: WidgetRepositoryProtocol) -> None:
+    async def _fill_widgets(self, content: dict[str, object], widgets: WidgetRepositoryProtocol) -> None:
         slots = content.get("widgets", {})
+        if not isinstance(slots, dict):
+            raise ValueError("Invalid widget slots in published content")
+        if any(not isinstance(slot, dict) for slot in slots.values()):
+            raise ValueError("Invalid widget slot in published content")
         directives = [d for d in slots.values() if d.get("status") == "ready" and d.get("widget_id") is not None]
         if not directives:
             return
@@ -98,7 +109,7 @@ class PartQueryService:
 
     async def _fill_images(
         self,
-        content: dict[str, Any],
+        content: dict[str, object],
         images: ImageRepositoryProtocol,
     ) -> None:
         image_ids = _collect_image_ids(content)
@@ -107,7 +118,7 @@ class PartQueryService:
         resolver = ImageUrlResolver(image_repository=images, object_storage=self._storage)
         urls = await resolver.resolve(list(image_ids))
 
-        def replace_images(value: Any) -> None:
+        def replace_images(value: object) -> None:
             if isinstance(value, dict):
                 raw = value.get("image_id")
                 if raw is not None:

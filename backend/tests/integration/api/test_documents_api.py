@@ -220,6 +220,15 @@ async def test_upload_without_a_cookie_is_401(client: TestClient) -> None:
     assert response.json()["error_code"] == "not_authenticated"
 
 
+async def test_upload_rejects_unsupported_content(
+    client: TestClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    _register(client)
+    response = client.post("/api/v1/documents", files={"file": ("fake.pdf", b"not a pdf", "application/pdf")})
+    assert response.status_code == 415
+    assert response.json()["error_code"] == "unsupported_file_type"
+
+
 async def test_import_creates_document_and_dispatches(client: TestClient, dispatcher: FakeTaskDispatcher) -> None:
     _register(client)
     response = client.post(
@@ -349,6 +358,9 @@ async def test_share_material_shows_for_recipient_without_spending_quota(
     client.cookies.clear()
     document_id = await _new_parsed_document(client, session_factory)
     body = {"document_id": str(document_id), "email": email}
+    owner_email = client.get("/api/v1/me").json()["email"]
+    self_share = client.post("/api/v1/materials/share", json={**body, "email": owner_email})
+    assert self_share.status_code == 422 and self_share.json()["error_code"] == "share_with_self"
     missing = client.post("/api/v1/materials/share", json={**body, "email": "missing@example.com"})
     assert missing.status_code == 422 and missing.json()["error_code"] == "recipient_not_registered"
     assert client.post("/api/v1/materials/share", json=body).status_code == 200
@@ -658,6 +670,23 @@ async def test_generate_insufficient_quota_leaves_no_changes(
     assert dispatcher.calls == []
 
 
+async def test_generate_queue_failure_keeps_queued_part_and_reservation(
+    client: TestClient, dispatcher: FakeTaskDispatcher, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    document_id = await _new_parsed_document(client, session_factory)
+    dispatcher.fail_with = TaskDispatchError()
+    response = client.post(
+        f"/api/v1/documents/{document_id}/generate",
+        json={"topic_ids": ["topic-adaptive"], "answers": {"level": "novice", "goal": "exam", "depth": "standard"}},
+    )
+    assert response.status_code == 503 and response.json()["error_code"] == "queue_unavailable"
+    async with session_factory() as session:
+        parts = await DocumentPartRepository(session).list_by_document(document_id)
+        entries = (await session.scalars(select(GenerationLedger))).all()
+    assert len(parts) == 4 and parts[-1].status.value == "queued"
+    assert [(entry.op, entry.delta) for entry in entries] == [("reserve", -1)]
+
+
 async def test_plan_rejects_empty_and_unknown_selections(
     client: TestClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
@@ -673,6 +702,12 @@ async def test_plan_rejects_empty_and_unknown_selections(
     unknown = client.post(f"/api/v1/documents/{document_id}/plan", json={"topic_ids": ["nope"]})
     assert unknown.status_code == 422
     assert unknown.json()["error_code"] == "unknown_topic"
+    answers = {"level": "novice", "goal": "exam", "depth": "standard"}
+    for topic_ids, error_code in (([], "empty_topic_selection"), (["nope"], "unknown_topic")):
+        response = client.post(
+            f"/api/v1/documents/{document_id}/generate", json={"topic_ids": topic_ids, "answers": answers}
+        )
+        assert response.status_code == 422 and response.json()["error_code"] == error_code
 
 
 async def test_plan_of_a_parsing_document_is_409(
