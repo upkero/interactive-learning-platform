@@ -72,3 +72,27 @@ class TopicNodeOut(BaseModel):
 
 class TopicTreeOut(BaseModel):
     topics: list[TopicNodeOut]
+
+
+class PlanRequest(BaseModel):
+    """Body of ``POST /documents/{id}/plan`` (story 1.4.6)."""
+
+    topic_ids: list[str] = Field(default_factory=list)
+
+
+class PlannedPartOut(BaseModel):
+    index: int
+    title: str
+    tokens: int
+
+
+class PlanResponse(BaseModel):
+    """Preview of the generation: parts, cost and the remaining quota.
+
+    ``cost`` is the number of parts the generation would create;
+    nothing is reserved by the plan call.
+    """
+
+    parts: list[PlannedPartOut]
+    cost: int
+    available: int

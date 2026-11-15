@@ -101,3 +101,19 @@ class InvalidGdocsUrlError(BaseAppException):
     status_code = 422
     error_code = "invalid_gdocs_url"
     default_detail = "The URL must point to a Google Docs document."
+
+
+class EmptyTopicSelectionError(BaseAppException):
+    """The plan/generate request selected no topics (422)."""
+
+    status_code = 422
+    error_code = "empty_topic_selection"
+    default_detail = "Select at least one topic."
+
+
+class UnknownTopicError(BaseAppException):
+    """A selected topic id does not exist in the document's tree (422)."""
+
+    status_code = 422
+    error_code = "unknown_topic"
+    default_detail = "The topic is not part of this document."

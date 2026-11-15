@@ -15,6 +15,7 @@ from fastapi.params import Form
 from src.app.api.v1.dependencies.auth import CurrentUserDep
 from src.app.api.v1.dependencies.services import (
     DocumentQueryServiceDep,
+    GenerationServiceDep,
     ImportServiceDep,
     UploadServiceDep,
 )
@@ -24,6 +25,9 @@ from src.app.schemas.documents import (
     DocumentImportIn,
     DocumentOut,
     PartSummaryOut,
+    PlannedPartOut,
+    PlanRequest,
+    PlanResponse,
     SharedWithOut,
     TopicNodeOut,
     TopicTreeOut,
@@ -71,6 +75,21 @@ async def get_document_topics(
 ) -> TopicTreeOut:
     tree = await service.get_topic_tree(user_id=user.id, document_id=document_id)
     return TopicTreeOut(topics=[TopicNodeOut.model_validate(node) for node in tree["topics"]])
+
+
+@router.post("/{document_id}/plan", response_model=PlanResponse, operation_id="documents_plan")
+async def plan_document(
+    document_id: UUID,
+    body: PlanRequest,
+    user: CurrentUserDep,
+    service: GenerationServiceDep,
+) -> PlanResponse:
+    plan, available = await service.plan(user_id=user.id, document_id=document_id, topic_ids=body.topic_ids)
+    return PlanResponse(
+        parts=[PlannedPartOut(index=part.index, title=part.title, tokens=part.tokens) for part in plan.parts],
+        cost=len(plan.parts),
+        available=available,
+    )
 
 
 @router.get("/{document_id}", response_model=DocumentOut, operation_id="documents_get")

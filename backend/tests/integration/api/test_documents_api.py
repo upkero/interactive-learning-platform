@@ -15,12 +15,14 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.api.v1.dependencies.services import get_task_dispatcher
 from src.app.api.v1.middleware.rate_limit import limiter
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.documents import DocumentStatus, PartDraft
+from src.app.models.generation_ledger import GenerationLedger
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
 from src.main import create_app
@@ -313,6 +315,135 @@ async def test_topics_of_a_foreign_document_is_404(client: TestClient) -> None:
     shown = client.get(f"/api/v1/documents/{created.json()['id']}/topics")
     assert shown.status_code == 404
     assert shown.json()["error_code"] == "document_not_found"
+
+
+async def test_plan_preview_is_stable_and_leaves_the_quota_journal_untouched(
+    client: TestClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    _register(client)
+    created = _upload(client, filename="lecture.pdf")
+    document_id = UUID(created.json()["id"])
+    await _make_parsed(document_id, session_factory)
+
+    first = client.post(
+        f"/api/v1/documents/{document_id}/plan",
+        json={"topic_ids": ["topic-adaptive", "topic-quota"]},
+    )
+    assert first.status_code == 200, first.text
+    second = client.post(
+        f"/api/v1/documents/{document_id}/plan",
+        json={"topic_ids": ["topic-adaptive", "topic-quota"]},
+    )
+    assert second.status_code == 200
+    # two consecutive calls with the same topics give the same answer
+    assert first.json() == second.json()
+
+    body = first.json()
+    assert body["cost"] == len(body["parts"]) == 1
+    assert body["parts"][0]["tokens"] == 416  # 142 + 178 + 96
+    assert body["available"] == 20  # default monthly limit
+
+    # the journal is untouched: nothing was reserved by the preview
+    async with session_factory() as session:
+        count = (await session.scalars(select(func.count()).select_from(GenerationLedger))).one()
+    assert count == 0
+
+
+async def test_plan_rejects_empty_and_unknown_selections(
+    client: TestClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    _register(client)
+    created = _upload(client)
+    document_id = UUID(created.json()["id"])
+    await _make_parsed(document_id, session_factory)
+
+    empty = client.post(f"/api/v1/documents/{document_id}/plan", json={"topic_ids": []})
+    assert empty.status_code == 422
+    assert empty.json()["error_code"] == "empty_topic_selection"
+
+    unknown = client.post(f"/api/v1/documents/{document_id}/plan", json={"topic_ids": ["nope"]})
+    assert unknown.status_code == 422
+    assert unknown.json()["error_code"] == "unknown_topic"
+
+
+async def test_plan_of_a_parsing_document_is_409(
+    client: TestClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    _register(client)
+    created = _upload(client)
+    document_id = UUID(created.json()["id"])
+    async with session_factory() as session, session.begin():
+        await DocumentRepository(session).set_status(document_id, DocumentStatus.PARSING)
+
+    response = client.post(f"/api/v1/documents/{document_id}/plan", json={"topic_ids": ["a"]})
+    assert response.status_code == 409
+    assert response.json()["error_code"] == "document_not_ready"
+    assert response.json()["status"] == "parsing"
+
+
+async def test_shared_user_cannot_plan(client: TestClient, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    _register(client, f"owner-{uuid4()}@example.com")
+    created = _upload(client)
+    document_id = UUID(created.json()["id"])
+    await _make_parsed(document_id, session_factory)
+
+    client.cookies.clear()
+    _register(client, f"stranger-{uuid4()}@example.com")
+    response = client.post(f"/api/v1/documents/{document_id}/plan", json={"topic_ids": ["topic-adaptive"]})
+    assert response.status_code == 404
+    assert response.json()["error_code"] == "document_not_found"
+
+
+async def _make_parsed(document_id: UUID, session_factory: async_sessionmaker[AsyncSession]) -> None:
+    """Simulate a finished parse: parsed status, tree and parts (dev seed shape)."""
+    async with session_factory() as session, session.begin():
+        documents = DocumentRepository(session)
+        await documents.set_status(document_id, DocumentStatus.PARSED)
+        await documents.set_topic_tree(
+            document_id,
+            {
+                "topics": [
+                    {
+                        "id": "topic-adaptive",
+                        "title": "Adaptive learning",
+                        "children": [
+                            {"id": "topic-chunking", "title": "Semantic chunking", "children": []},
+                            {"id": "topic-tree", "title": "Topic tree", "children": []},
+                        ],
+                    },
+                    {"id": "topic-quota", "title": "Quota and generation pipeline", "children": []},
+                ]
+            },
+        )
+        await DocumentPartRepository(session).add_many(
+            document_id,
+            [
+                PartDraft(
+                    index=0,
+                    title="What adaptive learning is",
+                    topic_ids=["topic-adaptive", "topic-chunking"],
+                    source_markdown="part one",
+                    token_count=142,
+                    profile={},
+                ),
+                PartDraft(
+                    index=1,
+                    title="Topic tree and semantic chunks",
+                    topic_ids=["topic-chunking", "topic-tree"],
+                    source_markdown="part two",
+                    token_count=178,
+                    profile={},
+                ),
+                PartDraft(
+                    index=2,
+                    title="Quota and generation pipeline",
+                    topic_ids=["topic-quota"],
+                    source_markdown="part three",
+                    token_count=96,
+                    profile={},
+                ),
+            ],
+        )
 
 
 async def test_the_third_upload_in_processing_is_429(

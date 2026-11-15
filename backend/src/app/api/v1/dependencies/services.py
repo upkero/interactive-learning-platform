@@ -12,16 +12,21 @@ from fastapi import Depends
 
 from src.app.api.v1.dependencies.container import ContainerDep
 from src.app.api.v1.dependencies.db import DBSessionDep
+from src.app.core.clock import SystemClock
 from src.app.core.settings.upload import get_upload_settings
 from src.app.interfaces.services.task_dispatcher import TaskDispatcher
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
+from src.app.repositories.generation_ledger_repository import GenerationLedgerRepository
 from src.app.repositories.user_material_repository import UserMaterialRepository
 from src.app.repositories.user_repository import UserRepository
 from src.app.services.documents.document_query_service import DocumentQueryService
 from src.app.services.documents.file_inspector import FileInspector
+from src.app.services.documents.generation_service import GenerationService
 from src.app.services.documents.import_service import ImportService
+from src.app.services.documents.splitting import TopicTreePlanner
 from src.app.services.documents.upload_service import UploadService
+from src.app.services.quota.ledger import QuotaLedger
 
 
 def get_task_dispatcher(container: ContainerDep) -> TaskDispatcher:
@@ -91,14 +96,35 @@ def get_import_service(
 ImportServiceDep = Annotated[ImportService, Depends(get_import_service)]
 
 
+def get_generation_service(
+    session: DBSessionDep,
+) -> GenerationService:
+    return GenerationService(
+        documents=DocumentRepository(session),
+        materials=UserMaterialRepository(session),
+        parts=DocumentPartRepository(session),
+        planner=TopicTreePlanner(),
+        ledger=QuotaLedger(
+            users=UserRepository(session),
+            ledger=GenerationLedgerRepository(session),
+            clock=SystemClock(),
+        ),
+    )
+
+
+GenerationServiceDep = Annotated[GenerationService, Depends(get_generation_service)]
+
+
 __all__ = [
     "DocumentQueryServiceDep",
     "FileInspectorDep",
+    "GenerationServiceDep",
     "ImportServiceDep",
     "TaskDispatcherDep",
     "UploadServiceDep",
     "get_document_query_service",
     "get_file_inspector",
+    "get_generation_service",
     "get_import_service",
     "get_task_dispatcher",
     "get_upload_service",
