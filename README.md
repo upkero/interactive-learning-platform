@@ -63,6 +63,19 @@ http://localhost:8000/docs
 
 Боевая конфигурация описана в `docs/adr/0009-deployment.md`.
 
+Используются три имени: `app.<домен>` (приложение и API на `/api/`),
+`widgets.<домен>` (iframe-виджеты) и `files.<домен>` (MinIO). Удалите старую
+DNS-запись отдельного домена API. Например, список имён сертификата:
+
+```bash
+certbot certonly --webroot -w /var/www/certbot --cert-name grasp.example \
+  -d app.grasp.example -d widgets.grasp.example -d files.grasp.example
+```
+
+При реализации frontend (4.1.1) адрес назначения server-side rewrites для
+`/api/:path*` должен читаться из `API_INTERNAL_URL`: на хосте по умолчанию
+`http://localhost:8000`, в Compose — `http://api:8000` (см. `frontend/.env.example`).
+
 Один раз перед первым деплоем — пакет MinIO в GHCR приватный, без
 входа VPS не скачает образ:
 
