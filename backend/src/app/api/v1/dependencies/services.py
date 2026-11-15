@@ -13,6 +13,7 @@ from fastapi import Depends
 from src.app.api.v1.dependencies.container import ContainerDep
 from src.app.api.v1.dependencies.db import DBSessionDep
 from src.app.core.clock import SystemClock
+from src.app.core.decision_log import DecisionLog
 from src.app.core.settings.upload import get_upload_settings
 from src.app.interfaces.services.task_dispatcher import TaskDispatcher
 from src.app.repositories.document_part_repository import DocumentPartRepository
@@ -158,7 +159,13 @@ QuizCheckServiceDep = Annotated[QuizCheckService, Depends(get_quiz_check_service
 
 
 def get_report_service(session: DBSessionDep) -> ReportService:
-    return ReportService(session=session, reports=ReportRepository(session), usages=WidgetUsageRepository(session))
+    return ReportService(
+        session=session,
+        reports=ReportRepository(session),
+        usages=WidgetUsageRepository(session),
+        widgets=WidgetRepository(session),
+        decision_log=DecisionLog(),
+    )
 
 
 ReportServiceDep = Annotated[ReportService, Depends(get_report_service)]

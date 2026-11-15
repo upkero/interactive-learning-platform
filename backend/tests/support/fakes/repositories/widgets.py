@@ -69,6 +69,19 @@ class FakeWidgetRepository(WidgetRepositoryProtocol):
     async def get(self, widget_id: UUID) -> WidgetRecord | None:
         return self._widgets.get(widget_id)
 
+    async def lock_for_update(self, widget_id: UUID) -> WidgetRecord | None:
+        return self._widgets.get(widget_id)
+
+    async def exclude_if_active(self, widget_id: UUID) -> bool:
+        row = self._widgets.get(widget_id)
+        if row is None or row.status is not WidgetStatus.ACTIVE:
+            return False
+        self._widgets[widget_id] = replace(row, status=WidgetStatus.EXCLUDED)
+        return True
+
+    async def search_active(self, embedding: list[float], limit: int) -> list[WidgetRecord]:
+        return [row for row in self._widgets.values() if row.status is WidgetStatus.ACTIVE][:limit]
+
     async def create(
         self,
         *,
@@ -188,6 +201,9 @@ class FakeReportRepository(ReportRepositoryProtocol):
             if row.widget_id == widget_id and row.user_id == user_id:
                 return row
         return None
+
+    async def count_by_widget(self, widget_id: UUID) -> int:
+        return len({report.user_id for report in self._reports.values() if report.widget_id == widget_id})
 
     async def create_if_not_exists(
         self,

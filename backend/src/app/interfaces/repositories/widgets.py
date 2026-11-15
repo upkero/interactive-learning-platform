@@ -55,6 +55,12 @@ class WidgetRepositoryProtocol(Protocol):
 
     async def set_status(self, widget_id: UUID, status: WidgetStatus) -> None: ...
 
+    async def lock_for_update(self, widget_id: UUID) -> WidgetRecord | None: ...
+
+    async def exclude_if_active(self, widget_id: UUID) -> bool: ...
+
+    async def search_active(self, embedding: list[float], limit: int) -> list[WidgetRecord]: ...
+
 
 class WidgetDescriptionRepositoryProtocol(Protocol):
     """Public API of the widget_descriptions table access (write-only)."""
@@ -87,6 +93,8 @@ class ReportRepositoryProtocol(Protocol):
     """Public API of the reports table access."""
 
     async def get_by_widget_and_user(self, widget_id: UUID, user_id: UUID) -> ReportRecord | None: ...
+
+    async def count_by_widget(self, widget_id: UUID) -> int: ...
 
     async def create_if_not_exists(
         self,

@@ -3,6 +3,7 @@
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +11,7 @@ from src.app.contracts.widgets import WidgetKind, WidgetRecord, WidgetStatus
 from src.app.exceptions.widgets import WidgetConstraintError, WidgetsIntegrityError
 from src.app.interfaces.repositories.widgets import WidgetRepositoryProtocol
 from src.app.models.widget import Widget
+from src.app.models.widget_description import WidgetDescription
 from src.app.repositories._errors import constraint_name
 
 WIDGET_KIND_FIELDS_CHECK: str = "ck_widgets_kind_fields"
@@ -41,6 +43,31 @@ class WidgetRepository(WidgetRepositoryProtocol):
     async def get(self, widget_id: UUID) -> WidgetRecord | None:
         row = await self._session.get(Widget, widget_id)
         return self._to_record(row) if row is not None else None
+
+    async def lock_for_update(self, widget_id: UUID) -> WidgetRecord | None:
+        row = (await self._session.scalars(select(Widget).where(Widget.id == widget_id).with_for_update())).first()
+        return self._to_record(row) if row is not None else None
+
+    async def exclude_if_active(self, widget_id: UUID) -> bool:
+        stmt = (
+            update(Widget)
+            .where(Widget.id == widget_id, Widget.status == WidgetStatus.ACTIVE.value)
+            .values(status=WidgetStatus.EXCLUDED.value)
+            .returning(Widget.id)
+        )
+        return (await self._session.scalars(stmt)).first() is not None
+
+    async def search_active(self, embedding: list[float], limit: int) -> list[WidgetRecord]:
+        distance = WidgetDescription.embedding.cosine_distance(embedding)
+        stmt = (
+            select(Widget)
+            .join(WidgetDescription, WidgetDescription.widget_id == Widget.id)
+            .where(Widget.status == WidgetStatus.ACTIVE.value)
+            .order_by(distance)
+            .limit(limit)
+        )
+        rows = (await self._session.scalars(stmt)).all()
+        return [self._to_record(row) for row in rows]
 
     async def create(
         self,

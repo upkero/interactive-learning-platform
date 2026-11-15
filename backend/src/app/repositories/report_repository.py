@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,6 +36,10 @@ class ReportRepository(ReportRepositoryProtocol):
             await self._session.scalars(select(Report).where(Report.widget_id == widget_id, Report.user_id == user_id))
         ).first()
         return self._to_record(row) if row is not None else None
+
+    async def count_by_widget(self, widget_id: UUID) -> int:
+        statement = select(func.count(func.distinct(Report.user_id))).where(Report.widget_id == widget_id)
+        return int((await self._session.scalars(statement)).one())
 
     async def create_if_not_exists(
         self,
