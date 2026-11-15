@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from src.app.contracts.documents import DocumentErrorCode
+
 
 class DocumentCreatedOut(BaseModel):
     """Body of 201 after a successful upload or import."""
@@ -49,7 +51,7 @@ class DocumentOut(BaseModel):
     title: str
     status: Literal["uploaded", "parsing", "parsed", "generating", "done", "failed"]
     # parse_failed, gdocs_not_public, … (story 1.9)
-    error_code: str | None = None
+    error_code: DocumentErrorCode | None = None
     page_count: int | None
     role: Literal["owner", "shared"]
     source_url: str | None = Field(description="Presigned URL of the source file; for gdocs — the original link.")

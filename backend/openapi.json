@@ -292,13 +292,12 @@
           "error_code": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/DocumentErrorCode"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Error Code"
+            ]
           },
           "id": {
             "format": "uuid",

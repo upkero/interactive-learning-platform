@@ -10,7 +10,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents import MaterialRole, PartDraft, PartStatus
-from src.app.exceptions.quizzes import InvalidQuizAnswerError
+from src.app.exceptions.quizzes import InvalidQuizAnswerError, QuizNotFoundError
 from src.app.services.documents.quiz_check_service import QuizCheckService, check_answer
 from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.repositories.documents import FakeDocumentPartRepository, FakeUserMaterialRepository
@@ -26,6 +26,19 @@ def test_seed_quiz_uses_separate_answer_key() -> None:
     key = content["answer_keys"][quiz["key"]]
     assert check_answer(quiz, key, "a").is_correct
     assert not check_answer(quiz, key, "b").is_correct
+
+
+@pytest.mark.parametrize(
+    ("quiz", "key", "answer"),
+    [
+        ({"type": "numeric"}, {}, 1.0),
+        ({"type": "numeric"}, {"answer": 1.0, "tolerance": -1}, 1.0),
+        ({"type": "single_choice"}, {"correct_id": "a", "why_wrong": {"b": 42}}, "a"),
+    ],
+)
+def test_malformed_answer_key_is_not_exposed(quiz: dict[str, object], key: dict[str, object], answer: object) -> None:
+    with pytest.raises(QuizNotFoundError):
+        check_answer(quiz, key, answer)
 
 
 @pytest.mark.parametrize(

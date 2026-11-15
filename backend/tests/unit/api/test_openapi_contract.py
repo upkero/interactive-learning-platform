@@ -45,6 +45,20 @@ def test_openapi_responses_are_specific_to_operations() -> None:
     assert "402" in paths["/api/v1/documents/{document_id}/generate"]["post"]["responses"]
 
 
+def test_document_error_code_is_limited_to_document_error_enum() -> None:
+    schemas = create_app().openapi()["components"]["schemas"]
+    error_code = schemas["DocumentOut"]["properties"]["error_code"]
+    assert {"$ref": "#/components/schemas/DocumentErrorCode"} in error_code["anyOf"]
+    assert set(schemas["DocumentErrorCode"]["enum"]) == {
+        "parse_failed",
+        "gdocs_not_public",
+        "gdocs_import_failed",
+        "too_many_pages",
+        "empty_document",
+        "enqueue_failed",
+    }
+
+
 @pytest.mark.parametrize("cookie", [None, "expired-or-invalid"])
 def test_logout_clears_cookie_without_authentication(cookie: str | None) -> None:
     with TestClient(create_app()) as client:
