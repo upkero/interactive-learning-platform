@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.app.contracts.quota import LedgerEntry, LedgerOp
 from src.app.exceptions.quota import LedgerEntryDuplicateError, QuotaIntegrityError
 from src.app.interfaces.repositories.quota import GenerationLedgerRepositoryProtocol
+from src.app.models.document import Document
+from src.app.models.document_part import DocumentPart
 from src.app.models.generation_ledger import GenerationLedger
 from src.app.repositories._errors import constraint_name
 
@@ -76,3 +78,17 @@ class GenerationLedgerRepository(GenerationLedgerRepositoryProtocol):
             GenerationLedger.period_start >= period_start,
         )
         return int((await self._session.scalars(stmt)).one())
+
+    async def reserve_period(self, document_id: UUID) -> date | None:
+        stmt = (
+            select(GenerationLedger.period_start)
+            .where(GenerationLedger.document_id == document_id, GenerationLedger.op == LedgerOp.RESERVE.value)
+            .order_by(GenerationLedger.id.desc())
+            .limit(1)
+        )
+        return (await self._session.scalars(stmt)).first()
+
+    async def part_owner(self, part_id: UUID) -> tuple[UUID, UUID] | None:
+        stmt = select(Document.owner_id, Document.id).join(DocumentPart).where(DocumentPart.id == part_id)
+        row = (await self._session.execute(stmt)).one_or_none()
+        return (row[0], row[1]) if row is not None else None

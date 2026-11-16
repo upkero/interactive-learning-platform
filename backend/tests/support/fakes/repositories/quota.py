@@ -14,6 +14,7 @@ class FakeGenerationLedgerRepository(GenerationLedgerRepositoryProtocol):
     def __init__(self) -> None:
         self._entries: list[LedgerEntry] = []
         self._next_id = 1
+        self.part_owners: dict[UUID, tuple[UUID, UUID]] = {}
 
     async def add(
         self,
@@ -41,3 +42,16 @@ class FakeGenerationLedgerRepository(GenerationLedgerRepositoryProtocol):
 
     async def sum_delta(self, user_id: UUID, period_start: date) -> int:
         return sum(e.delta for e in self._entries if e.user_id == user_id and e.period_start >= period_start)
+
+    async def reserve_period(self, document_id: UUID) -> date | None:
+        return next(
+            (
+                e.period_start
+                for e in reversed(self._entries)
+                if e.document_id == document_id and e.op is LedgerOp.RESERVE
+            ),
+            None,
+        )
+
+    async def part_owner(self, part_id: UUID) -> tuple[UUID, UUID] | None:
+        return self.part_owners.get(part_id)

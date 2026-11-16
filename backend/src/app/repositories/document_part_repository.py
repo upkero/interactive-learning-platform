@@ -1,8 +1,10 @@
 """Repository of document parts."""
 
 from collections.abc import Sequence
+from datetime import datetime
 from uuid import UUID
 
+from pydantic import JsonValue
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,6 +49,26 @@ class DocumentPartRepository(DocumentPartRepositoryProtocol):
         row = await self._session.get(DocumentPart, part_id)
         return self._to_record(row) if row is not None else None
 
+    async def lock(self, part_id: UUID) -> PartRecord | None:
+        stmt = select(DocumentPart).where(DocumentPart.id == part_id).with_for_update()
+        row = (await self._session.scalars(stmt)).first()
+        return self._to_record(row) if row is not None else None
+
+    async def lock_stale(self, *, statuses: frozenset[PartStatus], before: datetime, limit: int) -> list[PartRecord]:
+        stmt = (
+            select(DocumentPart)
+            .where(DocumentPart.status.in_([s.value for s in statuses]), DocumentPart.stage_changed_at < before)
+            .order_by(DocumentPart.stage_changed_at, DocumentPart.id)
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
+        return [self._to_record(row) for row in (await self._session.scalars(stmt)).all()]
+
+    async def touch(self, part_id: UUID) -> None:
+        await self._session.execute(
+            update(DocumentPart).where(DocumentPart.id == part_id).values(stage_changed_at=func.now())
+        )
+
     async def list_by_document(self, document_id: UUID) -> list[PartRecord]:
         rows = await self._session.scalars(
             select(DocumentPart).where(DocumentPart.document_id == document_id).order_by(DocumentPart.index)
@@ -86,6 +108,7 @@ class DocumentPartRepository(DocumentPartRepositoryProtocol):
         *,
         error: str | None = None,
         bump_attempts: bool = False,
+        content: dict[str, JsonValue] | None = None,
     ) -> bool:
         """Compare-and-set status change: ``UPDATE ... WHERE status IN (...) RETURNING id``.
 
@@ -101,6 +124,8 @@ class DocumentPartRepository(DocumentPartRepositoryProtocol):
             values["published_at"] = func.now()
         if bump_attempts:
             values["attempts"] = DocumentPart.attempts + 1
+        if content is not None:
+            values["content"] = content
         stmt = (
             update(DocumentPart)
             .where(DocumentPart.id == part_id, DocumentPart.status.in_([s.value for s in expected]))

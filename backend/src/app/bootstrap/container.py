@@ -10,7 +10,9 @@ from src.app.core.settings.auth import AuthSettings, get_auth_settings
 from src.app.core.settings.celery import get_celery_settings
 from src.app.core.settings.llm import get_llm_settings
 from src.app.core.settings.processing import ProcessingSettings, get_processing_settings
+from src.app.core.settings.progress import get_progress_settings
 from src.app.core.settings.reports import ReportsSettings, get_reports_settings
+from src.app.core.settings.solver import get_solver_settings
 from src.app.core.settings.storage import get_storage_settings
 from src.app.core.settings.upload import get_upload_settings
 from src.app.db.session import build_engine, build_session_factory
@@ -43,6 +45,8 @@ from src.app.services.quota.quota_ledger import QuotaLedger
 from src.app.services.quota.quota_service import QuotaService
 from src.app.services.reports.report_service import ReportService
 from src.app.services.sharing.sharing_service import SharingService
+from src.app.services.solver.pipeline.part_recovery import PartRecovery
+from src.app.services.solver.pipeline.stub_pipeline import StubPipeline
 from src.app.services.users.profile_service import ProfileService
 from src.app.storage.s3_object_storage_client import S3ObjectStorageClient, build_ping_client, build_s3_client
 from src.app.tasks.dispatcher import CeleryTaskDispatcher
@@ -66,6 +70,29 @@ class ApplicationContainer:
         return get_reports_settings()
 
     # -- services -----------------------------------------------------------
+
+    @cached_property
+    def part_recovery(self) -> PartRecovery:
+        return PartRecovery(
+            session_factory=self.session_factory,
+            parts=DocumentPartRepository,
+            documents=DocumentRepository,
+            ledger=self.quota_ledger,
+            dispatcher=self.task_dispatcher,
+        )
+
+    @cached_property
+    def processing_pipeline(self) -> StubPipeline:
+        if get_solver_settings().pipeline != "stub":
+            raise RuntimeError("The real solver pipeline is not available until story 2.7")
+        return StubPipeline(
+            session_factory=self.session_factory,
+            parts=DocumentPartRepository,
+            documents=DocumentRepository,
+            ledger=self.quota_ledger,
+            redis=self.progress_redis,
+            progress_settings=get_progress_settings(),
+        )
 
     @cached_property
     def auth_service(self) -> AuthService:
@@ -207,6 +234,11 @@ class ApplicationContainer:
         # Async Redis client for readiness probes and progress streams.
         redis_client: aioredis.Redis = aioredis.Redis.from_url(get_celery_settings().broker_url)
         return redis_client
+
+    @cached_property
+    def progress_redis(self) -> aioredis.Redis:
+        client: aioredis.Redis = aioredis.Redis.from_url(str(get_progress_settings().url))
+        return client
 
     @cached_property
     def task_dispatcher(self) -> CeleryTaskDispatcher:

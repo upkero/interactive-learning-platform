@@ -1,8 +1,11 @@
 """Protocols of the document aggregate repositories."""
 
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from typing import Any, Protocol
 from uuid import UUID
+
+from pydantic import JsonValue
 
 from src.app.contracts.documents.document_record import DocumentRecord
 from src.app.contracts.documents.image_draft import ImageDraft
@@ -60,11 +63,25 @@ class DocumentRepositoryProtocol(Protocol):
 
     async def count_active(self, owner_id: UUID, *, exclude: UUID | None = None) -> int: ...
 
+    async def refresh_status(self, document_id: UUID) -> None: ...
+
+    async def lock_stale_uploaded(self, *, before: datetime, limit: int) -> list[DocumentRecord]: ...
+
+    async def touch(self, document_id: UUID) -> None: ...
+
 
 class DocumentPartRepositoryProtocol(Protocol):
     """Public API of the document_parts table access."""
 
     async def get(self, part_id: UUID) -> PartRecord | None: ...
+
+    async def lock(self, part_id: UUID) -> PartRecord | None: ...
+
+    async def lock_stale(
+        self, *, statuses: frozenset[PartStatus], before: datetime, limit: int
+    ) -> list[PartRecord]: ...
+
+    async def touch(self, part_id: UUID) -> None: ...
 
     async def list_by_document(self, document_id: UUID) -> list[PartRecord]: ...
 
@@ -78,6 +95,7 @@ class DocumentPartRepositoryProtocol(Protocol):
         *,
         error: str | None = None,
         bump_attempts: bool = False,
+        content: dict[str, JsonValue] | None = None,
     ) -> bool: ...
 
 

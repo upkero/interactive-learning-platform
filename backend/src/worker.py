@@ -12,6 +12,7 @@ setup_logging(get_logging_settings())
 celery_app = Celery(
     "grasp",
     broker=get_celery_settings().broker_url,
+    include=["src.app.tasks.parts"],
 )
 celery_app.conf.update(
     task_ignore_result=True,

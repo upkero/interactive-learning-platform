@@ -1,10 +1,11 @@
 """Repository of documents."""
 
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +15,7 @@ from src.app.contracts.documents.topic_node import topic_roots
 from src.app.exceptions.documents import DocumentsIntegrityError
 from src.app.interfaces.repositories.documents import DocumentRepositoryProtocol
 from src.app.models.document import Document
+from src.app.models.document_part import DocumentPart
 
 
 class DocumentRepository(DocumentRepositoryProtocol):
@@ -46,6 +48,33 @@ class DocumentRepository(DocumentRepositoryProtocol):
     async def get(self, document_id: UUID) -> DocumentRecord | None:
         row = await self._session.get(Document, document_id)
         return self._to_record(row) if row is not None else None
+
+    async def refresh_status(self, document_id: UUID) -> None:
+        stmt = select(Document).where(Document.id == document_id).with_for_update()
+        document = (await self._session.scalars(stmt)).first()
+        if document is None or document.status != DocumentStatus.GENERATING.value:
+            return
+        statuses = list(
+            (
+                await self._session.scalars(select(DocumentPart.status).where(DocumentPart.document_id == document_id))
+            ).all()
+        )
+        if statuses and all(status in ("published", "failed") for status in statuses):
+            document.status = DocumentStatus.DONE.value if "published" in statuses else DocumentStatus.FAILED.value
+            await self._session.flush()
+
+    async def lock_stale_uploaded(self, *, before: datetime, limit: int) -> list[DocumentRecord]:
+        stmt = (
+            select(Document)
+            .where(Document.status == DocumentStatus.UPLOADED.value, Document.updated_at < before)
+            .order_by(Document.updated_at, Document.id)
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
+        return [self._to_record(row) for row in (await self._session.scalars(stmt)).all()]
+
+    async def touch(self, document_id: UUID) -> None:
+        await self._session.execute(update(Document).where(Document.id == document_id).values(updated_at=func.now()))
 
     async def get_owned(self, document_id: UUID, owner_id: UUID) -> DocumentRecord | None:
         row = (

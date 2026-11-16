@@ -6,6 +6,8 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
+from pydantic import JsonValue
+
 from src.app.contracts.documents.document_record import DocumentRecord
 from src.app.contracts.documents.image_draft import ImageDraft
 from src.app.contracts.documents.image_record import ImageRecord
@@ -36,6 +38,7 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
 
     def __init__(self) -> None:
         self._documents: dict[UUID, DocumentRecord] = {}
+        self.refreshed: list[UUID] = []
         # minimal transaction emulation: ids created since the last
         # checkpoint (commit) are discarded by rollback()
         self._pending: list[UUID] = []
@@ -51,6 +54,19 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
 
     async def get(self, document_id: UUID) -> DocumentRecord | None:
         return self._documents.get(document_id)
+
+    async def refresh_status(self, document_id: UUID) -> None:
+        self.refreshed.append(document_id)
+
+    async def lock_stale_uploaded(self, *, before: datetime, limit: int) -> list[DocumentRecord]:
+        return sorted(
+            (d for d in self._documents.values() if d.status is DocumentStatus.UPLOADED and d.updated_at < before),
+            key=lambda d: (d.updated_at, d.id),
+        )[:limit]
+
+    async def touch(self, document_id: UUID) -> None:
+        if document_id in self._documents:
+            self._documents[document_id] = replace(self._documents[document_id], updated_at=now())
 
     async def get_owned(self, document_id: UUID, owner_id: UUID) -> DocumentRecord | None:
         row = self._documents.get(document_id)
@@ -137,6 +153,19 @@ class FakeDocumentPartRepository(DocumentPartRepositoryProtocol):
     async def get(self, part_id: UUID) -> PartRecord | None:
         return self._parts.get(part_id)
 
+    async def lock(self, part_id: UUID) -> PartRecord | None:
+        return await self.get(part_id)
+
+    async def lock_stale(self, *, statuses: frozenset[PartStatus], before: datetime, limit: int) -> list[PartRecord]:
+        return sorted(
+            (p for p in self._parts.values() if p.status in statuses and p.stage_changed_at < before),
+            key=lambda p: (p.stage_changed_at, p.id),
+        )[:limit]
+
+    async def touch(self, part_id: UUID) -> None:
+        if part_id in self._parts:
+            self._parts[part_id] = replace(self._parts[part_id], stage_changed_at=now())
+
     async def list_by_document(self, document_id: UUID) -> list[PartRecord]:
         return sorted(
             (p for p in self._parts.values() if p.document_id == document_id),
@@ -174,6 +203,7 @@ class FakeDocumentPartRepository(DocumentPartRepositoryProtocol):
         *,
         error: str | None = None,
         bump_attempts: bool = False,
+        content: dict[str, JsonValue] | None = None,
     ) -> bool:
         row = self._parts.get(part_id)
         if row is None or row.status not in expected:
@@ -184,6 +214,7 @@ class FakeDocumentPartRepository(DocumentPartRepositoryProtocol):
             error=error,
             stage_changed_at=now(),
             attempts=row.attempts + (1 if bump_attempts else 0),
+            content=content if content is not None else row.content,
             published_at=datetime.now(UTC) if to is PartStatus.PUBLISHED else row.published_at,
         )
         self._parts[part_id] = updated
