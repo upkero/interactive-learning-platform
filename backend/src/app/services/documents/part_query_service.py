@@ -5,7 +5,6 @@ from contextlib import suppress
 from copy import deepcopy
 from uuid import UUID
 
-from pydantic import TypeAdapter
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents.part_details import PartDetails
@@ -18,10 +17,11 @@ from src.app.interfaces.repositories.documents import (
 )
 from src.app.interfaces.repositories.widgets import WidgetRepositoryProtocol
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
-from src.app.schemas.parts import PartContentOut
 from src.app.services.documents.image_url_resolver import ImageUrlResolver
 
-_PUBLIC_CONTENT = TypeAdapter(PartContentOut)
+_PUBLIC_CONTENT_FIELDS = frozenset(
+    {"schema_version", "title", "markdown", "key_terms", "widgets", "images", "quizzes", "sources", "sections"}
+)
 
 
 def _public_quiz(quiz: dict[str, object]) -> dict[str, object]:
@@ -78,7 +78,7 @@ class PartQueryService:
                 return PartDetails(part=part, content=None)
 
             content: dict[str, object] = deepcopy(
-                {key: value for key, value in part.content.items() if key in PartContentOut.model_fields}
+                {key: value for key, value in part.content.items() if key in _PUBLIC_CONTENT_FIELDS}
             )
             quizzes = content.get("quizzes", [])
             if not isinstance(quizzes, list) or any(not isinstance(quiz, dict) for quiz in quizzes):
@@ -86,7 +86,7 @@ class PartQueryService:
             content["quizzes"] = [_public_quiz(quiz) for quiz in quizzes]
             await self._fill_widgets(content, self._widgets(session))
             await self._fill_images(content, self._images(session))
-            return PartDetails(part=part, content=_PUBLIC_CONTENT.validate_python(content).model_dump(mode="json"))
+            return PartDetails(part=part, content=content)
 
     async def _fill_widgets(self, content: dict[str, object], widgets: WidgetRepositoryProtocol) -> None:
         slots = content.get("widgets", {})

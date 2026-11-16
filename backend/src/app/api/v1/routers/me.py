@@ -74,7 +74,8 @@ async def list_materials(
     service: MaterialQueryServiceDep,
     role_filter: Annotated[Literal["mine", "shared"], Query(alias="filter")] = "mine",
 ) -> list[MaterialOut]:
-    role = MaterialRole.OWNER if role_filter == "mine" else MaterialRole.SHARED
+    roles = {"mine": MaterialRole.OWNER, "shared": MaterialRole.SHARED}
+    role = roles[role_filter]
     records = await service.list_materials(user.id, role)
     return [
         MaterialOut(

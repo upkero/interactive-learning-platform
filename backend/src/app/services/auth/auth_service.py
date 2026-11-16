@@ -1,7 +1,6 @@
 """Registration, login and session issuing (story 1.4.2).
 
-The service owns the transaction: repositories only flush, the commit
-happens here after the domain work succeeded. Passwords are argon2,
+The service owns the transaction; repositories only flush. Passwords are argon2,
 emails are normalized to lowercase, and login never reveals whether the
 email exists — unknown email and wrong password answer the same
 ``invalid_credentials``.

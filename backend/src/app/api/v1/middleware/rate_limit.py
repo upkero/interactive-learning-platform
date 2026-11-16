@@ -16,6 +16,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 
+from src.app.core.settings.rate_limit import get_rate_limit_settings
 from src.app.exceptions.auth import RateLimitedError
 
 
@@ -32,7 +33,13 @@ def client_ip(request: Request) -> str:
     return get_remote_address(request)
 
 
-limiter = Limiter(key_func=client_ip)
+# The decorators need this limiter at import time, before the container exists.
+limiter = Limiter(
+    key_func=client_ip,
+    storage_uri=get_rate_limit_settings().storage_uri,
+    key_prefix="grasp:ratelimit",
+    in_memory_fallback_enabled=True,
+)
 
 
 async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:

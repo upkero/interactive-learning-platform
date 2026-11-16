@@ -13,7 +13,7 @@ from src.app.contracts.quizzes.check_result import QuizCheckResult
 from src.app.exceptions.quizzes import InvalidQuizAnswerError, QuizIntegrityError, QuizNotFoundError
 from src.app.interfaces.repositories.documents import DocumentPartRepositoryProtocol, UserMaterialRepositoryProtocol
 from src.app.interfaces.repositories.quizzes import QuizAttemptRepositoryProtocol
-from src.app.schemas.quiz_keys import MultipleChoiceKey, NumericKey, OrderingKey, SingleChoiceKey
+from src.app.services.solver.quizzes.answer_keys import MultipleChoiceKey, NumericKey, OrderingKey, SingleChoiceKey
 
 logger = logging.getLogger(__name__)
 

@@ -1,4 +1,4 @@
-"""Validation of private answer keys stored in published content."""
+"""Validate private answer keys stored in published content."""
 
 from pydantic import BaseModel, Field, StrictFloat, StrictStr
 

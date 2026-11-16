@@ -823,7 +823,9 @@ async def test_plan_of_a_parsing_document_is_409(
     assert response.json()["status"] == "parsing"
 
 
-async def test_shared_user_cannot_plan(client: TestClient, session_factory: async_sessionmaker[AsyncSession]) -> None:
+async def test_shared_user_cannot_plan_generate_or_read_parts(
+    client: TestClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
     _register(client, f"owner-{uuid4()}@example.com")
     created = _upload(client)
     document_id = UUID(created.json()["id"])
