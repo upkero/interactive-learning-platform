@@ -1,5 +1,10 @@
 """Unit tests 1.4.1: slowapi rate limiting answers the unified error format."""
 
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
@@ -32,6 +37,17 @@ def _build_app() -> FastAPI:
 # in the shared module-level Limiter keyed by the function name, so every
 # app rebuild would stack another limit onto the same endpoint.
 _APP = _build_app()
+
+
+def test_app_cannot_start_without_rate_limit_storage(tmp_path: Path) -> None:
+    env = os.environ.copy()
+    env.pop("RATE_LIMIT_STORAGE_URI", None)
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[3])
+    result = subprocess.run(
+        [sys.executable, "-c", "import src.main"], cwd=tmp_path, env=env, capture_output=True, text=True, check=False
+    )
+    assert result.returncode != 0
+    assert "storage_uri" in result.stderr
 
 
 @pytest.fixture

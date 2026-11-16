@@ -38,6 +38,7 @@ jobs:
     env:
       DB_URL: postgresql+asyncpg://grasp:grasp@localhost:5432/grasp_test
       REDIS_URL: redis://localhost:6379/0
+      RATE_LIMIT_STORAGE_URI: memory://
       AUTH_JWT_SECRET: ci-test-jwt-secret-must-be-at-least-32-characters-long
       SEED_PASSWORD: ci-seed-password
       # MinIO raised below, admin creds match the dev defaults in compose

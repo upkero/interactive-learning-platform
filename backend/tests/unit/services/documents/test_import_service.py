@@ -114,7 +114,11 @@ async def test_failed_dispatch_marks_import_failed_and_releases_capacity(caplog:
     assert document.error_code is DocumentErrorCode.ENQUEUE_FAILED
     assert document.error_detail == "OSError('broker timeout')"
     failure_logs = [record for record in caplog.records if record.message == "Document processing failed."]
-    assert not failure_logs
+    assert len(failure_logs) == 1
+    assert failure_logs[0].levelname == "WARNING"
+    assert vars(failure_logs[0])["document_id"] == str(document.id)
+    assert vars(failure_logs[0])["error_code"] == "enqueue_failed"
+    assert vars(failure_logs[0])["exception"] == "OSError('broker timeout')"
     dispatcher.fail_with = None
     assert (await service.import_document(owner_id=owner, url=_VALID_URL)).status is DocumentStatus.UPLOADED
 

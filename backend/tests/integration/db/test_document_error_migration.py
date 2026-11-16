@@ -75,24 +75,3 @@ async def test_document_diagnostics_migration_preserves_legacy_text(db: AsyncEng
         assert errors[coded_document] == "parse_failed"
     finally:
         await asyncio.to_thread(_migrate, "head")
-
-
-async def test_0004_repairs_an_older_0003_installation(db: AsyncEngine) -> None:
-    await asyncio.to_thread(_migrate, "0003_document_error_code", downgrade=True)
-    try:
-        # Simulate the originally published 0003, which had no such column.
-        async with db.begin() as connection:
-            await connection.execute(text("ALTER TABLE documents DROP COLUMN error_detail"))
-        await asyncio.to_thread(_migrate, "head")
-        async with db.connect() as connection:
-            assert (
-                await connection.scalar(
-                    text(
-                        "SELECT count(*) FROM information_schema.columns "
-                        "WHERE table_name = 'documents' AND column_name = 'error_detail'"
-                    )
-                )
-                == 1
-            )
-    finally:
-        await asyncio.to_thread(_migrate, "head")

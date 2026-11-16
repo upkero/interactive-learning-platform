@@ -38,8 +38,6 @@ async def mark_document_failed(
             error_code=error_code,
             error_detail=error_detail,
         )
-    if error_code is DocumentErrorCode.ENQUEUE_FAILED:
-        return  # The dispatcher already logged the broker failure.
     logger.warning(
         "Document processing failed.",
         extra={

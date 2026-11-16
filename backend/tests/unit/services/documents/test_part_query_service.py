@@ -13,7 +13,7 @@ from src.app.contracts.documents import ImageDraft, MaterialRole, PartDraft, Par
 from src.app.contracts.widgets import WidgetKind
 from src.app.exceptions.documents import PartNotFoundError
 from src.app.schemas.parts import PartContentOut
-from src.app.services.documents.part_query_service import PartQueryService
+from src.app.services.documents.part_query_service import _PUBLIC_CONTENT_FIELDS, PartQueryService
 from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.repositories.documents import (
     FakeDocumentPartRepository,
@@ -24,6 +24,10 @@ from tests.support.fakes.repositories.widgets import FakeWidgetRepository
 from tests.support.fakes.storage.object_storage_client import FakeObjectStorageClient
 
 pytestmark = pytest.mark.unit
+
+
+def test_public_content_allowlist_matches_http_schema() -> None:
+    assert set(PartContentOut.model_fields) == _PUBLIC_CONTENT_FIELDS
 
 
 def test_seed_public_content_cannot_contain_answer_keys() -> None:

@@ -151,7 +151,11 @@ async def test_queue_failure_keeps_object_and_releases_upload_capacity(caplog: p
     assert document.status is DocumentStatus.FAILED and document.error_code is DocumentErrorCode.ENQUEUE_FAILED
     assert document.error_detail == "OSError('broker connection refused')"
     failure_logs = [record for record in caplog.records if record.message == "Document processing failed."]
-    assert not failure_logs
+    assert len(failure_logs) == 1
+    assert failure_logs[0].levelname == "WARNING"
+    assert vars(failure_logs[0])["document_id"] == str(document.id)
+    assert vars(failure_logs[0])["error_code"] == "enqueue_failed"
+    assert vars(failure_logs[0])["exception"] == "OSError('broker connection refused')"
     assert storage.delete_object_calls == []
     dispatcher.fail_with = None
     assert (

@@ -51,7 +51,7 @@ class CeleryTaskDispatcher:
         try:
             await asyncio.to_thread(self._app.send_task, task_name, args=[str(task_id)], queue=queue)
         except (KombuError, OSError) as exc:
-            logger.error("Task dispatch failed.", extra={"task": task_name}, exc_info=exc)
+            logger.error("Task dispatch failed.", extra={"task": task_name, "task_arg": str(task_id)}, exc_info=exc)
             raise TaskDispatchError() from exc
 
 

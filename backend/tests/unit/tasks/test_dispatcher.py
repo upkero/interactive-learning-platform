@@ -34,8 +34,9 @@ async def test_task_names_queues_and_serialized_ids(monkeypatch: pytest.MonkeyPa
 
 
 @pytest.mark.parametrize("cause", [OperationalError("kombu failure"), OSError("network failure")])
+@pytest.mark.parametrize("part", [False, True])
 async def test_broker_failure_is_private_and_retains_cause(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, cause: Exception
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, cause: Exception, part: bool
 ) -> None:
     dispatcher = CeleryTaskDispatcher(CelerySettings(broker_url="memory://"))
 
@@ -44,8 +45,14 @@ async def test_broker_failure_is_private_and_retains_cause(
 
     monkeypatch.setattr(dispatcher._app, "send_task", fail)
     with pytest.raises(TaskDispatchError) as caught:
-        await dispatcher.enqueue_parse(UUID(int=1))
+        if part:
+            await dispatcher.enqueue_part(UUID(int=1), high=True)
+        else:
+            await dispatcher.enqueue_parse(UUID(int=1))
     assert caught.value.__cause__ is cause
     assert "task" not in caught.value.extra
     records = [record for record in caplog.records if record.message == "Task dispatch failed."]
-    assert len(records) == 1 and vars(records[0])["task"] == "documents.parse_document"
+    assert len(records) == 1
+    assert vars(records[0])["task"] == ("parts.process_part" if part else "documents.parse_document")
+    assert vars(records[0])["task_arg"] == str(UUID(int=1))
+    assert records[0].exc_info is not None
