@@ -2,6 +2,8 @@
 
 import importlib
 import pkgutil
+import re
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,6 +13,26 @@ from src.app.exceptions.base import BaseAppException
 from src.main import create_app
 
 pytestmark = pytest.mark.unit
+
+
+def test_error_documentation_matches_openapi() -> None:
+    schema = create_app().openapi()
+    doc = (Path(__file__).resolve().parents[4] / "docs/api-errors.md").read_text(encoding="utf-8")
+    public, documents = doc.split("## Коды ошибок документа")
+
+    def codes(text: str) -> set[str]:
+        return set(re.findall(r"^\| `([^`]+)` \|", text, re.MULTILINE))
+
+    assert codes(public) == set(schema["components"]["schemas"]["ErrorCode"]["enum"])
+    assert codes(documents) == set(schema["components"]["schemas"]["DocumentErrorCode"]["enum"])
+    for line in public.splitlines():
+        if not line.startswith("| `"):
+            continue
+        fields = line.split("|")
+        status = fields[2].strip()
+        for method, path in re.findall(r"`(GET|POST|PATCH|DELETE) (/[^`]*)`", fields[5]):
+            operation = schema["paths"]["/api/v1" + path][method.lower()]
+            assert status in operation["responses"]
 
 
 def test_openapi_uses_unified_error_responses_and_lists_error_codes() -> None:
