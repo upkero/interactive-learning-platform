@@ -13,7 +13,6 @@ from src.app.exceptions.tasks import TaskDispatchError
 from src.app.interfaces.observability.metrics_collector import MetricsCollector
 from src.app.interfaces.repositories.documents import DocumentPartRepositoryProtocol, DocumentRepositoryProtocol
 from src.app.interfaces.services.task_dispatcher import TaskDispatcher
-from src.app.observability.noop_metrics_collector import NoopMetricsCollector
 from src.app.services.solver.pipeline.part_recovery import PartRecovery
 
 logger = logging.getLogger(__name__)
@@ -38,9 +37,9 @@ class Watchdog:
         documents: Callable[[AsyncSession], DocumentRepositoryProtocol],
         recovery: PartRecovery,
         dispatcher: TaskDispatcher,
+        metrics: MetricsCollector,
         stuck_after: timedelta = timedelta(minutes=10),
         lost_after: timedelta = timedelta(minutes=30),
-        metrics: MetricsCollector | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._parts = parts
@@ -49,7 +48,7 @@ class Watchdog:
         self._dispatcher = dispatcher
         self._stuck_after = stuck_after
         self._lost_after = lost_after
-        self._metrics = metrics or NoopMetricsCollector()
+        self._metrics = metrics
 
     async def tick(self) -> WatchdogReport:
         retry: list[UUID] = []
@@ -72,6 +71,14 @@ class Watchdog:
                 except Exception:
                     errors += 1
                     logger.exception("watchdog.part_failed", extra={"part_id": str(part.id)})
+                    # Keep a poisoned part out of the oldest-first batch: it has
+                    # already spent its retries, so touching is preferable to
+                    # logging the same failure on every tick.
+                    try:
+                        async with session.begin_nested():
+                            await parts.touch(part.id)
+                    except Exception:
+                        logger.exception("watchdog.touch_failed", extra={"part_id": str(part.id)})
             for part in await parts.lock_stale(
                 statuses=frozenset({PartStatus.QUEUED}), older_than=self._lost_after, limit=BATCH_SIZE
             ):
@@ -91,6 +98,7 @@ class Watchdog:
                 except Exception:
                     errors += 1
                     logger.exception("watchdog.document_failed", extra={"document_id": str(document.id)})
+        await self._recovery.publish_pending()
         for part_id in [*retry, *lost_parts]:
             try:
                 await self._dispatcher.enqueue_part(part_id, high=False)

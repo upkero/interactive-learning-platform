@@ -6,11 +6,12 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents.statuses import PartStatus
+from src.app.contracts.progress import ProgressEventType
 from src.app.contracts.quota import LedgerOp
 from src.app.services.solver.pipeline.watchdog import Watchdog
 from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
-from tests.unit.services.solver.pipeline.test_part_recovery import RecoveryFixture, build_recovery
+from tests.support.fixtures.solver import RecoveryFixture, build_recovery
 
 pytestmark = pytest.mark.unit
 
@@ -40,6 +41,7 @@ async def test_watchdog_requeues_first_attempt() -> None:
     assert report.requeued == 1 and report.failed == 0
     assert case.dispatcher.calls == [("enqueue_part", (case.part.id, False))]
     assert ("watchdog_actions_total", {"action": "requeued"}, 1) in metrics.labeled_counters
+    assert [(e[1], e[3]) for e in case.notifier.events] == [(ProgressEventType.PART_STATUS, PartStatus.QUEUED.value)]
 
 
 async def test_watchdog_fails_and_refunds_exhausted_attempt() -> None:
@@ -50,6 +52,10 @@ async def test_watchdog_fails_and_refunds_exhausted_attempt() -> None:
     assert [e.op for e in case.ledger.entries] == [LedgerOp.RESERVE, LedgerOp.REFUND]
     assert case.documents.refreshed == [case.part.document_id]
     assert ("watchdog_actions_total", {"action": "failed"}, 1) in metrics.labeled_counters
+    assert [(e[1], e[3]) for e in case.notifier.events] == [
+        (ProgressEventType.PART_STATUS, PartStatus.FAILED.value),
+        (ProgressEventType.DOCUMENT_DONE, None),
+    ]
 
 
 async def test_watchdog_requeues_only_lost_queued_parts() -> None:

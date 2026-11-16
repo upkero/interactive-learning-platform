@@ -14,20 +14,15 @@ from celery import Celery
 pytestmark = pytest.mark.integration
 
 
-def test_worker_consumes_high_priority_before_normal(monkeypatch: pytest.MonkeyPatch) -> None:
-    broker = os.environ.get("TEST_CELERY_BROKER_URL")
-    if not broker:
-        if os.environ.get("CI"):
-            pytest.fail("TEST_CELERY_BROKER_URL is required in CI")
-        pytest.skip("TEST_CELERY_BROKER_URL must point to an isolated Redis broker")
-    monkeypatch.setenv("CELERY_BROKER_URL", broker)
+def test_worker_consumes_high_priority_before_normal(monkeypatch: pytest.MonkeyPatch, broker_url: str) -> None:
+    monkeypatch.setenv("CELERY_BROKER_URL", broker_url)
     key = f"priority-test-{uuid4()}"
-    client = redis.Redis.from_url(broker)
-    app = Celery(broker=broker)
+    client = redis.Redis.from_url(broker_url)
+    app = Celery(broker=broker_url)
     for _ in range(20):
         app.send_task("tests.record_priority", args=[key, "normal"], queue="parts")
     app.send_task("tests.record_priority", args=[key, "high"], queue="parts.high")
-    env = {**os.environ, "CELERY_BROKER_URL": broker}
+    env = {**os.environ, "CELERY_BROKER_URL": broker_url}
     process = subprocess.Popen(
         [
             sys.executable,

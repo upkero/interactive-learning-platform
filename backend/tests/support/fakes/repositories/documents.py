@@ -40,9 +40,14 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
     def __init__(self) -> None:
         self._documents: dict[UUID, DocumentRecord] = {}
         self.refreshed: list[UUID] = []
+        self._parts: DocumentPartRepositoryProtocol | None = None
         # minimal transaction emulation: ids created since the last
         # checkpoint (commit) are discarded by rollback()
         self._pending: list[UUID] = []
+
+    def attach_parts(self, parts: DocumentPartRepositoryProtocol) -> None:
+        """Let ``refresh_status`` aggregate the same parts the service sees."""
+        self._parts = parts
 
     def checkpoint(self) -> None:
         self._pending.clear()
@@ -60,7 +65,19 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
         self._documents[record.id] = record
 
     async def refresh_status(self, document_id: UUID) -> None:
+        """Mirror the real aggregation: finish generating documents when all parts are terminal."""
         self.refreshed.append(document_id)
+        document = self._documents.get(document_id)
+        if document is None or document.status is not DocumentStatus.GENERATING or self._parts is None:
+            return
+        parts = await self._parts.list_by_document(document_id)
+        if parts and all(p.status in {PartStatus.PUBLISHED, PartStatus.FAILED} for p in parts):
+            published = any(p.status is PartStatus.PUBLISHED for p in parts)
+            self._documents[document_id] = replace(
+                document,
+                status=DocumentStatus.DONE if published else DocumentStatus.FAILED,
+                updated_at=now(),
+            )
 
     async def lock_stale_uploaded(self, *, older_than: timedelta, limit: int) -> list[DocumentRecord]:
         before = now() - older_than

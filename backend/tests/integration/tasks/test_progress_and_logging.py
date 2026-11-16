@@ -6,13 +6,13 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 import redis.asyncio as redis
 from celery import Celery
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from src.app.contracts.progress import ProgressEventType
 from src.app.core.settings.progress import ProgressSettings
 from src.app.observability.progress_notifier import RedisProgressNotifier
 from src.app.tasks.names import PROCESS_PART_TASK
@@ -20,22 +20,15 @@ from src.app.tasks.names import PROCESS_PART_TASK
 pytestmark = pytest.mark.integration
 
 
-def broker_url() -> str:
-    broker = os.environ.get("TEST_CELERY_BROKER_URL")
-    if not broker:
-        if os.environ.get("CI"):
-            pytest.fail("TEST_CELERY_BROKER_URL is required in CI")
-        pytest.skip("TEST_CELERY_BROKER_URL must point to an isolated Redis broker")
-    return broker
-
-
-async def test_progress_stream_json_contract() -> None:
-    client = redis.Redis.from_url(broker_url())
+async def test_progress_stream_json_contract(broker_url: str) -> None:
+    client = redis.Redis.from_url(broker_url)
     document_id, part_id = uuid4(), uuid4()
     key = f"progress:{document_id}"
     notifier = RedisProgressNotifier(client, ProgressSettings())
     try:
-        await notifier.emit(document_id, "part_status", part_id=part_id, stage="main_pass", message="Processing")
+        await notifier.emit(
+            document_id, ProgressEventType.PART_STATUS, part_id=part_id, stage="main_pass", message="Processing"
+        )
         rows = await client.xrange(key)
         assert len(rows) == 1
         event = json.loads(rows[0][1][b"data"])
@@ -49,15 +42,13 @@ async def test_progress_stream_json_contract() -> None:
 
 async def test_worker_logs_skip_as_json_with_part_id(
     monkeypatch: pytest.MonkeyPatch,
-    session_factory: async_sessionmaker[AsyncSession],
-    part_ids: tuple[UUID, UUID, UUID],
+    broker_url: str,
     tmp_path: Path,
 ) -> None:
-    broker = broker_url()
-    monkeypatch.setenv("CELERY_BROKER_URL", broker)
+    monkeypatch.setenv("CELERY_BROKER_URL", broker_url)
     # A missing UUID must reach the task and take the part.skip branch.
     part_id = uuid4()
-    app = Celery(broker=broker)
+    app = Celery(broker=broker_url)
     log_file = tmp_path / "worker.log"
     with log_file.open("wb") as output:
         process = await asyncio.create_subprocess_exec(
@@ -75,7 +66,7 @@ async def test_worker_logs_skip_as_json_with_part_id(
             "--without-gossip",
             "--without-mingle",
             "--without-heartbeat",
-            env={**os.environ, "LOG_FORMAT": "json", "CELERY_BROKER_URL": broker},
+            env={**os.environ, "LOG_FORMAT": "json", "CELERY_BROKER_URL": broker_url},
             stdout=output,
             stderr=subprocess.STDOUT,
         )

@@ -2,15 +2,17 @@
 
 from uuid import UUID
 
+from src.app.contracts.progress import ProgressEventType
+
 
 class FakeProgressNotifier:
     def __init__(self) -> None:
-        self.events: list[tuple[UUID, str, UUID | None, str | None, str]] = []
+        self.events: list[tuple[UUID, ProgressEventType, UUID | None, str | None, str]] = []
 
     async def emit(
         self,
         document_id: UUID,
-        event_type: str,
+        event_type: ProgressEventType,
         *,
         part_id: UUID | None = None,
         stage: str | None = None,

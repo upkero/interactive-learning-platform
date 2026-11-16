@@ -88,6 +88,7 @@ class ApplicationContainer:
             documents=DocumentRepository,
             ledger=self.quota_ledger,
             dispatcher=self.task_dispatcher,
+            notifier=self.progress_notifier,
         )
 
     @cached_property
@@ -108,7 +109,7 @@ class ApplicationContainer:
             parts=DocumentPartRepository,
             documents=DocumentRepository,
             ledger=self.quota_ledger,
-            notifier=RedisProgressNotifier(self.progress_redis, get_progress_settings()),
+            notifier=self.progress_notifier,
         )
 
     @cached_property
@@ -261,6 +262,10 @@ class ApplicationContainer:
     def progress_redis(self) -> aioredis.Redis:
         client: aioredis.Redis = aioredis.Redis.from_url(str(get_progress_settings().url))
         return client
+
+    @cached_property
+    def progress_notifier(self) -> RedisProgressNotifier:
+        return RedisProgressNotifier(self.progress_redis, get_progress_settings())
 
     @cached_property
     def task_dispatcher(self) -> CeleryTaskDispatcher:
