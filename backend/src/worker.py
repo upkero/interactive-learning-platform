@@ -1,17 +1,18 @@
+"""Celery worker and scheduler configuration."""
+
 from celery import Celery
+from kombu import Exchange, Queue
 
 from src.app.core.logging import setup_logging
 from src.app.core.settings.celery import get_celery_settings
 from src.app.core.settings.logging import get_logging_settings
+from src.app.tasks.names import MAINTENANCE_QUEUE, PARSE_DOCUMENT_TASK, PARTS_HIGH_QUEUE, PARTS_QUEUE
 
 setup_logging(get_logging_settings())
-settings = get_celery_settings()
-
 celery_app = Celery(
     "grasp",
-    broker=str(settings.broker_url),
+    broker=get_celery_settings().broker_url,
 )
-
 celery_app.conf.update(
     task_ignore_result=True,
     task_serializer="json",
@@ -20,5 +21,13 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     task_soft_time_limit=300,
     task_time_limit=330,
-    task_default_queue="parts",
+    task_default_queue=PARTS_QUEUE,
+    task_queues=tuple(
+        Queue(name, exchange=Exchange(name, type="direct"), routing_key=name)
+        for name in (MAINTENANCE_QUEUE, PARTS_HIGH_QUEUE, PARTS_QUEUE)
+    ),
+    task_routes={PARSE_DOCUMENT_TASK: {"queue": PARTS_HIGH_QUEUE}, "maintenance.*": {"queue": MAINTENANCE_QUEUE}},
+    broker_transport="src.app.tasks.redis_transport:OrderedRedisTransport",
+    broker_transport_options={"queue_order_strategy": "priority", "visibility_timeout": 3600},
+    timezone="UTC",
 )
