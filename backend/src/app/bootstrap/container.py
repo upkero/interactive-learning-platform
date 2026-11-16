@@ -47,6 +47,7 @@ from src.app.services.reports.report_service import ReportService
 from src.app.services.sharing.sharing_service import SharingService
 from src.app.services.solver.pipeline.part_recovery import PartRecovery
 from src.app.services.solver.pipeline.stub_pipeline import StubPipeline
+from src.app.services.solver.pipeline.watchdog import Watchdog
 from src.app.services.users.profile_service import ProfileService
 from src.app.storage.s3_object_storage_client import S3ObjectStorageClient, build_ping_client, build_s3_client
 from src.app.tasks.dispatcher import CeleryTaskDispatcher
@@ -78,6 +79,16 @@ class ApplicationContainer:
             parts=DocumentPartRepository,
             documents=DocumentRepository,
             ledger=self.quota_ledger,
+            dispatcher=self.task_dispatcher,
+        )
+
+    @cached_property
+    def watchdog(self) -> Watchdog:
+        return Watchdog(
+            session_factory=self.session_factory,
+            parts=DocumentPartRepository,
+            documents=DocumentRepository,
+            recovery=self.part_recovery,
             dispatcher=self.task_dispatcher,
         )
 
