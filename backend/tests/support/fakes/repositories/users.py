@@ -1,8 +1,12 @@
 """In-memory fake of UserRepository."""
 
+from dataclasses import replace
+from typing import Any
 from uuid import UUID, uuid4
 
 from src.app.contracts.users import UserRecord
+from src.app.contracts.users.profile_update import ProfileUpdate
+from src.app.exceptions.users import UserAlreadyExistsError
 from src.app.interfaces.repositories.users import UserRepositoryProtocol
 from tests.support.time import now
 
@@ -28,6 +32,9 @@ class FakeUserRepository(UserRepositoryProtocol):
         locale: str = "ru",
         monthly_limit: int = 20,
     ) -> UserRecord:
+        # mirrors the citext unique constraint of the users table
+        if await self.get_by_email(email) is not None:
+            raise UserAlreadyExistsError
         record = UserRecord(
             id=uuid4(),
             email=email,
@@ -45,3 +52,20 @@ class FakeUserRepository(UserRepositoryProtocol):
 
     async def lock_for_update(self, user_id: UUID) -> UserRecord | None:
         return self._users.get(user_id)
+
+    async def save_last_answers(self, user_id: UUID, answers: dict[str, Any]) -> None:
+        user = self._users[user_id]
+        self._users[user_id] = replace(user, profile={**user.profile, "last_answers": answers})
+
+    async def update_profile_fields(self, user_id: UUID, fields: ProfileUpdate) -> UserRecord | None:
+        user = self._users.get(user_id)
+        if user is None:
+            return None
+        allowed = {
+            key: getattr(fields, key)
+            for key in ("display_name", "locale", "notify_email")
+            if key in fields.provided and (key == "display_name" or getattr(fields, key) is not None)
+        }
+        updated = replace(user, **allowed)
+        self._users[user_id] = updated
+        return updated

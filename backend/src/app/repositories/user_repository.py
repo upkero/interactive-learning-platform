@@ -1,5 +1,6 @@
 """Repository of users."""
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -7,7 +8,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.users import UserRecord
-from src.app.exceptions.users import UserAlreadyExistsError, UsersIntegrityError
+from src.app.contracts.users.profile_update import ProfileUpdate
+from src.app.exceptions.users import UserAlreadyExistsError, UserNotFoundError, UsersIntegrityError
 from src.app.interfaces.repositories.users import UserRepositoryProtocol
 from src.app.models.user import User
 from src.app.repositories._errors import constraint_name
@@ -73,3 +75,22 @@ class UserRepository(UserRepositoryProtocol):
         """Select a user with ``FOR UPDATE`` inside the caller's transaction."""
         row = (await self._session.scalars(select(User).where(User.id == user_id).with_for_update())).first()
         return self._to_record(row) if row is not None else None
+
+    async def save_last_answers(self, user_id: UUID, answers: dict[str, Any]) -> None:
+        row = await self._session.get(User, user_id)
+        if row is None:
+            raise UserNotFoundError()
+        row.profile = {**row.profile, "last_answers": answers}
+        await self._session.flush()
+
+    async def update_profile_fields(self, user_id: UUID, fields: ProfileUpdate) -> UserRecord | None:
+        row = await self._session.get(User, user_id)
+        if row is None:
+            return None
+        for key in ("display_name", "locale", "notify_email"):
+            if key in fields.provided:
+                value = getattr(fields, key)
+                if key == "display_name" or value is not None:
+                    setattr(row, key, value)
+        await self._session.flush()
+        return self._to_record(row)

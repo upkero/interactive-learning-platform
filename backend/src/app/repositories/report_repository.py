@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,6 +28,7 @@ class ReportRepository(ReportRepositoryProtocol):
             part_id=row.part_id,
             reason=ReportReason(row.reason),
             created_at=row.created_at,
+            comment=row.comment,
         )
 
     async def get_by_widget_and_user(self, widget_id: UUID, user_id: UUID) -> ReportRecord | None:
@@ -36,6 +37,10 @@ class ReportRepository(ReportRepositoryProtocol):
         ).first()
         return self._to_record(row) if row is not None else None
 
+    async def count_by_widget(self, widget_id: UUID) -> int:
+        statement = select(func.count(func.distinct(Report.user_id))).where(Report.widget_id == widget_id)
+        return int((await self._session.scalars(statement)).one())
+
     async def create_if_not_exists(
         self,
         *,
@@ -43,6 +48,7 @@ class ReportRepository(ReportRepositoryProtocol):
         user_id: UUID,
         reason: ReportReason,
         part_id: UUID | None = None,
+        comment: str | None = None,
     ) -> ReportRecord | None:
         """Insert a report unless the same user already reported the widget.
 
@@ -56,6 +62,7 @@ class ReportRepository(ReportRepositoryProtocol):
                 user_id=user_id,
                 part_id=part_id,
                 reason=reason.value,
+                comment=comment,
             )
             .on_conflict_do_nothing(index_elements=[Report.widget_id, Report.user_id])
             .returning(Report)

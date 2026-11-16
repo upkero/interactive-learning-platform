@@ -20,6 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.api.v1.dependencies import ContainerDep
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
+from src.app.schemas.errors import ErrorResponse
+from src.app.schemas.health import HealthResponse
 
 router = APIRouter(prefix="/health", tags=["infra"])
 
@@ -27,7 +29,7 @@ router = APIRouter(prefix="/health", tags=["infra"])
 _CHECK_TIMEOUT_SECONDS = 5.0
 
 
-@router.get("/live")
+@router.get("/live", response_model=HealthResponse, status_code=200, operation_id="health_live")
 async def liveness() -> dict[str, str]:
     return {"status": "ok"}
 
@@ -64,7 +66,13 @@ async def _check_object_storage(storage: ObjectStorageClient) -> str | None:
     return None
 
 
-@router.get("/ready")
+@router.get(
+    "/ready",
+    response_model=HealthResponse,
+    status_code=200,
+    operation_id="health_ready",
+    responses={503: {"model": ErrorResponse}},
+)
 async def readiness(container: ContainerDep) -> dict[str, str]:
     errors = [
         message

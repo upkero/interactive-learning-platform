@@ -47,31 +47,85 @@ BOB_EMAIL: Final[str] = "bob@grasp.local"
 # In the runtime image the seed compose profile mounts them at the same path.
 FIXTURES_DIR: Final[Path] = Path(__file__).resolve().parents[3] / "tests" / "support" / "fixtures" / "seed"
 
-TOPIC_TREE: Final[dict[str, Any]] = {
-    "topics": [
-        {
-            "id": "topic-adaptive",
-            "title": "Adaptive learning",
-            "children": [
-                {"id": "topic-chunking", "title": "Semantic chunking", "children": []},
-                {"id": "topic-tree", "title": "Topic tree", "children": []},
-            ],
-        },
-        {"id": "topic-quota", "title": "Quota and generation pipeline", "children": []},
-    ]
-}
+TOPIC_TREE: Final[list[dict[str, Any]]] = [
+    {
+        "id": "topic-adaptive",
+        "title": "Adaptive learning",
+        "level": 1,
+        "start": 0,
+        "end": 1200,
+        "own_tokens": 142,
+        "total_tokens": 320,
+        "page": 1,
+        "image_ids": [],
+        "children": [
+            {
+                "id": "topic-chunking",
+                "title": "Semantic chunking",
+                "level": 2,
+                "start": 0,
+                "end": 600,
+                "own_tokens": 178,
+                "total_tokens": 178,
+                "page": 1,
+                "image_ids": [],
+                "children": [],
+            },
+            {
+                "id": "topic-tree",
+                "title": "Topic tree",
+                "level": 2,
+                "start": 600,
+                "end": 1200,
+                "own_tokens": 0,
+                "total_tokens": 0,
+                "page": 1,
+                "image_ids": [],
+                "children": [],
+            },
+        ],
+    },
+    {
+        "id": "topic-quota",
+        "title": "Quota and generation pipeline",
+        "level": 1,
+        "start": 1200,
+        "end": 1800,
+        "own_tokens": 96,
+        "total_tokens": 96,
+        "page": 2,
+        "image_ids": [],
+        "children": [],
+    },
+]
 
 # Screen E6: the done document needs its own tree for topic navigation.
-DONE_TOPIC_TREE: Final[dict[str, Any]] = {
-    "topics": [
-        {
-            "id": "topic-neurons",
-            "title": "From neurons to layers",
-            "children": [],
-        },
-        {"id": "topic-training", "title": "Training and activation", "children": []},
-    ]
-}
+DONE_TOPIC_TREE: Final[list[dict[str, Any]]] = [
+    {
+        "id": "topic-neurons",
+        "title": "From neurons to layers",
+        "level": 1,
+        "start": 0,
+        "end": 900,
+        "own_tokens": 200,
+        "total_tokens": 200,
+        "page": 1,
+        "image_ids": [],
+        "children": [],
+    },
+    {
+        "id": "topic-training",
+        "title": "Training and activation",
+        "level": 1,
+        "start": 900,
+        "end": 1600,
+        "own_tokens": 150,
+        "total_tokens": 150,
+        "page": 2,
+        "image_ids": [],
+        "children": [],
+    },
+]
 
 
 async def _load_fixture(name: str) -> Any:

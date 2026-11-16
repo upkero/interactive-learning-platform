@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import Any
 
+from pydantic import JsonValue
+
 
 @dataclass(frozen=True, slots=True)
 class PartDraft:
@@ -14,4 +16,4 @@ class PartDraft:
     source_markdown: str
     token_count: int
     profile: dict[str, Any] | None = None
-    content: dict[str, Any] | None = None
+    content: dict[str, JsonValue] | None = None

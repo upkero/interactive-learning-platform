@@ -4,10 +4,11 @@ Real repositories and their test fakes both conform to these protocols;
 mypy strict verifies that the two never drift apart (story 1.2.7).
 """
 
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 from src.app.contracts.users import UserRecord
+from src.app.contracts.users.profile_update import ProfileUpdate
 
 
 class UserRepositoryProtocol(Protocol):
@@ -28,3 +29,7 @@ class UserRepositoryProtocol(Protocol):
     ) -> UserRecord: ...
 
     async def lock_for_update(self, user_id: UUID) -> UserRecord | None: ...
+
+    async def save_last_answers(self, user_id: UUID, answers: dict[str, Any]) -> None: ...
+
+    async def update_profile_fields(self, user_id: UUID, fields: ProfileUpdate) -> UserRecord | None: ...

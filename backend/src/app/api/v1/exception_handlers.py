@@ -17,26 +17,34 @@ def _error_response(
     detail: Any,
     error_code: str,
     headers: Mapping[str, str] | None = None,
+    extra: Mapping[str, Any] | None = None,
 ) -> JSONResponse:
     # Cast to dict: JSONResponse requires dict headers
     resp_headers = dict(headers) if headers else None
+    content: dict[str, Any] = {"detail": detail, "error_code": error_code}
+    # Domain exceptions may carry numbers the frontend needs in the body
+    # (quota_exceeded -> available/requested): they land at the top level.
+    if extra:
+        content.update(extra)
     return JSONResponse(
         status_code=status,
-        content={"detail": detail, "error_code": error_code},
+        content=content,
         headers=resp_headers,
     )
 
 
 async def handle_app_exception(request: Request, exc: BaseAppException) -> JSONResponse:
-    if exc.status_code >= 500:
+    if not type(exc).public or exc.error_code != type(exc).error_code:
         logger.error(
             "Application error on %s %s: %s",
             request.method,
             request.url.path,
             exc.detail,
             exc_info=exc,
+            extra={"request_id": getattr(request.state, "request_id", "-")},
         )
-    return _error_response(exc.status_code, exc.detail, exc.error_code)
+        return _error_response(500, "Internal server error", "internal_server_error")
+    return _error_response(exc.status_code, exc.detail, exc.error_code, extra=exc.extra)
 
 
 async def handle_request_validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
@@ -53,8 +61,16 @@ async def handle_http_exception(request: Request, exc: StarletteHTTPException) -
 
 
 async def handle_unexpected_exception(request: Request, exc: Exception) -> JSONResponse:
-    logger.error("Unhandled exception on %s %s", request.method, request.url.path, exc_info=exc)
-    return _error_response(500, "Internal server error", "internal_server_error")
+    logger.error(
+        "Unhandled exception on %s %s",
+        request.method,
+        request.url.path,
+        exc_info=exc,
+        extra={"request_id": getattr(request.state, "request_id", "-")},
+    )
+    request_id = getattr(request.state, "request_id", None)
+    headers = {"X-Request-ID": request_id} if request_id else None
+    return _error_response(500, "Internal server error", "internal_server_error", headers=headers)
 
 
 def register_exception_handlers(app: FastAPI) -> None:

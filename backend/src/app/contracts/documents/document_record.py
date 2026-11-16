@@ -2,10 +2,10 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
 from uuid import UUID
 
-from src.app.contracts.documents.statuses import DocumentStatus, SourceType
+from src.app.contracts.documents.statuses import DocumentErrorCode, DocumentStatus, SourceType
+from src.app.contracts.documents.topic_node import TopicNode
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,7 +21,8 @@ class DocumentRecord:
     page_count: int | None
     checksum: str
     status: DocumentStatus
-    topic_tree: dict[str, Any] | None
-    error: str | None
+    topic_tree: tuple[TopicNode, ...] | None
+    error_code: DocumentErrorCode | None
     created_at: datetime
     updated_at: datetime
+    error_detail: str | None = None

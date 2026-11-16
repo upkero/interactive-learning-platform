@@ -9,6 +9,7 @@ Usage: ``python -m src.cli <command> <flags>``
 
 import argparse
 import asyncio
+import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -87,6 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Path to catalog.json (default: backend resources).",
     )
+    subcommands.add_parser("export-openapi", help="Export the API schema to backend/openapi.json.")
     return parser
 
 
@@ -98,6 +100,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         return asyncio.run(_run_seed_dev(fake_embeddings=args.fake_embeddings))
     if args.command == "seed-primitives":
         return asyncio.run(_run_seed_primitives(catalog=args.catalog))
+    if args.command == "export-openapi":
+        from src.main import app
+
+        destination = Path(__file__).resolve().parents[1] / "openapi.json"
+        destination.write_text(json.dumps(app.openapi(), indent=2, ensure_ascii=False, sort_keys=True) + "\n")
+        print(f"export-openapi: {destination}")
+        return 0
     parser.error(f"Unknown command: {args.command}")  # pragma: no cover
     return 2
 

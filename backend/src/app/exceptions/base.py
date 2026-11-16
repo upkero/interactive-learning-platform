@@ -5,6 +5,7 @@ from typing import Any
 class BaseAppException(Exception):
     """Base exception for application-specific failures."""
 
+    public = False
     status_code = 500
     error_code = "app_error"
     default_detail = "Application error."

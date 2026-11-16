@@ -69,6 +69,22 @@ class FakeWidgetRepository(WidgetRepositoryProtocol):
     async def get(self, widget_id: UUID) -> WidgetRecord | None:
         return self._widgets.get(widget_id)
 
+    async def get_many(self, widget_ids: Sequence[UUID]) -> list[WidgetRecord]:
+        return [record for widget_id in dict.fromkeys(widget_ids) if (record := self._widgets.get(widget_id))]
+
+    async def lock_for_update(self, widget_id: UUID) -> WidgetRecord | None:
+        return self._widgets.get(widget_id)
+
+    async def exclude_if_active(self, widget_id: UUID) -> bool:
+        row = self._widgets.get(widget_id)
+        if row is None or row.status is not WidgetStatus.ACTIVE:
+            return False
+        self._widgets[widget_id] = replace(row, status=WidgetStatus.EXCLUDED)
+        return True
+
+    async def search_active(self, embedding: list[float], limit: int) -> list[WidgetRecord]:
+        return [row for row in self._widgets.values() if row.status is WidgetStatus.ACTIVE][:limit]
+
     async def create(
         self,
         *,
@@ -137,9 +153,22 @@ class FakeWidgetUsageRepository(WidgetUsageRepositoryProtocol):
 
     def __init__(self) -> None:
         self._usages: dict[UUID, WidgetUsageRecord] = {}
+        self.accessible_parts: set[tuple[UUID, UUID]] = set()
 
     async def get(self, usage_id: UUID) -> WidgetUsageRecord | None:
         return self._usages.get(usage_id)
+
+    async def find_accessible_part(self, widget_id: UUID, user_id: UUID, part_id: UUID | None) -> UUID | None:
+        return next(
+            (
+                usage.part_id
+                for usage in self._usages.values()
+                if usage.widget_id == widget_id
+                and (user_id, usage.part_id) in self.accessible_parts
+                and (part_id is None or part_id == usage.part_id)
+            ),
+            None,
+        )
 
     async def add_many(self, part_id: UUID, usages: Sequence[WidgetUsageDraft]) -> list[WidgetUsageRecord]:
         created: list[WidgetUsageRecord] = []
@@ -176,6 +205,9 @@ class FakeReportRepository(ReportRepositoryProtocol):
                 return row
         return None
 
+    async def count_by_widget(self, widget_id: UUID) -> int:
+        return len({report.user_id for report in self._reports.values() if report.widget_id == widget_id})
+
     async def create_if_not_exists(
         self,
         *,
@@ -183,6 +215,7 @@ class FakeReportRepository(ReportRepositoryProtocol):
         user_id: UUID,
         reason: ReportReason,
         part_id: UUID | None = None,
+        comment: str | None = None,
     ) -> ReportRecord | None:
         if await self.get_by_widget_and_user(widget_id, user_id) is not None:
             return None
@@ -193,6 +226,7 @@ class FakeReportRepository(ReportRepositoryProtocol):
             part_id=part_id,
             reason=reason,
             created_at=now(),
+            comment=comment,
         )
         self._reports[record.id] = record
         return record

@@ -1,6 +1,6 @@
 """In-memory fakes of the document aggregate repositories."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
@@ -9,10 +9,19 @@ from uuid import UUID, uuid4
 from src.app.contracts.documents.document_record import DocumentRecord
 from src.app.contracts.documents.image_draft import ImageDraft
 from src.app.contracts.documents.image_record import ImageRecord
+from src.app.contracts.documents.material_details import MaterialDetails
 from src.app.contracts.documents.material_record import MaterialRecord
 from src.app.contracts.documents.part_draft import PartDraft
 from src.app.contracts.documents.part_record import PartRecord
-from src.app.contracts.documents.statuses import DocumentStatus, MaterialRole, PartStatus, SourceType
+from src.app.contracts.documents.shared_user_info import SharedUserInfo
+from src.app.contracts.documents.statuses import (
+    DocumentErrorCode,
+    DocumentStatus,
+    MaterialRole,
+    PartStatus,
+    SourceType,
+)
+from src.app.contracts.documents.topic_node import topic_roots
 from src.app.interfaces.repositories.documents import (
     DocumentPartRepositoryProtocol,
     DocumentRepositoryProtocol,
@@ -27,6 +36,18 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
 
     def __init__(self) -> None:
         self._documents: dict[UUID, DocumentRecord] = {}
+        # minimal transaction emulation: ids created since the last
+        # checkpoint (commit) are discarded by rollback()
+        self._pending: list[UUID] = []
+
+    def checkpoint(self) -> None:
+        self._pending.clear()
+
+    def rollback(self) -> None:
+        """Discard rows created since the last checkpoint (commit)."""
+        for document_id in self._pending:
+            self._documents.pop(document_id, None)
+        self._pending.clear()
 
     async def get(self, document_id: UUID) -> DocumentRecord | None:
         return self._documents.get(document_id)
@@ -40,6 +61,7 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
     async def create(
         self,
         *,
+        id: UUID | None = None,
         owner_id: UUID,
         title: str,
         source_type: SourceType,
@@ -52,7 +74,7 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
     ) -> DocumentRecord:
         timestamp = now()
         record = DocumentRecord(
-            id=uuid4(),
+            id=id or uuid4(),
             owner_id=owner_id,
             title=title,
             source_type=source_type,
@@ -64,11 +86,12 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
             checksum=checksum,
             status=DocumentStatus.UPLOADED,
             topic_tree=None,
-            error=None,
+            error_code=None,
             created_at=timestamp,
             updated_at=timestamp,
         )
         self._documents[record.id] = record
+        self._pending.append(record.id)
         return record
 
     async def set_status(
@@ -76,26 +99,33 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
         document_id: UUID,
         status: DocumentStatus,
         *,
-        error: str | None = None,
+        error_code: DocumentErrorCode | None = None,
+        error_detail: str | None = None,
     ) -> DocumentRecord | None:
         row = self._documents.get(document_id)
         if row is not None:
-            updated = replace(row, status=status, error=error, updated_at=now())
+            updated = replace(row, status=status, error_code=error_code, error_detail=error_detail, updated_at=now())
             self._documents[document_id] = updated
             return updated
         return None
 
-    async def set_topic_tree(self, document_id: UUID, topic_tree: dict[str, Any]) -> DocumentRecord | None:
+    async def set_topic_tree(
+        self,
+        document_id: UUID,
+        topic_tree: Sequence[Mapping[str, Any]],
+    ) -> DocumentRecord | None:
         row = self._documents.get(document_id)
         if row is not None:
-            updated = replace(row, topic_tree=topic_tree, updated_at=now())
+            updated = replace(row, topic_tree=topic_roots(topic_tree), updated_at=now())
             self._documents[document_id] = updated
             return updated
         return None
 
-    async def count_active(self, owner_id: UUID) -> int:
-        active = {DocumentStatus.UPLOADED, DocumentStatus.PARSING, DocumentStatus.PARSED, DocumentStatus.GENERATING}
-        return sum(1 for d in self._documents.values() if d.owner_id == owner_id and d.status in active)
+    async def count_active(self, owner_id: UUID, *, exclude: UUID | None = None) -> int:
+        active = {DocumentStatus.UPLOADED, DocumentStatus.PARSING, DocumentStatus.GENERATING}
+        return sum(
+            1 for d in self._documents.values() if d.owner_id == owner_id and d.status in active and d.id != exclude
+        )
 
 
 class FakeDocumentPartRepository(DocumentPartRepositoryProtocol):
@@ -200,10 +230,39 @@ class FakeUserMaterialRepository(UserMaterialRepositoryProtocol):
 
     def __init__(self) -> None:
         self._materials: dict[tuple[UUID, UUID], MaterialRecord] = {}
+        self.details: list[MaterialDetails] = []
+        # email/display_name are not part of MaterialRecord; tests register
+        # the user info alongside shared materials
+        self._user_info: dict[UUID, tuple[str, str | None]] = {}
+        # minimal transaction emulation, see FakeDocumentRepository
+        self._pending: list[tuple[UUID, UUID]] = []
+
+    def register_user(self, user_id: UUID, email: str, display_name: str | None = None) -> None:
+        self._user_info[user_id] = (email, display_name)
+
+    def checkpoint(self) -> None:
+        self._pending.clear()
+
+    def rollback(self) -> None:
+        """Discard rows created since the last checkpoint (commit)."""
+        for key in self._pending:
+            self._materials.pop(key, None)
+        self._pending.clear()
 
     async def get_role(self, user_id: UUID, document_id: UUID) -> MaterialRole | None:
         row = self._materials.get((user_id, document_id))
         return row.role if row is not None else None
+
+    async def share_if_absent(self, user_id: UUID, document_id: UUID, shared_by: UUID) -> None:
+        if (user_id, document_id) not in self._materials:
+            await self.create(user_id=user_id, document_id=document_id, role=MaterialRole.SHARED, shared_by=shared_by)
+
+    async def list_details(self, user_id: UUID, role: MaterialRole) -> list[MaterialDetails]:
+        return [
+            detail
+            for detail in self.details
+            if (user_id, detail.document_id) in self._materials and detail.role == role.value
+        ]
 
     async def create(
         self,
@@ -221,7 +280,20 @@ class FakeUserMaterialRepository(UserMaterialRepositoryProtocol):
             created_at=now(),
         )
         self._materials[(user_id, document_id)] = record
+        self._pending.append((user_id, document_id))
         return record
 
     async def list_by_user(self, user_id: UUID) -> list[MaterialRecord]:
         return [m for m in self._materials.values() if m.user_id == user_id]
+
+    async def list_shared_with(self, document_id: UUID) -> list[SharedUserInfo]:
+        return [
+            SharedUserInfo(
+                user_id=m.user_id,
+                email=self._user_info.get(m.user_id, ("", None))[0],
+                display_name=self._user_info.get(m.user_id, ("", None))[1],
+                shared_at=m.created_at,
+            )
+            for m in self._materials.values()
+            if m.document_id == document_id and m.role is MaterialRole.SHARED
+        ]

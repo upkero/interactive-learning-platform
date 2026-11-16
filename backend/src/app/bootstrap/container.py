@@ -4,18 +4,183 @@ from functools import cached_property
 import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from src.app.core.clock import SystemClock
 from src.app.core.settings.app import get_app_settings
+from src.app.core.settings.auth import AuthSettings, get_auth_settings
 from src.app.core.settings.celery import get_celery_settings
 from src.app.core.settings.llm import get_llm_settings
+from src.app.core.settings.processing import ProcessingSettings, get_processing_settings
+from src.app.core.settings.reports import ReportsSettings, get_reports_settings
 from src.app.core.settings.storage import get_storage_settings
+from src.app.core.settings.upload import get_upload_settings
 from src.app.db.session import build_engine, build_session_factory
 from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.llm.factory import create_llm_client
+from src.app.observability.decision_log import DecisionLog
+from src.app.observability.noop_metrics_collector import NoopMetricsCollector
+from src.app.repositories.document_part_repository import DocumentPartRepository
+from src.app.repositories.document_repository import DocumentRepository
+from src.app.repositories.generation_ledger_repository import GenerationLedgerRepository
+from src.app.repositories.image_repository import ImageRepository
+from src.app.repositories.quiz_attempt_repository import QuizAttemptRepository
+from src.app.repositories.report_repository import ReportRepository
+from src.app.repositories.user_material_repository import UserMaterialRepository
+from src.app.repositories.user_repository import UserRepository
+from src.app.repositories.widget_repository import WidgetRepository
+from src.app.repositories.widget_usage_repository import WidgetUsageRepository
+from src.app.services.auth.auth_service import AuthService
+from src.app.services.documents.document_query_service import DocumentQueryService
+from src.app.services.documents.file_inspector import FileInspector
+from src.app.services.documents.generation_service import GenerationService
+from src.app.services.documents.import_service import ImportService
+from src.app.services.documents.material_query_service import MaterialQueryService
+from src.app.services.documents.part_query_service import PartQueryService
+from src.app.services.documents.quiz_check_service import QuizCheckService
+from src.app.services.documents.topic_per_part_planner import TopicPerPartPlanner
+from src.app.services.documents.upload_service import UploadService
+from src.app.services.quota.quota_ledger import QuotaLedger
+from src.app.services.quota.quota_service import QuotaService
+from src.app.services.reports.report_service import ReportService
+from src.app.services.sharing.sharing_service import SharingService
+from src.app.services.users.profile_service import ProfileService
 from src.app.storage.s3_object_storage_client import S3ObjectStorageClient, build_ping_client, build_s3_client
+from src.app.tasks.dispatcher import CeleryTaskDispatcher
 
 
 class ApplicationContainer:
+    """Composition root: the only place concrete classes are constructed."""
+
+    # -- settings -----------------------------------------------------------
+
+    @cached_property
+    def auth_settings(self) -> AuthSettings:
+        return get_auth_settings()
+
+    @cached_property
+    def processing_settings(self) -> ProcessingSettings:
+        return get_processing_settings()
+
+    @cached_property
+    def reports_settings(self) -> ReportsSettings:
+        return get_reports_settings()
+
+    # -- services -----------------------------------------------------------
+
+    @cached_property
+    def auth_service(self) -> AuthService:
+        return AuthService(session_factory=self.session_factory, users=UserRepository, settings=self.auth_settings)
+
+    @cached_property
+    def profile_service(self) -> ProfileService:
+        return ProfileService(session_factory=self.session_factory, users=UserRepository)
+
+    @cached_property
+    def sharing_service(self) -> SharingService:
+        return SharingService(
+            session_factory=self.session_factory,
+            materials=UserMaterialRepository,
+            users=UserRepository,
+        )
+
+    @cached_property
+    def material_query_service(self) -> MaterialQueryService:
+        return MaterialQueryService(session_factory=self.session_factory, materials=UserMaterialRepository)
+
+    @cached_property
+    def quota_ledger(self) -> QuotaLedger:
+        return QuotaLedger(
+            users_factory=UserRepository,
+            ledger_factory=GenerationLedgerRepository,
+            clock=SystemClock(),
+        )
+
+    @cached_property
+    def quota_service(self) -> QuotaService:
+        return QuotaService(session_factory=self.session_factory, ledger=self.quota_ledger)
+
+    @cached_property
+    def upload_service(self) -> UploadService:
+        return UploadService(
+            session_factory=self.session_factory,
+            inspector=FileInspector(get_upload_settings()),
+            storage=self.object_storage,
+            dispatcher=self.task_dispatcher,
+            documents=DocumentRepository,
+            materials=UserMaterialRepository,
+            users=UserRepository,
+            settings=self.processing_settings,
+        )
+
+    @cached_property
+    def import_service(self) -> ImportService:
+        return ImportService(
+            session_factory=self.session_factory,
+            dispatcher=self.task_dispatcher,
+            documents=DocumentRepository,
+            materials=UserMaterialRepository,
+            users=UserRepository,
+            settings=self.processing_settings,
+        )
+
+    @cached_property
+    def document_query_service(self) -> DocumentQueryService:
+        return DocumentQueryService(
+            session_factory=self.session_factory,
+            documents=DocumentRepository,
+            materials=UserMaterialRepository,
+            parts=DocumentPartRepository,
+            storage=self.object_storage,
+        )
+
+    @cached_property
+    def generation_service(self) -> GenerationService:
+        return GenerationService(
+            session_factory=self.session_factory,
+            documents=DocumentRepository,
+            materials=UserMaterialRepository,
+            parts=DocumentPartRepository,
+            users=UserRepository,
+            planner=TopicPerPartPlanner(),
+            storage=self.object_storage,
+            ledger=self.quota_ledger,
+            dispatcher=self.task_dispatcher,
+            settings=self.processing_settings,
+        )
+
+    @cached_property
+    def part_query_service(self) -> PartQueryService:
+        return PartQueryService(
+            session_factory=self.session_factory,
+            parts=DocumentPartRepository,
+            materials=UserMaterialRepository,
+            images=ImageRepository,
+            widgets=WidgetRepository,
+            storage=self.object_storage,
+        )
+
+    @cached_property
+    def quiz_check_service(self) -> QuizCheckService:
+        return QuizCheckService(
+            session_factory=self.session_factory,
+            parts=DocumentPartRepository,
+            materials=UserMaterialRepository,
+            attempts=QuizAttemptRepository,
+        )
+
+    @cached_property
+    def report_service(self) -> ReportService:
+        return ReportService(
+            session_factory=self.session_factory,
+            reports=ReportRepository,
+            usages=WidgetUsageRepository,
+            widgets=WidgetRepository,
+            decision_log=DecisionLog(metrics=NoopMetricsCollector()),
+            settings=self.reports_settings,
+        )
+
+    # -- infrastructure -----------------------------------------------------
+
     @cached_property
     def llm_client(self) -> LLMClient:
         return create_llm_client(get_llm_settings())
@@ -42,6 +207,15 @@ class ApplicationContainer:
         # Async Redis client for readiness probes and progress streams.
         redis_client: aioredis.Redis = aioredis.Redis.from_url(get_celery_settings().broker_url)
         return redis_client
+
+    @cached_property
+    def task_dispatcher(self) -> CeleryTaskDispatcher:
+        """Celery-backed queue entry point; tests replace it with a fake.
+
+        Task names are addressed through ``send_task``, so the API stays
+        decoupled from the worker's task registrations (story 1.5).
+        """
+        return CeleryTaskDispatcher(get_celery_settings())
 
     @cached_property
     def _db_engine(self) -> AsyncEngine:

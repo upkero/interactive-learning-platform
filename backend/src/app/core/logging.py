@@ -31,7 +31,8 @@ class _JsonFormatter(logging.Formatter):
 
 class _RequestIdFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        record.request_id = get_request_id() or "-"
+        if not getattr(record, "request_id", None):
+            record.request_id = get_request_id() or "-"
         return True
 
 

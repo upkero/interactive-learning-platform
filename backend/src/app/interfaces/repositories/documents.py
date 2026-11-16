@@ -1,16 +1,24 @@
 """Protocols of the document aggregate repositories."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 from uuid import UUID
 
 from src.app.contracts.documents.document_record import DocumentRecord
 from src.app.contracts.documents.image_draft import ImageDraft
 from src.app.contracts.documents.image_record import ImageRecord
+from src.app.contracts.documents.material_details import MaterialDetails
 from src.app.contracts.documents.material_record import MaterialRecord
 from src.app.contracts.documents.part_draft import PartDraft
 from src.app.contracts.documents.part_record import PartRecord
-from src.app.contracts.documents.statuses import DocumentStatus, MaterialRole, PartStatus, SourceType
+from src.app.contracts.documents.shared_user_info import SharedUserInfo
+from src.app.contracts.documents.statuses import (
+    DocumentErrorCode,
+    DocumentStatus,
+    MaterialRole,
+    PartStatus,
+    SourceType,
+)
 
 
 class DocumentRepositoryProtocol(Protocol):
@@ -23,6 +31,7 @@ class DocumentRepositoryProtocol(Protocol):
     async def create(
         self,
         *,
+        id: UUID | None = None,
         owner_id: UUID,
         title: str,
         source_type: SourceType,
@@ -39,12 +48,17 @@ class DocumentRepositoryProtocol(Protocol):
         document_id: UUID,
         status: DocumentStatus,
         *,
-        error: str | None = None,
+        error_code: DocumentErrorCode | None = None,
+        error_detail: str | None = None,
     ) -> DocumentRecord | None: ...
 
-    async def set_topic_tree(self, document_id: UUID, topic_tree: dict[str, Any]) -> DocumentRecord | None: ...
+    async def set_topic_tree(
+        self,
+        document_id: UUID,
+        topic_tree: Sequence[Mapping[str, Any]],
+    ) -> DocumentRecord | None: ...
 
-    async def count_active(self, owner_id: UUID) -> int: ...
+    async def count_active(self, owner_id: UUID, *, exclude: UUID | None = None) -> int: ...
 
 
 class DocumentPartRepositoryProtocol(Protocol):
@@ -94,3 +108,11 @@ class UserMaterialRepositoryProtocol(Protocol):
     ) -> MaterialRecord: ...
 
     async def list_by_user(self, user_id: UUID) -> list[MaterialRecord]: ...
+
+    async def share_if_absent(self, user_id: UUID, document_id: UUID, shared_by: UUID) -> None: ...
+
+    async def list_details(self, user_id: UUID, role: MaterialRole) -> list[MaterialDetails]: ...
+
+    async def list_shared_with(self, document_id: UUID) -> list[SharedUserInfo]:
+        """Users with the shared role on the document, oldest share first."""
+        ...
