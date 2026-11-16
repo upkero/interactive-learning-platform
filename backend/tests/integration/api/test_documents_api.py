@@ -321,6 +321,61 @@ async def test_quiz_attempts_are_stored(client: TestClient, session_factory: asy
         assert (await session.scalars(select(func.count()).select_from(QuizAttempt))).one() == 2
 
 
+async def test_published_part_accepts_section_without_topic(
+    client: TestClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    document_id = await _new_parsed_document(client, session_factory)
+    async with session_factory() as session, session.begin():
+        part = (await DocumentPartRepository(session).list_by_document(document_id))[0]
+        await session.execute(
+            update(DocumentPart)
+            .where(DocumentPart.id == part.id)
+            .values(
+                status="published",
+                content={
+                    "title": "Page",
+                    "markdown": "# Unmatched",
+                    "sections": [
+                        {
+                            "title": "Unmatched",
+                            "anchor": "unmatched",
+                            "topic_id": None,
+                            "source_span": None,
+                            "page": None,
+                        }
+                    ],
+                },
+            )
+        )
+    response = client.get(f"/api/v1/parts/{part.id}")
+    assert response.status_code == 200, response.text
+    section = response.json()["content"]["sections"][0]
+    assert section["topic_id"] is None and section["source_span"] is None
+
+
+async def test_corrupt_answer_key_is_internal_error_with_context(
+    client: TestClient, session_factory: async_sessionmaker[AsyncSession], caplog: pytest.LogCaptureFixture
+) -> None:
+    document_id = await _new_parsed_document(client, session_factory)
+    async with session_factory() as session, session.begin():
+        part = (await DocumentPartRepository(session).list_by_document(document_id))[0]
+        await session.execute(
+            update(DocumentPart)
+            .where(DocumentPart.id == part.id)
+            .values(
+                status="published",
+                content={"quizzes": [{"key": "q", "type": "single_choice"}], "answer_keys": {"q": {"correct_id": 5}}},
+            )
+        )
+    response = client.post("/api/v1/quiz-attempts", json={"part_id": str(part.id), "quiz_key": "q", "answer": "a"})
+    assert response.status_code == 500
+    assert response.json()["error_code"] == "internal_server_error"
+    records = [record for record in caplog.records if record.message == "Published quiz answer key is invalid."]
+    assert len(records) == 1
+    assert records[0].levelname == "ERROR"
+    assert vars(records[0])["part_id"] == str(part.id) and vars(records[0])["quiz_key"] == "q"
+
+
 async def test_widget_reports_require_access_and_are_idempotent(
     client: TestClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
@@ -528,6 +583,49 @@ async def test_topics_of_a_failed_document_carries_the_parse_error(
     # the client translates the code; the human text stays generic
     assert body["status"] == "failed"
     assert body["reason"] == "parse_failed"
+
+
+async def test_failed_document_diagnostics_never_reach_api(
+    client: TestClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    _register(client)
+    created = _upload(client)
+    document_id = UUID(created.json()["id"])
+    secret = "worker exception: private details"
+    async with session_factory() as session, session.begin():
+        await DocumentRepository(session).set_status(
+            document_id, DocumentStatus.FAILED, error_code=DocumentErrorCode.PARSE_FAILED, error_detail=secret
+        )
+    async with session_factory() as session:
+        document = await DocumentRepository(session).get(document_id)
+        assert document is not None and document.error_detail == secret
+    detail = client.get(f"/api/v1/documents/{document_id}")
+    assert detail.status_code == 200
+    assert detail.json()["error_code"] == "parse_failed"
+    assert "error_detail" not in detail.json() and secret not in detail.text
+    for path, method, body in (
+        ("topics", "GET", None),
+        ("plan", "POST", {"topic_ids": ["1"]}),
+    ):
+        response = client.request(method, f"/api/v1/documents/{document_id}/{path}", json=body)
+        assert response.status_code == 409
+        assert response.json()["reason"] == "parse_failed"
+        assert "error_detail" not in response.json() and secret not in response.text
+
+
+async def test_failed_document_without_code_does_not_invent_reason(
+    client: TestClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    _register(client)
+    created = _upload(client)
+    document_id = UUID(created.json()["id"])
+    async with session_factory() as session, session.begin():
+        await DocumentRepository(session).set_status(document_id, DocumentStatus.FAILED, error_detail="private")
+    for path, method, body in (("topics", "GET", None), ("plan", "POST", {"topic_ids": ["1"]})):
+        response = client.request(method, f"/api/v1/documents/{document_id}/{path}", json=body)
+        assert response.status_code == 409
+        assert response.json()["reason"] is None
+        assert "private" not in response.text
 
 
 async def test_topics_of_a_foreign_document_is_404(client: TestClient) -> None:

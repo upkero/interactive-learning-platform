@@ -1,4 +1,4 @@
-"""Store only the parse error code and keep technical details out of the API.
+"""Store the public parse error code separately from technical details.
 
 Revision ID: 0003_document_error_code
 Revises: 0002_report_comments
@@ -23,11 +23,11 @@ _ERROR_CODES = (
 
 
 def upgrade() -> None:
-    # Rows written before the rename may hold free text; the new CHECK
-    # accepts only known codes, so anything else is dropped instead of
-    # failing the migration.
+    # Preserve old free-text failures before applying the code-only CHECK.
     allowed = ", ".join(f"'{code}'" for code in _ERROR_CODES)
-    op.execute(f"UPDATE documents SET error = NULL WHERE error IS NOT NULL AND error NOT IN ({allowed})")
+    op.add_column("documents", sa.Column("error_detail", sa.Text(), nullable=True))
+    op.execute(f"UPDATE documents SET error_detail = error WHERE error IS NOT NULL AND error NOT IN ({allowed})")
+    op.execute(f"UPDATE documents SET error = 'parse_failed' WHERE error IS NOT NULL AND error NOT IN ({allowed})")
     op.alter_column(
         "documents",
         "error",
@@ -53,3 +53,7 @@ def downgrade() -> None:
         type_=sa.Text(),
         existing_nullable=True,
     )
+    # The old column can store either a code or details. Prefer the
+    # diagnostic text where present rather than silently discarding it.
+    op.execute("UPDATE documents SET error = error_detail WHERE error_detail IS NOT NULL")
+    op.drop_column("documents", "error_detail")

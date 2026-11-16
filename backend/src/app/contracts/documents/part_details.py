@@ -2,11 +2,12 @@
 
 from dataclasses import dataclass
 
+from pydantic import JsonValue
+
 from src.app.contracts.documents.part_record import PartRecord
-from src.app.contracts.documents.public_part_content import PublicPartContent
 
 
 @dataclass(frozen=True, slots=True)
 class PartDetails:
     part: PartRecord
-    content: PublicPartContent | None
+    content: dict[str, JsonValue] | None

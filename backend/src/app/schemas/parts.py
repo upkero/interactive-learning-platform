@@ -114,8 +114,8 @@ class SourceSpan(PublicModel):
 class SectionOut(PublicModel):
     title: str
     anchor: str
-    topic_id: str
-    source_span: SourceSpan
+    topic_id: str | None
+    source_span: SourceSpan | None
     page: int | None = None
 
 

@@ -25,3 +25,4 @@ class DocumentRecord:
     error_code: DocumentErrorCode | None
     created_at: datetime
     updated_at: datetime
+    error_detail: str | None = None

@@ -15,9 +15,9 @@ class DocumentStatus(StrEnum):
 class DocumentErrorCode(StrEnum):
     """Why a document ended up in ``failed`` (story 1.9, migration 0003).
 
-    Only the code is stored: the client translates it through its
+    Only the code is exposed: the client translates it through its
     ``errors.<code>`` dictionary, while technical details (exception
-    text) live only in server logs.
+    text) stay in server-side diagnostics and never leave the API.
     """
 
     PARSE_FAILED = "parse_failed"

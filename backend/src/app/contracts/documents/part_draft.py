@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-from src.app.contracts.documents.public_part_content import JsonValue
+from pydantic import JsonValue
 
 
 @dataclass(frozen=True, slots=True)

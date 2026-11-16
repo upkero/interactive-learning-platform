@@ -9,7 +9,6 @@ from pydantic import TypeAdapter
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents.part_details import PartDetails
-from src.app.contracts.documents.public_part_content import PublicPartContent
 from src.app.contracts.documents.statuses import PartStatus
 from src.app.exceptions.documents import PartNotFoundError
 from src.app.interfaces.repositories.documents import (
@@ -19,9 +18,10 @@ from src.app.interfaces.repositories.documents import (
 )
 from src.app.interfaces.repositories.widgets import WidgetRepositoryProtocol
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
+from src.app.schemas.parts import PartContentOut
 from src.app.services.documents.image_url_resolver import ImageUrlResolver
 
-_PUBLIC_CONTENT = TypeAdapter(PublicPartContent)
+_PUBLIC_CONTENT = TypeAdapter(PartContentOut)
 
 
 def _public_quiz(quiz: dict[str, object]) -> dict[str, object]:
@@ -77,15 +77,16 @@ class PartQueryService:
             if part.status is not PartStatus.PUBLISHED or part.content is None:
                 return PartDetails(part=part, content=None)
 
-            content: dict[str, object] = deepcopy({key: value for key, value in part.content.items()})
-            content.pop("answer_keys", None)
+            content: dict[str, object] = deepcopy(
+                {key: value for key, value in part.content.items() if key in PartContentOut.model_fields}
+            )
             quizzes = content.get("quizzes", [])
             if not isinstance(quizzes, list) or any(not isinstance(quiz, dict) for quiz in quizzes):
                 raise ValueError("Invalid quizzes in published content")
             content["quizzes"] = [_public_quiz(quiz) for quiz in quizzes]
             await self._fill_widgets(content, self._widgets(session))
             await self._fill_images(content, self._images(session))
-            return PartDetails(part=part, content=_PUBLIC_CONTENT.validate_python(content))
+            return PartDetails(part=part, content=_PUBLIC_CONTENT.validate_python(content).model_dump(mode="json"))
 
     async def _fill_widgets(self, content: dict[str, object], widgets: WidgetRepositoryProtocol) -> None:
         slots = content.get("widgets", {})

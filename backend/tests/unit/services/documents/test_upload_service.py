@@ -140,14 +140,22 @@ async def test_db_failure_deletes_the_uploaded_object() -> None:
     assert session.rolled_back == 1
 
 
-async def test_queue_failure_keeps_object_and_releases_upload_capacity() -> None:
+async def test_queue_failure_keeps_object_and_releases_upload_capacity(caplog: pytest.LogCaptureFixture) -> None:
     service, documents, _materials, storage, dispatcher, _session = _service()
     owner = uuid4()
     dispatcher.fail_with = TaskDispatchError()
+    dispatcher.fail_with.__cause__ = OSError("broker connection refused")
     with pytest.raises(TaskDispatchError):
         await service.upload(owner_id=owner, filename="lecture.pdf", title=None, stream=_Stream(_PDF_BYTES))
     (document,) = documents._documents.values()
     assert document.status is DocumentStatus.FAILED and document.error_code is DocumentErrorCode.ENQUEUE_FAILED
+    assert document.error_detail == "OSError('broker connection refused')"
+    failure_logs = [record for record in caplog.records if record.message == "Document processing failed."]
+    assert len(failure_logs) == 1
+    assert failure_logs[0].levelname == "WARNING"
+    assert vars(failure_logs[0])["document_id"] == str(document.id)
+    assert vars(failure_logs[0])["error_code"] == "enqueue_failed"
+    assert vars(failure_logs[0])["exception"] == "OSError('broker connection refused')"
     assert storage.delete_object_calls == []
     dispatcher.fail_with = None
     assert (

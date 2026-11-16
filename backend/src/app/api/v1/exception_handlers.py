@@ -75,7 +75,9 @@ async def handle_unexpected_exception(request: Request, exc: Exception) -> JSONR
         exc_info=exc,
         extra={"request_id": getattr(request.state, "request_id", "-")},
     )
-    return _error_response(500, "Internal server error", "internal_server_error")
+    request_id = getattr(request.state, "request_id", None)
+    headers = {"X-Request-ID": request_id} if request_id else None
+    return _error_response(500, "Internal server error", "internal_server_error", headers=headers)
 
 
 def register_exception_handlers(app: FastAPI) -> None:

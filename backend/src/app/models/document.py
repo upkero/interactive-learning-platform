@@ -52,5 +52,6 @@ class Document(Base):
     status: Mapped[str] = mapped_column(String(16), server_default="uploaded")
     topic_tree: Mapped[list[dict[str, Any]] | dict[str, Any] | None] = mapped_column(JSONB)
     error_code: Mapped[str | None] = mapped_column(String(64))
+    error_detail: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())

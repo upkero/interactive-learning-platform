@@ -100,10 +100,11 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
         status: DocumentStatus,
         *,
         error_code: DocumentErrorCode | None = None,
+        error_detail: str | None = None,
     ) -> DocumentRecord | None:
         row = self._documents.get(document_id)
         if row is not None:
-            updated = replace(row, status=status, error_code=error_code, updated_at=now())
+            updated = replace(row, status=status, error_code=error_code, error_detail=error_detail, updated_at=now())
             self._documents[document_id] = updated
             return updated
         return None

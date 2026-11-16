@@ -6,9 +6,8 @@ the parse pipeline hit a known error (story 1.9). The short own
 transaction releases the in-processing slot, so the user can upload
 again.
 
-Only the enum code is stored in ``documents.error_code``; technical
-text goes only to the logs. That is the single place where the WARNING is emitted, so
-the worker and the API log the transition the same way.
+The public code is stored in ``documents.error_code`` and diagnostic text
+in ``documents.error_detail``. The same details are emitted in one log event.
 """
 
 import logging
@@ -37,6 +36,7 @@ async def mark_document_failed(
             document_id,
             DocumentStatus.FAILED,
             error_code=error_code,
+            error_detail=error_detail,
         )
     logger.warning(
         "Document processing failed.",

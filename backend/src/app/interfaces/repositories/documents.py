@@ -49,6 +49,7 @@ class DocumentRepositoryProtocol(Protocol):
         status: DocumentStatus,
         *,
         error_code: DocumentErrorCode | None = None,
+        error_detail: str | None = None,
     ) -> DocumentRecord | None: ...
 
     async def set_topic_tree(

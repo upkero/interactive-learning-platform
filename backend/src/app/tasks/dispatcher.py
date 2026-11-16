@@ -12,6 +12,7 @@ instead of leaking kombu internals.
 """
 
 import asyncio
+import logging
 from uuid import UUID
 
 from celery import Celery
@@ -26,6 +27,8 @@ from src.app.tasks.names import (
     PARTS_QUEUE,
     PROCESS_PART_TASK,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class CeleryTaskDispatcher:
@@ -48,7 +51,8 @@ class CeleryTaskDispatcher:
         try:
             await asyncio.to_thread(self._app.send_task, task_name, args=[str(task_id)], queue=queue)
         except (KombuError, OSError) as exc:
-            raise TaskDispatchError(extra={"task": task_name}) from exc
+            logger.error("Task dispatch failed.", extra={"task": task_name}, exc_info=exc)
+            raise TaskDispatchError() from exc
 
 
 __all__ = ["CeleryTaskDispatcher"]

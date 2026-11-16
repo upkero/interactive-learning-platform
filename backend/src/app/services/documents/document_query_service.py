@@ -99,7 +99,9 @@ class DocumentQueryService:
         """
         if document.status is DocumentStatus.FAILED:
             reason = document.error_code.value if document.error_code is not None else None
-            raise DocumentNotReadyError(extra={"status": "failed", "reason": reason})
+            raise DocumentNotReadyError(
+                detail="Document processing failed.", extra={"status": "failed", "reason": reason}
+            )
         if document.status not in READABLE_STATUSES:
             raise DocumentNotReadyError(extra={"status": document.status.value})
 

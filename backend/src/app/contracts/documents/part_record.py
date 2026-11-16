@@ -5,7 +5,8 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from src.app.contracts.documents.public_part_content import JsonValue
+from pydantic import JsonValue
+
 from src.app.contracts.documents.statuses import PartStatus
 
 

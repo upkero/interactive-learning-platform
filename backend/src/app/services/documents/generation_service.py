@@ -9,7 +9,6 @@ them.
 """
 
 from collections.abc import Callable
-from dataclasses import dataclass
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -22,6 +21,7 @@ from src.app.contracts.documents import (
     TopicNode,
 )
 from src.app.contracts.documents.generation import GenerationCommand, GenerationStarted
+from src.app.contracts.documents.topic_plan import TopicPlan
 from src.app.core.settings.processing import ProcessingSettings
 from src.app.exceptions.documents import (
     DocumentNotFoundError,
@@ -35,18 +35,13 @@ from src.app.interfaces.repositories.documents import (
     UserMaterialRepositoryProtocol,
 )
 from src.app.interfaces.repositories.users import UserRepositoryProtocol
-from src.app.interfaces.services.part_planner import PartPlan, PartPlanner
+from src.app.interfaces.services.part_planner import PartPlanner
 from src.app.interfaces.services.task_dispatcher import TaskDispatcher
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.services.documents.document_query_service import READABLE_STATUSES
 from src.app.services.documents.processing_capacity import assert_processing_capacity
 from src.app.services.quota.quota_ledger import QuotaLedger
 from src.app.storage.object_keys import parsed_markdown_key
-
-
-@dataclass(frozen=True, slots=True)
-class TopicPlan:
-    parts: tuple[PartPlan, ...]
 
 
 class GenerationService:
@@ -84,9 +79,6 @@ class GenerationService:
         )
         markdown = await self._load_markdown(user_id, document_id)
         async with self._session_factory() as session, session.begin():
-            materials = self._materials(session)
-            if await materials.get_role(user_id, document_id) is not MaterialRole.OWNER:
-                raise DocumentNotFoundError()
             # Lock before reading the document to serialize concurrent starts.
             documents = self._documents(session)
             await assert_processing_capacity(
@@ -99,9 +91,6 @@ class GenerationService:
             plan, _ = await self._plan_with_session(session, user_id, document_id, topic_ids, markdown)
             parts = self._parts(session)
             existing = await parts.list_by_document(document_id)
-            document = await documents.get(document_id)
-            if document is None:
-                raise DocumentNotFoundError()
             next_index = max((part.index for part in existing), default=-1) + 1
             profile = answers.as_dict()
             drafts = [
@@ -174,7 +163,9 @@ class GenerationService:
     def _assert_plannable(document: DocumentRecord) -> None:
         if document.status is DocumentStatus.FAILED:
             reason = document.error_code.value if document.error_code is not None else None
-            raise DocumentNotReadyError(extra={"status": "failed", "reason": reason})
+            raise DocumentNotReadyError(
+                detail="Document processing failed.", extra={"status": "failed", "reason": reason}
+            )
         if document.status not in READABLE_STATUSES:
             raise DocumentNotReadyError(extra={"status": document.status.value})
 

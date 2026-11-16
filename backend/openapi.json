@@ -258,7 +258,7 @@
         "type": "object"
       },
       "DocumentErrorCode": {
-        "description": "Why a document ended up in ``failed`` (story 1.9, migration 0003).\n\nOnly the code is stored: the client translates it through its\n``errors.<code>`` dictionary, while technical details (exception\ntext) live only in server logs.",
+        "description": "Why a document ended up in ``failed`` (story 1.9, migration 0003).\n\nOnly the code is exposed: the client translates it through its\n``errors.<code>`` dictionary, while technical details (exception\ntext) stay in server-side diagnostics and never leave the API.",
         "enum": [
           "parse_failed",
           "gdocs_not_public",
@@ -1438,15 +1438,29 @@
             "title": "Page"
           },
           "source_span": {
-            "$ref": "#/components/schemas/SourceSpan"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "title": {
             "title": "Title",
             "type": "string"
           },
           "topic_id": {
-            "title": "Topic Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic Id"
           }
         },
         "required": [

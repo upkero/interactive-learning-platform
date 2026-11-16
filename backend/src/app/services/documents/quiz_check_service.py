@@ -1,71 +1,81 @@
 """Check and persist answers to published quizzes."""
 
+import logging
 from collections.abc import Callable, Mapping
 from math import isclose
 from uuid import UUID
 
+from pydantic import StrictFloat, StrictStr, TypeAdapter, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents.statuses import PartStatus
 from src.app.contracts.quizzes.check_result import QuizCheckResult
-from src.app.exceptions.quizzes import InvalidQuizAnswerError, QuizNotFoundError
+from src.app.exceptions.quizzes import InvalidQuizAnswerError, QuizIntegrityError, QuizNotFoundError
 from src.app.interfaces.repositories.documents import DocumentPartRepositoryProtocol, UserMaterialRepositoryProtocol
 from src.app.interfaces.repositories.quizzes import QuizAttemptRepositoryProtocol
+from src.app.schemas.quiz_keys import MultipleChoiceKey, NumericKey, OrderingKey, SingleChoiceKey
+
+logger = logging.getLogger(__name__)
+
+_SINGLE = TypeAdapter(SingleChoiceKey)
+_MULTIPLE = TypeAdapter(MultipleChoiceKey)
+_ORDERING = TypeAdapter(OrderingKey)
+_NUMERIC = TypeAdapter(NumericKey)
+_STRING_ANSWER = TypeAdapter(StrictStr)
+_LIST_ANSWER = TypeAdapter(list[StrictStr])
+_NUMBER_ANSWER = TypeAdapter(StrictFloat)
 
 
 def check_answer(quiz: Mapping[str, object], key: Mapping[str, object], answer: object) -> QuizCheckResult:
     kind = quiz.get("type")
-    correct: str | list[str] | float
-    if kind == "single_choice":
-        value = key.get("correct_id")
-        if not isinstance(value, str):
-            raise QuizNotFoundError()
-        if type(answer) is not str:
-            raise InvalidQuizAnswerError()
-        correct = value
-        is_correct = answer == correct
-    elif kind in ("multiple_choice", "ordering"):
-        if not isinstance(answer, list) or any(type(item) is not str for item in answer):
-            raise InvalidQuizAnswerError()
-        if len(set(answer)) != len(answer):
-            raise InvalidQuizAnswerError()
-        value = key.get("correct_order" if kind == "ordering" else "correct_ids")
-        if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
-            raise QuizNotFoundError()
-        correct = [item for item in value if isinstance(item, str)]
-        is_correct = answer == correct if kind == "ordering" else set(answer) == set(correct)
-    elif kind == "numeric":
-        value = key.get("answer")
-        if type(answer) not in (int, float):
-            raise InvalidQuizAnswerError()
-        if type(value) not in (int, float) or not isinstance(value, int | float):
-            raise QuizNotFoundError()
-        tolerance = key.get("tolerance", 0.01)
-        if type(tolerance) not in (int, float) or not isinstance(tolerance, int | float) or tolerance < 0:
-            raise QuizNotFoundError()
-        assert isinstance(answer, int | float)
-        correct = float(value)
-        is_correct = isclose(answer, correct, rel_tol=tolerance, abs_tol=1e-9)
-    else:
-        raise InvalidQuizAnswerError()
-    explanation = key.get("explanation")
-    if explanation is not None and not isinstance(explanation, str):
-        raise QuizNotFoundError()
-    raw_explanations = (
-        key.get("why_wrong") if kind in ("single_choice", "multiple_choice") else key.get("common_mistakes")
-    )
-    option_explanations: dict[str, str] | list[str] | None = None
-    if isinstance(raw_explanations, dict):
-        if any(not isinstance(k, str) or not isinstance(v, str) for k, v in raw_explanations.items()):
-            raise QuizNotFoundError()
-        option_explanations = {k: v for k, v in raw_explanations.items() if isinstance(k, str) and isinstance(v, str)}
-    elif isinstance(raw_explanations, list):
-        if any(not isinstance(item, str) for item in raw_explanations):
-            raise QuizNotFoundError()
-        option_explanations = [item for item in raw_explanations if isinstance(item, str)]
-    elif raw_explanations is not None:
-        raise QuizNotFoundError()
-    return QuizCheckResult(is_correct, correct, explanation, option_explanations)
+    parsed: SingleChoiceKey | MultipleChoiceKey | OrderingKey | NumericKey
+    try:
+        match kind:
+            case "single_choice":
+                parsed = _SINGLE.validate_python(key)
+            case "multiple_choice":
+                parsed = _MULTIPLE.validate_python(key)
+            case "ordering":
+                parsed = _ORDERING.validate_python(key)
+            case "numeric":
+                parsed = _NUMERIC.validate_python(key)
+            case _:
+                raise QuizIntegrityError()
+    except ValidationError as exc:
+        raise QuizIntegrityError() from exc
+
+    try:
+        match parsed:
+            case SingleChoiceKey():
+                correct = parsed.correct_id
+                return QuizCheckResult(
+                    _STRING_ANSWER.validate_python(answer) == correct, correct, parsed.explanation, parsed.why_wrong
+                )
+            case MultipleChoiceKey():
+                choices = _LIST_ANSWER.validate_python(answer)
+                if len(set(choices)) != len(choices):
+                    raise InvalidQuizAnswerError()
+                return QuizCheckResult(
+                    set(choices) == set(parsed.correct_ids), parsed.correct_ids, parsed.explanation, parsed.why_wrong
+                )
+            case OrderingKey():
+                order = _LIST_ANSWER.validate_python(answer)
+                if len(set(order)) != len(order):
+                    raise InvalidQuizAnswerError()
+                return QuizCheckResult(
+                    order == parsed.correct_order, parsed.correct_order, parsed.explanation, parsed.common_mistakes
+                )
+            case NumericKey():
+                number = _NUMBER_ANSWER.validate_python(answer)
+                return QuizCheckResult(
+                    isclose(number, parsed.answer, rel_tol=parsed.tolerance, abs_tol=1e-9),
+                    parsed.answer,
+                    parsed.explanation,
+                    parsed.common_mistakes,
+                )
+    except ValidationError as exc:
+        raise InvalidQuizAnswerError() from exc
+    raise QuizIntegrityError()
 
 
 class QuizCheckService:
@@ -91,13 +101,21 @@ class QuizCheckService:
                 raise QuizNotFoundError()
             quizzes = part.content.get("quizzes")
             keys = part.content.get("answer_keys")
-            if not isinstance(quizzes, list) or not isinstance(keys, dict):
+            if not isinstance(quizzes, list):
                 raise QuizNotFoundError()
             quiz = next((item for item in quizzes if isinstance(item, dict) and item.get("key") == quiz_key), None)
-            key = keys.get(quiz_key)
-            if quiz is None or not isinstance(key, dict):
+            if quiz is None:
                 raise QuizNotFoundError()
-            result = check_answer(quiz, key, answer)
+            try:
+                key = keys.get(quiz_key) if isinstance(keys, dict) else None
+                if not isinstance(key, dict):
+                    raise QuizIntegrityError()
+                result = check_answer(quiz, key, answer)
+            except QuizIntegrityError:
+                logger.error(
+                    "Published quiz answer key is invalid.", extra={"part_id": str(part_id), "quiz_key": quiz_key}
+                )
+                raise
             await self._attempts(session).create(
                 user_id=user_id,
                 part_id=part_id,

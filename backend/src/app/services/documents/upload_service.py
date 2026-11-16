@@ -126,7 +126,7 @@ class UploadService:
                 session_factory=self._session_factory,
                 documents=self._documents,
                 document_id=document.id,
-                error_detail=str(exc),
+                error_detail=repr(exc.__cause__ or exc),
             )
             raise
         return document

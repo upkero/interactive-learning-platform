@@ -43,12 +43,16 @@ def test_openapi_responses_are_specific_to_operations() -> None:
     assert "413" not in paths["/api/v1/me"]["get"]["responses"]
     assert "415" not in paths["/api/v1/me"]["get"]["responses"]
     assert "402" in paths["/api/v1/documents/{document_id}/generate"]["post"]["responses"]
+    upload_responses = paths["/api/v1/documents"]["post"]["responses"]
+    assert {"413", "415"} <= upload_responses.keys()
 
 
 def test_document_error_code_is_limited_to_document_error_enum() -> None:
     schemas = create_app().openapi()["components"]["schemas"]
     error_code = schemas["DocumentOut"]["properties"]["error_code"]
     assert {"$ref": "#/components/schemas/DocumentErrorCode"} in error_code["anyOf"]
+    reason = schemas["ErrorResponse"]["properties"]["reason"]
+    assert {"$ref": "#/components/schemas/DocumentErrorCode"} in reason["anyOf"]
     assert set(schemas["DocumentErrorCode"]["enum"]) == {
         "parse_failed",
         "gdocs_not_public",

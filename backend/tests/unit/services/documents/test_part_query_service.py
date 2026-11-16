@@ -90,6 +90,9 @@ async def test_part_content_is_safe_and_resolves_three_directives() -> None:
         ],
         "answer_keys": {"q": {"correct_id": "a", "explanation": "secret"}},
         "private_pipeline_detail": "must not reach callers",
+        "sections": [
+            {"title": "Unmatched", "anchor": "unmatched", "topic_id": None, "source_span": None, "page": None}
+        ],
     }
     parts._parts[part.id] = replace(part, status=PartStatus.PUBLISHED, content=original)
     service = _service(
@@ -107,6 +110,8 @@ async def test_part_content_is_safe_and_resolves_three_directives() -> None:
     assert public["widgets"]["w2"]["primitive_id"] == "graph"
     assert public["quizzes"][0]["options"] == [{"id": "a", "text": "A"}]
     assert "answer_keys" not in public
+    assert public["sections"][0]["topic_id"] is None
+    assert public["sections"][0]["source_span"] is None
     assert "private_pipeline_detail" not in details.content
     assert original["answer_keys"]["q"]["correct_id"] == "a"
     with pytest.raises(PartNotFoundError):

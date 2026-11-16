@@ -38,6 +38,7 @@ class DocumentRepository(DocumentRepositoryProtocol):
             status=DocumentStatus(row.status),
             topic_tree=topic_roots(row.topic_tree) if row.topic_tree is not None else None,
             error_code=DocumentErrorCode(row.error_code) if row.error_code is not None else None,
+            error_detail=row.error_detail,
             created_at=row.created_at,
             updated_at=row.updated_at,
         )
@@ -93,6 +94,7 @@ class DocumentRepository(DocumentRepositoryProtocol):
         status: DocumentStatus,
         *,
         error_code: DocumentErrorCode | None = None,
+        error_detail: str | None = None,
     ) -> DocumentRecord | None:
         """Update the status of a document and return the fresh record."""
         row = await self._session.get(Document, document_id)
@@ -100,6 +102,7 @@ class DocumentRepository(DocumentRepositoryProtocol):
             return None
         row.status = status.value
         row.error_code = error_code.value if error_code is not None else None
+        row.error_detail = error_detail
         await self._session.flush()
         return self._to_record(row)
 

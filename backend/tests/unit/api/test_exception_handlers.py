@@ -130,6 +130,7 @@ def test_app_exception_500_is_logged_with_request_id(client: TestClient, caplog:
 def test_unhandled_exception_logs_request_id(client: TestClient, caplog: pytest.LogCaptureFixture) -> None:
     response = client.get("/crash", headers={"X-Request-ID": "unhandled-request-id"})
     assert response.status_code == 500
+    assert response.headers["x-request-id"] == "unhandled-request-id"
     assert any(
         "Unhandled exception" in record.message and getattr(record, "request_id", None) == "unhandled-request-id"
         for record in caplog.records
