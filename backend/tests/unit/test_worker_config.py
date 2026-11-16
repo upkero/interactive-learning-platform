@@ -4,8 +4,9 @@ import pytest
 
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.core.log_context import bind_log_context, get_log_context
-from src.app.core.logging import _RequestIdFilter
+from src.app.core.logging import _ContextFilter
 from src.app.tasks.names import NORMALIZE_LIBRARY_TASK, WATCHDOG_TICK_TASK
+from src.app.tasks.redis_transport import OrderedChannel
 from src.app.tasks.runner import run_async
 from src.worker import celery_app
 
@@ -38,11 +39,18 @@ def test_context_is_nested_and_restored() -> None:
     with bind_log_context(part_id="part"):
         with bind_log_context(document_id="doc"):
             record = logging.LogRecord("test", logging.INFO, "", 0, "message", (), None)
-            assert _RequestIdFilter().filter(record)
+            assert _ContextFilter().filter(record)
             assert record.part_id == "part"  # type: ignore[attr-defined]
             assert record.document_id == "doc"  # type: ignore[attr-defined]
         assert get_log_context() == {"part_id": "part"}
     assert get_log_context() == {}
+
+
+def test_transport_preserves_consumer_order() -> None:
+    channel = object.__new__(OrderedChannel)
+    channel._active_queues = ["maintenance", "parts.high", "parts", "parts.high"]
+    channel.active_fanout_queues = set()
+    assert channel.active_queues == ["maintenance", "parts.high", "parts"]
 
 
 def test_runner_closes_container_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:

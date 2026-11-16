@@ -1,7 +1,7 @@
 """Repository of documents."""
 
 from collections.abc import Mapping, Sequence
-from datetime import datetime
+from datetime import timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.documents.document_record import DocumentRecord
-from src.app.contracts.documents.statuses import DocumentErrorCode, DocumentStatus, SourceType
+from src.app.contracts.documents.statuses import DocumentErrorCode, DocumentStatus, PartStatus, SourceType
 from src.app.contracts.documents.topic_node import topic_roots
 from src.app.exceptions.documents import DocumentsIntegrityError
 from src.app.interfaces.repositories.documents import DocumentRepositoryProtocol
@@ -50,23 +50,24 @@ class DocumentRepository(DocumentRepositoryProtocol):
         return self._to_record(row) if row is not None else None
 
     async def refresh_status(self, document_id: UUID) -> None:
+        """Finish a generation when all parts are terminal; any publication makes it done."""
         stmt = select(Document).where(Document.id == document_id).with_for_update()
         document = (await self._session.scalars(stmt)).first()
         if document is None or document.status != DocumentStatus.GENERATING.value:
             return
-        statuses = list(
-            (
-                await self._session.scalars(select(DocumentPart.status).where(DocumentPart.document_id == document_id))
-            ).all()
-        )
-        if statuses and all(status in ("published", "failed") for status in statuses):
-            document.status = DocumentStatus.DONE.value if "published" in statuses else DocumentStatus.FAILED.value
+        aggregate = select(
+            func.bool_and(DocumentPart.status.in_([PartStatus.PUBLISHED.value, PartStatus.FAILED.value])),
+            func.bool_or(DocumentPart.status == PartStatus.PUBLISHED.value),
+        ).where(DocumentPart.document_id == document_id)
+        all_terminal, any_published = (await self._session.execute(aggregate)).one()
+        if all_terminal:
+            document.status = DocumentStatus.DONE.value if any_published else DocumentStatus.FAILED.value
             await self._session.flush()
 
-    async def lock_stale_uploaded(self, *, before: datetime, limit: int) -> list[DocumentRecord]:
+    async def lock_stale_uploaded(self, *, older_than: timedelta, limit: int) -> list[DocumentRecord]:
         stmt = (
             select(Document)
-            .where(Document.status == DocumentStatus.UPLOADED.value, Document.updated_at < before)
+            .where(Document.status == DocumentStatus.UPLOADED.value, Document.updated_at < func.now() - older_than)
             .order_by(Document.updated_at, Document.id)
             .limit(limit)
             .with_for_update(skip_locked=True)

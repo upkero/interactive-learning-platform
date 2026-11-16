@@ -4,6 +4,7 @@ import asyncio
 import os
 import subprocess
 import sys
+from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID
 
 import pytest
@@ -28,6 +29,8 @@ async def test_soft_limit_retries_then_refunds(
 ) -> None:
     broker = os.environ.get("TEST_CELERY_BROKER_URL")
     if not broker:
+        if os.environ.get("CI"):
+            pytest.fail("TEST_CELERY_BROKER_URL is required in CI")
         pytest.skip("TEST_CELERY_BROKER_URL must point to an isolated Redis broker")
     monkeypatch.setenv("CELERY_BROKER_URL", broker)
     user_id, document_id, part_id = part_ids
@@ -36,7 +39,10 @@ async def test_soft_limit_retries_then_refunds(
         await container.quota_ledger.reserve(session, user_id=user_id, document_id=document_id, parts=1)
         await DocumentRepository(session).set_status(document_id, DocumentStatus.GENERATING)
     app = Celery(broker=broker)
-    env = {**os.environ, "CELERY_BROKER_URL": broker, "REDIS_PROGRESS_URL": broker, "SOLVER_PIPELINE": "stub"}
+    parsed = urlsplit(broker)
+    progress_db = "/14" if parsed.path != "/14" else "/13"
+    progress_url = urlunsplit((parsed.scheme, parsed.netloc, progress_db, parsed.query, parsed.fragment))
+    env = {**os.environ, "CELERY_BROKER_URL": broker, "REDIS_PROGRESS_URL": progress_url, "SOLVER_PIPELINE": "stub"}
     process = await asyncio.create_subprocess_exec(
         sys.executable,
         "-m",
@@ -68,6 +74,7 @@ async def test_soft_limit_retries_then_refunds(
                     break
             await asyncio.sleep(0.1)
         assert part is not None and part.status is PartStatus.FAILED and part.attempts == 2
+        assert part.error == "soft_time_limit"
         async with session_factory() as session:
             entries = (await session.scalars(select(GenerationLedger).where(GenerationLedger.op == "refund"))).all()
             assert len(entries) == 1 and entries[0].part_id == part_id

@@ -28,7 +28,6 @@ COPY --chown=appuser:appgroup alembic.ini ./
 COPY --chown=appuser:appgroup migrations/ migrations/
 COPY --chown=appuser:appgroup src/ src/
 COPY --chown=appuser:appgroup resources/ resources/
-COPY --chown=appuser:appgroup tests/support/fixtures/seed/published_part.json tests/support/fixtures/seed/published_part.json
 
 USER appuser
 

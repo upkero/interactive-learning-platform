@@ -1,7 +1,7 @@
 """Protocols of the document aggregate repositories."""
 
 from collections.abc import Mapping, Sequence
-from datetime import datetime
+from datetime import timedelta
 from typing import Any, Protocol
 from uuid import UUID
 
@@ -13,6 +13,7 @@ from src.app.contracts.documents.image_record import ImageRecord
 from src.app.contracts.documents.material_details import MaterialDetails
 from src.app.contracts.documents.material_record import MaterialRecord
 from src.app.contracts.documents.part_draft import PartDraft
+from src.app.contracts.documents.part_owner import PartOwner
 from src.app.contracts.documents.part_record import PartRecord
 from src.app.contracts.documents.shared_user_info import SharedUserInfo
 from src.app.contracts.documents.statuses import (
@@ -65,7 +66,7 @@ class DocumentRepositoryProtocol(Protocol):
 
     async def refresh_status(self, document_id: UUID) -> None: ...
 
-    async def lock_stale_uploaded(self, *, before: datetime, limit: int) -> list[DocumentRecord]: ...
+    async def lock_stale_uploaded(self, *, older_than: timedelta, limit: int) -> list[DocumentRecord]: ...
 
     async def touch(self, document_id: UUID) -> None: ...
 
@@ -77,8 +78,10 @@ class DocumentPartRepositoryProtocol(Protocol):
 
     async def lock(self, part_id: UUID) -> PartRecord | None: ...
 
+    async def part_owner(self, part_id: UUID) -> PartOwner | None: ...
+
     async def lock_stale(
-        self, *, statuses: frozenset[PartStatus], before: datetime, limit: int
+        self, *, statuses: frozenset[PartStatus], older_than: timedelta, limit: int
     ) -> list[PartRecord]: ...
 
     async def touch(self, part_id: UUID) -> None: ...

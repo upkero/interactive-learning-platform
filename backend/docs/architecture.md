@@ -1,5 +1,24 @@
 # Architecture
 
+## Worker, queues and recovery
+
+Celery consumes `maintenance`, `parts.high`, then `parts`. The Redis transport
+preserves this order despite Kombu 5.6 using an unordered active-queue set;
+see [ADR-0011](../../docs/adr/0011-celery-redis-queue-order.md). Results are
+not persisted, acknowledgement is late and prefetch is one. `process_part`
+uses soft/hard limits of 300/330 seconds; `parse_document` has 600/660 seconds
+and is registered with an explicit placeholder until story 1.9. The real part
+pipeline and pending-widget finisher arrive in 2.7.
+
+Each synchronous Celery task calls `run_async`, which creates and closes its
+own container and event loop. Part state changes use conditional repository
+transitions; duplicate delivery therefore does not start another attempt.
+Every minute beat schedules a short-lived watchdog tick. It locks batches with
+`SKIP LOCKED`, isolates individual failures with savepoints, retries a stuck
+active part once and refunds exhausted parts in the same transaction. Queued
+parts and uploaded documents older than 30 minutes are re-enqueued; dispatch
+happens only after commit. Worker metric export is deferred to story 1.8.
+
 Layered architecture with strict inward dependency rule: outer layers depend on inner, never the reverse.
 
 ```

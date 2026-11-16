@@ -17,6 +17,8 @@ dependencies = [
 
     # Очереди и кэш
     "celery[redis]>=5.4.0",
+    # OrderedRedisTransport depends on Kombu 5.6's Redis channel internals.
+    "kombu>=5.6,<5.7",
     "redis>=5.2.0",
 
     # Хранилище файлов MinIO (S3)

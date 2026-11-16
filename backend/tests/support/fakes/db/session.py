@@ -68,3 +68,16 @@ class FakeSession:
 
     def begin(self) -> FakeTransaction:
         return FakeTransaction(self)
+
+    def begin_nested(self) -> FakeTransaction:
+        return FakeSavepoint(self)
+
+
+class FakeSavepoint(FakeTransaction):
+    async def __aenter__(self) -> "FakeSavepoint":
+        return self
+
+    async def __aexit__(
+        self, exc_type: type[BaseException] | None, exc: BaseException | None, tb: TracebackType | None
+    ) -> None:
+        return None

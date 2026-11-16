@@ -14,6 +14,20 @@ class QuotaIntegrityError(QuotaError):
     default_detail = "Quota ledger integrity constraint violated."
 
 
+class QuotaPartNotFoundError(QuotaIntegrityError):
+    """A part cannot be accounted for because its owner cannot be found."""
+
+    error_code = "quota_part_not_found"
+    default_detail = "Cannot account for a missing part."
+
+
+class QuotaReservationNotFoundError(QuotaIntegrityError):
+    """A part has no corresponding reservation."""
+
+    error_code = "quota_reservation_not_found"
+    default_detail = "Cannot account for a part without a reservation."
+
+
 class LedgerEntryDuplicateError(QuotaIntegrityError):
     """The (part_id, op) ledger entry already exists (e.g. watchdog race)."""
 

@@ -1,7 +1,7 @@
 """Repository of document parts."""
 
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import timedelta
 from uuid import UUID
 
 from pydantic import JsonValue
@@ -10,10 +10,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.documents.part_draft import PartDraft
+from src.app.contracts.documents.part_owner import PartOwner
 from src.app.contracts.documents.part_record import PartRecord
 from src.app.contracts.documents.statuses import PartStatus
 from src.app.exceptions.documents import DocumentPartDuplicateError, DocumentsIntegrityError
 from src.app.interfaces.repositories.documents import DocumentPartRepositoryProtocol
+from src.app.models.document import Document
 from src.app.models.document_part import DocumentPart
 from src.app.repositories._errors import constraint_name
 
@@ -54,10 +56,20 @@ class DocumentPartRepository(DocumentPartRepositoryProtocol):
         row = (await self._session.scalars(stmt)).first()
         return self._to_record(row) if row is not None else None
 
-    async def lock_stale(self, *, statuses: frozenset[PartStatus], before: datetime, limit: int) -> list[PartRecord]:
+    async def part_owner(self, part_id: UUID) -> PartOwner | None:
+        stmt = select(Document.owner_id, Document.id).join(DocumentPart).where(DocumentPart.id == part_id)
+        row = (await self._session.execute(stmt)).one_or_none()
+        return PartOwner(user_id=row[0], document_id=row[1]) if row is not None else None
+
+    async def lock_stale(
+        self, *, statuses: frozenset[PartStatus], older_than: timedelta, limit: int
+    ) -> list[PartRecord]:
         stmt = (
             select(DocumentPart)
-            .where(DocumentPart.status.in_([s.value for s in statuses]), DocumentPart.stage_changed_at < before)
+            .where(
+                DocumentPart.status.in_([s.value for s in statuses]),
+                DocumentPart.stage_changed_at < func.now() - older_than,
+            )
             .order_by(DocumentPart.stage_changed_at, DocumentPart.id)
             .limit(limit)
             .with_for_update(skip_locked=True)

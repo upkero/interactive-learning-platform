@@ -2,7 +2,6 @@
 
 import json
 from dataclasses import replace
-from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
 
@@ -11,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents import ImageDraft, MaterialRole, PartDraft, PartStatus
 from src.app.contracts.widgets import WidgetKind
+from src.app.core.fixtures import PUBLISHED_PART_FIXTURE
 from src.app.exceptions.documents import PartNotFoundError
 from src.app.schemas.parts import PartContentOut
 from src.app.services.documents.part_query_service import _PUBLIC_CONTENT_FIELDS, PartQueryService
@@ -31,7 +31,7 @@ def test_public_content_allowlist_matches_http_schema() -> None:
 
 
 def test_seed_public_content_cannot_contain_answer_keys() -> None:
-    fixture = Path(__file__).resolve().parents[3] / "support/fixtures/seed/published_part.json"
+    fixture = PUBLISHED_PART_FIXTURE
     content = json.loads(fixture.read_text())["content"]
     with pytest.raises(ValueError):
         PartContentOut.model_validate(content)

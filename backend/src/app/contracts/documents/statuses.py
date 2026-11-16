@@ -42,6 +42,9 @@ class PartStatus(StrEnum):
     FAILED = "failed"
 
 
+ACTIVE_PART_STATUSES = frozenset({PartStatus.MAIN_PASS, PartStatus.RESOLVING, PartStatus.ASSEMBLING})
+
+
 class MaterialRole(StrEnum):
     OWNER = "owner"
     SHARED = "shared"

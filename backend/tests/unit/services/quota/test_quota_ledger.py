@@ -13,6 +13,7 @@ from src.app.core.clock import Clock
 from src.app.services.quota.period import current_period, period_start_for
 from src.app.services.quota.quota_ledger import QuotaLedger
 from tests.support.fakes.db.session import FakeSession
+from tests.support.fakes.repositories.documents import FakeDocumentPartRepository
 from tests.support.fakes.repositories.quota import FakeGenerationLedgerRepository
 from tests.support.fakes.repositories.users import FakeUserRepository
 
@@ -46,6 +47,7 @@ def _ledger(users: FakeUserRepository, ledger: FakeGenerationLedgerRepository, t
     return QuotaLedger(
         users_factory=lambda _: users,
         ledger_factory=lambda _: ledger,
+        parts_factory=lambda _: FakeDocumentPartRepository(),
         clock=_FixedClock(today),
     )
 

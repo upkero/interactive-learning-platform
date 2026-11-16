@@ -4,6 +4,7 @@ from datetime import date
 from uuid import UUID
 
 from src.app.contracts.quota import LedgerEntry, LedgerOp
+from src.app.exceptions.quota import LedgerEntryDuplicateError
 from src.app.interfaces.repositories.quota import GenerationLedgerRepositoryProtocol
 from tests.support.time import now
 
@@ -14,7 +15,6 @@ class FakeGenerationLedgerRepository(GenerationLedgerRepositoryProtocol):
     def __init__(self) -> None:
         self._entries: list[LedgerEntry] = []
         self._next_id = 1
-        self.part_owners: dict[UUID, tuple[UUID, UUID]] = {}
 
     async def add(
         self,
@@ -26,6 +26,8 @@ class FakeGenerationLedgerRepository(GenerationLedgerRepositoryProtocol):
         document_id: UUID | None = None,
         part_id: UUID | None = None,
     ) -> LedgerEntry:
+        if part_id is not None and any(e.part_id == part_id and e.op == op for e in self._entries):
+            raise LedgerEntryDuplicateError()
         entry = LedgerEntry(
             id=self._next_id,
             user_id=user_id,
@@ -40,6 +42,10 @@ class FakeGenerationLedgerRepository(GenerationLedgerRepositoryProtocol):
         self._entries.append(entry)
         return entry
 
+    @property
+    def entries(self) -> tuple[LedgerEntry, ...]:
+        return tuple(self._entries)
+
     async def sum_delta(self, user_id: UUID, period_start: date) -> int:
         return sum(e.delta for e in self._entries if e.user_id == user_id and e.period_start >= period_start)
 
@@ -52,6 +58,3 @@ class FakeGenerationLedgerRepository(GenerationLedgerRepositoryProtocol):
             ),
             None,
         )
-
-    async def part_owner(self, part_id: UUID) -> tuple[UUID, UUID] | None:
-        return self.part_owners.get(part_id)

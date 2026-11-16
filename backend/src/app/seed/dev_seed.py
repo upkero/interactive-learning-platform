@@ -29,6 +29,7 @@ from src.app.contracts.documents.part_record import PartRecord
 from src.app.contracts.documents.statuses import DocumentStatus, MaterialRole, PartStatus, SourceType
 from src.app.contracts.users.user_record import UserRecord
 from src.app.contracts.widgets import UsageStatus, WidgetKind, WidgetUsageDraft
+from src.app.core.fixtures import PUBLISHED_PART_FIXTURE
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
 from src.app.repositories.image_repository import ImageRepository
@@ -223,7 +224,7 @@ async def _seed_documents(
         raise RuntimeError("Fresh document not found after create")
     await document_repository.set_topic_tree(done.id, DONE_TOPIC_TREE)
 
-    published = await _load_fixture("published_part.json")
+    published = json.loads(await asyncio.to_thread(PUBLISHED_PART_FIXTURE.read_text, encoding="utf-8"))
     (part,) = await part_repository.add_many(
         done.id,
         [

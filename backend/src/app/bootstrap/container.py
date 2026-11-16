@@ -12,15 +12,17 @@ from src.app.core.settings.llm import get_llm_settings
 from src.app.core.settings.processing import ProcessingSettings, get_processing_settings
 from src.app.core.settings.progress import get_progress_settings
 from src.app.core.settings.reports import ReportsSettings, get_reports_settings
-from src.app.core.settings.solver import get_solver_settings
 from src.app.core.settings.storage import get_storage_settings
 from src.app.core.settings.upload import get_upload_settings
 from src.app.db.session import build_engine, build_session_factory
 from src.app.interfaces.llm.llm_client import LLMClient
+from src.app.interfaces.services.part_pipeline import PartPipeline
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.llm.factory import create_llm_client
 from src.app.observability.decision_log import DecisionLog
 from src.app.observability.noop_metrics_collector import NoopMetricsCollector
+from src.app.observability.progress_notifier import RedisProgressNotifier
+from src.app.observability.prometheus_metrics_collector import PrometheusMetricsCollector
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
 from src.app.repositories.generation_ledger_repository import GenerationLedgerRepository
@@ -32,6 +34,7 @@ from src.app.repositories.user_repository import UserRepository
 from src.app.repositories.widget_repository import WidgetRepository
 from src.app.repositories.widget_usage_repository import WidgetUsageRepository
 from src.app.services.auth.auth_service import AuthService
+from src.app.services.documents.document_parser import DocumentParser
 from src.app.services.documents.document_query_service import DocumentQueryService
 from src.app.services.documents.file_inspector import FileInspector
 from src.app.services.documents.generation_service import GenerationService
@@ -45,6 +48,7 @@ from src.app.services.quota.quota_ledger import QuotaLedger
 from src.app.services.quota.quota_service import QuotaService
 from src.app.services.reports.report_service import ReportService
 from src.app.services.sharing.sharing_service import SharingService
+from src.app.services.solver.library.library_normalizer import LibraryNormalizer
 from src.app.services.solver.pipeline.part_recovery import PartRecovery
 from src.app.services.solver.pipeline.stub_pipeline import StubPipeline
 from src.app.services.solver.pipeline.watchdog import Watchdog
@@ -73,6 +77,10 @@ class ApplicationContainer:
     # -- services -----------------------------------------------------------
 
     @cached_property
+    def document_parser(self) -> DocumentParser:
+        return DocumentParser()
+
+    @cached_property
     def part_recovery(self) -> PartRecovery:
         return PartRecovery(
             session_factory=self.session_factory,
@@ -90,20 +98,22 @@ class ApplicationContainer:
             documents=DocumentRepository,
             recovery=self.part_recovery,
             dispatcher=self.task_dispatcher,
+            metrics=PrometheusMetricsCollector(),
         )
 
     @cached_property
-    def processing_pipeline(self) -> StubPipeline:
-        if get_solver_settings().pipeline != "stub":
-            raise RuntimeError("The real solver pipeline is not available until story 2.7")
+    def processing_pipeline(self) -> PartPipeline:
         return StubPipeline(
             session_factory=self.session_factory,
             parts=DocumentPartRepository,
             documents=DocumentRepository,
             ledger=self.quota_ledger,
-            redis=self.progress_redis,
-            progress_settings=get_progress_settings(),
+            notifier=RedisProgressNotifier(self.progress_redis, get_progress_settings()),
         )
+
+    @cached_property
+    def library_normalizer(self) -> LibraryNormalizer:
+        return LibraryNormalizer()
 
     @cached_property
     def auth_service(self) -> AuthService:
@@ -130,6 +140,7 @@ class ApplicationContainer:
         return QuotaLedger(
             users_factory=UserRepository,
             ledger_factory=GenerationLedgerRepository,
+            parts_factory=DocumentPartRepository,
             clock=SystemClock(),
         )
 
@@ -242,7 +253,7 @@ class ApplicationContainer:
 
     @cached_property
     def redis_client(self) -> aioredis.Redis:
-        # Async Redis client for readiness probes and progress streams.
+        # Async Redis client for readiness probes.
         redis_client: aioredis.Redis = aioredis.Redis.from_url(get_celery_settings().broker_url)
         return redis_client
 

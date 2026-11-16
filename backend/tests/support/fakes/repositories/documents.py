@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -14,6 +14,7 @@ from src.app.contracts.documents.image_record import ImageRecord
 from src.app.contracts.documents.material_details import MaterialDetails
 from src.app.contracts.documents.material_record import MaterialRecord
 from src.app.contracts.documents.part_draft import PartDraft
+from src.app.contracts.documents.part_owner import PartOwner
 from src.app.contracts.documents.part_record import PartRecord
 from src.app.contracts.documents.shared_user_info import SharedUserInfo
 from src.app.contracts.documents.statuses import (
@@ -55,10 +56,14 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
     async def get(self, document_id: UUID) -> DocumentRecord | None:
         return self._documents.get(document_id)
 
+    def store_record(self, record: DocumentRecord) -> None:
+        self._documents[record.id] = record
+
     async def refresh_status(self, document_id: UUID) -> None:
         self.refreshed.append(document_id)
 
-    async def lock_stale_uploaded(self, *, before: datetime, limit: int) -> list[DocumentRecord]:
+    async def lock_stale_uploaded(self, *, older_than: timedelta, limit: int) -> list[DocumentRecord]:
+        before = now() - older_than
         return sorted(
             (d for d in self._documents.values() if d.status is DocumentStatus.UPLOADED and d.updated_at < before),
             key=lambda d: (d.updated_at, d.id),
@@ -149,14 +154,24 @@ class FakeDocumentPartRepository(DocumentPartRepositoryProtocol):
 
     def __init__(self) -> None:
         self._parts: dict[UUID, PartRecord] = {}
+        self.owners: dict[UUID, PartOwner] = {}
 
     async def get(self, part_id: UUID) -> PartRecord | None:
         return self._parts.get(part_id)
 
+    def store_record(self, record: PartRecord) -> None:
+        self._parts[record.id] = record
+
     async def lock(self, part_id: UUID) -> PartRecord | None:
         return await self.get(part_id)
 
-    async def lock_stale(self, *, statuses: frozenset[PartStatus], before: datetime, limit: int) -> list[PartRecord]:
+    async def part_owner(self, part_id: UUID) -> PartOwner | None:
+        return self.owners.get(part_id)
+
+    async def lock_stale(
+        self, *, statuses: frozenset[PartStatus], older_than: timedelta, limit: int
+    ) -> list[PartRecord]:
+        before = now() - older_than
         return sorted(
             (p for p in self._parts.values() if p.status in statuses and p.stage_changed_at < before),
             key=lambda p: (p.stage_changed_at, p.id),
