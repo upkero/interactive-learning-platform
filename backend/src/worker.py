@@ -1,18 +1,26 @@
 """Celery worker and scheduler configuration."""
 
 from celery import Celery
+from celery.schedules import crontab
 from kombu import Exchange, Queue
 
 from src.app.core.logging import setup_logging
 from src.app.core.settings.celery import get_celery_settings
 from src.app.core.settings.logging import get_logging_settings
-from src.app.tasks.names import MAINTENANCE_QUEUE, PARSE_DOCUMENT_TASK, PARTS_HIGH_QUEUE, PARTS_QUEUE
+from src.app.tasks.names import (
+    MAINTENANCE_QUEUE,
+    NORMALIZE_LIBRARY_TASK,
+    PARSE_DOCUMENT_TASK,
+    PARTS_HIGH_QUEUE,
+    PARTS_QUEUE,
+    WATCHDOG_TICK_TASK,
+)
 
 setup_logging(get_logging_settings())
 celery_app = Celery(
     "grasp",
     broker=get_celery_settings().broker_url,
-    include=["src.app.tasks.parts"],
+    include=["src.app.tasks.parts", "src.app.tasks.maintenance"],
 )
 celery_app.conf.update(
     task_ignore_result=True,
@@ -31,4 +39,8 @@ celery_app.conf.update(
     broker_transport="src.app.tasks.redis_transport:OrderedRedisTransport",
     broker_transport_options={"queue_order_strategy": "priority", "visibility_timeout": 3600},
     timezone="UTC",
+    beat_schedule={
+        "watchdog-tick": {"task": WATCHDOG_TICK_TASK, "schedule": 60.0},
+        "normalize-library": {"task": NORMALIZE_LIBRARY_TASK, "schedule": crontab(minute=0, hour=3, day_of_week="mon")},
+    },
 )
