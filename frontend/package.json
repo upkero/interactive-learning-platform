@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint && npx tsx scripts/check-messages.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --reporter=verbose --passWithNoTests"
+    "test": "vitest run --reporter=verbose"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.0.0",
