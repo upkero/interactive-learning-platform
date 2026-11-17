@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { QueryProvider } from '@/shared/api/query-provider';
 
 export default async function LocaleLayout({
   children,
@@ -11,7 +12,9 @@ export default async function LocaleLayout({
 
   return (
     <html lang={locale}>
-      <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">{children}</body>
+      <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
+        <QueryProvider>{children}</QueryProvider>
+      </body>
     </html>
   );
 }
