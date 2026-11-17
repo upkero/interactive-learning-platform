@@ -1,0 +1,51 @@
+"""Structured call with schema validation and one retry.
+
+Services never parse JSON by hand: they define a pydantic model and call
+``call_structured``. On ``LLMSchemaError`` the English retry hint
+(``SCHEMA_RETRY_PROMPT`` from ``prompts.py``) is appended as a user message
+and the request is retried exactly once. Network/429 retries belong to the
+SDK — our own retries are applied only to schema errors.
+"""
+
+from dataclasses import replace
+
+from pydantic import BaseModel
+
+from src.app.contracts.llm.llm_message import LLMMessage
+from src.app.contracts.llm.llm_request import LLMRequest
+from src.app.exceptions.llm import LLMSchemaError
+from src.app.interfaces.llm.llm_client import LLMClient
+from src.app.llm.prompts import SCHEMA_RETRY_PROMPT
+
+
+async def call_structured[T: BaseModel](
+    llm: LLMClient,
+    request: LLMRequest,
+    schema: type[T],
+    *,
+    retries: int = 1,
+) -> T:
+    """Execute the structured call and return a schema instance."""
+    attempt_request = request
+    for attempt in range(retries + 1):
+        try:
+            return (await llm.complete_structured(attempt_request, schema)).value
+        except LLMSchemaError as exc:
+            if attempt == retries:
+                raise
+            # Show the model its own broken reply as the last assistant
+            # message (when the client reported it), then the correction
+            # hint as a user message. An empty reply is skipped: providers
+            # require non-empty content in every message but the last.
+            follow_up: tuple[LLMMessage, ...] = ()
+            if exc.raw_output:
+                follow_up = (LLMMessage(role="assistant", content=exc.raw_output),)
+            attempt_request = replace(
+                request,
+                messages=(
+                    *request.messages,
+                    *follow_up,
+                    LLMMessage(role="user", content=SCHEMA_RETRY_PROMPT.format(error=exc)),
+                ),
+            )
+    raise AssertionError("unreachable")
