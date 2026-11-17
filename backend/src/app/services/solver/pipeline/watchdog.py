@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents.statuses import ACTIVE_PART_STATUSES, PartStatus
+from src.app.contracts.progress import ProgressEvent
 from src.app.exceptions.tasks import TaskDispatchError
 from src.app.interfaces.observability.metrics_collector import MetricsCollector
 from src.app.interfaces.repositories.documents import DocumentPartRepositoryProtocol, DocumentRepositoryProtocol
@@ -54,6 +55,7 @@ class Watchdog:
         retry: list[UUID] = []
         lost_parts: list[UUID] = []
         lost_documents: list[UUID] = []
+        events: list[ProgressEvent] = []
         failed = 0
         errors = 0
         async with self._session_factory() as session, session.begin():
@@ -63,17 +65,18 @@ class Watchdog:
             ):
                 try:
                     async with session.begin_nested():
-                        requeued = await self._recovery.retry_or_fail_in(session, part, reason="watchdog")
-                    if requeued:
+                        outcome = await self._recovery.retry_or_fail_in(session, part, reason="watchdog")
+                    events.extend(outcome.events)
+                    if outcome.requeued:
                         retry.append(part.id)
                     else:
                         failed += 1
                 except Exception:
                     errors += 1
                     logger.exception("watchdog.part_failed", extra={"part_id": str(part.id)})
-                    # Keep a poisoned part out of the oldest-first batch: it has
-                    # already spent its retries, so touching is preferable to
-                    # logging the same failure on every tick.
+                    # Keep a part that keeps failing out of the oldest-first
+                    # batch: the exception can also happen on the first attempt,
+                    # and without a touch it would be selected on every tick.
                     try:
                         async with session.begin_nested():
                             await parts.touch(part.id)
@@ -98,7 +101,7 @@ class Watchdog:
                 except Exception:
                     errors += 1
                     logger.exception("watchdog.document_failed", extra={"document_id": str(document.id)})
-        await self._recovery.publish_pending()
+        await self._recovery.publish(events)
         for part_id in [*retry, *lost_parts]:
             try:
                 await self._dispatcher.enqueue_part(part_id, high=False)

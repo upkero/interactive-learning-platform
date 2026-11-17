@@ -9,7 +9,7 @@ from uuid import UUID
 from pydantic import JsonValue, TypeAdapter, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.app.contracts.documents.statuses import DocumentStatus, PartStatus
+from src.app.contracts.documents.statuses import TERMINAL_DOCUMENT_STATUSES, PartStatus
 from src.app.contracts.progress import ProgressEventType
 from src.app.core.fixtures import PUBLISHED_PART_FIXTURE
 from src.app.core.log_context import bind_log_context
@@ -60,7 +60,7 @@ class StubPipeline:
             await self._run_stages(document_id, part_id, content)
 
     async def _load_content(self) -> dict[str, JsonValue]:
-        """Read and validate the fixture once, before any stage transition."""
+        """Read and validate the fixture once for this pipeline instance."""
         if self._content is not None:
             return self._content
         raw = await asyncio.to_thread(PUBLISHED_PART_FIXTURE.read_text, encoding="utf-8")
@@ -107,10 +107,7 @@ class StubPipeline:
                     documents = self._documents(session)
                     await documents.refresh_status(document_id)
                     document = await documents.get(document_id)
-                    document_done = document is not None and document.status in (
-                        DocumentStatus.DONE,
-                        DocumentStatus.FAILED,
-                    )
+                    document_done = document is not None and document.status in TERMINAL_DOCUMENT_STATUSES
             await self._notifier.emit(
                 document_id, ProgressEventType.PART_STATUS, part_id=part_id, stage=next_status.value
             )

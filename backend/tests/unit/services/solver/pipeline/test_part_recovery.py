@@ -57,6 +57,20 @@ async def test_pipeline_error_publishes_failed_and_document_done() -> None:
     ]
 
 
+async def test_requeue_events_are_published_after_commit() -> None:
+    case = await build_recovery(PartStatus.MAIN_PASS, 1)
+    await case.recovery.retry_or_fail(case.part.id, reason="soft_time_limit")
+    assert case.session.committed == 1
+    assert case.notifier.committed_at_emit == [1]
+
+
+async def test_failure_events_are_published_after_commit() -> None:
+    case = await build_recovery(PartStatus.MAIN_PASS, 2)
+    await case.recovery.fail(case.part.id, reason="pipeline_error")
+    assert case.session.committed == 1
+    assert case.notifier.committed_at_emit == [1, 1]
+
+
 async def test_published_part_is_ignored() -> None:
     case = await build_recovery(PartStatus.PUBLISHED, 1)
     await case.recovery.retry_or_fail(case.part.id, reason="watchdog")

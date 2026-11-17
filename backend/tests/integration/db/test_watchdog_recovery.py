@@ -47,13 +47,14 @@ async def test_concurrent_watchdog_ticks_refund_only_once(
             .where(DocumentPart.document_id == document_id)
             .values(stage_changed_at=datetime.now(UTC) - timedelta(minutes=11))
         )
+    notifier = FakeProgressNotifier()
     recovery = PartRecovery(
         session_factory=session_factory,
         parts=DocumentPartRepository,
         documents=DocumentRepository,
         ledger=container.quota_ledger,
         dispatcher=dispatcher,
-        notifier=FakeProgressNotifier(),
+        notifier=notifier,
     )
     watchdog = Watchdog(
         session_factory=session_factory,
@@ -67,6 +68,11 @@ async def test_concurrent_watchdog_ticks_refund_only_once(
     assert sum(r.requeued for r in reports) == 1
     assert sum(r.failed for r in reports) == 1
     assert dispatcher.calls == [("enqueue_part", (first_id, False))]
+    assert len(notifier.events) == 2
+    assert sorted((event[1], event[3]) for event in notifier.events) == [
+        ("part_status", "failed"),
+        ("part_status", "queued"),
+    ]
     async with session_factory() as session:
         entries = (await session.scalars(select(GenerationLedger).where(GenerationLedger.op == "refund"))).all()
         assert len(entries) == 1 and entries[0].part_id == second.id and entries[0].delta == 1

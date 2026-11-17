@@ -43,6 +43,7 @@ class PartStatus(StrEnum):
 
 
 ACTIVE_PART_STATUSES = frozenset({PartStatus.MAIN_PASS, PartStatus.RESOLVING, PartStatus.ASSEMBLING})
+TERMINAL_DOCUMENT_STATUSES = frozenset({DocumentStatus.DONE, DocumentStatus.FAILED})
 
 
 class MaterialRole(StrEnum):

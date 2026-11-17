@@ -32,6 +32,7 @@ class RecoveryFixture:
     quota: QuotaLedger
     notifier: FakeProgressNotifier
     document: DocumentRecord
+    session: FakeSession
 
 
 async def build_recovery(status: PartStatus, attempts: int) -> RecoveryFixture:
@@ -41,7 +42,7 @@ async def build_recovery(status: PartStatus, attempts: int) -> RecoveryFixture:
     documents.attach_parts(parts)
     entries = FakeGenerationLedgerRepository()
     users = FakeUserRepository()
-    notifier = FakeProgressNotifier()
+    notifier = FakeProgressNotifier(committed=lambda: session.committed)
     user = await users.create(email="recovery@example.com", password_hash="hash")
     document = await documents.create(
         owner_id=user.id,
@@ -87,4 +88,5 @@ async def build_recovery(status: PartStatus, attempts: int) -> RecoveryFixture:
         quota=quota,
         notifier=notifier,
         document=document,
+        session=session,
     )

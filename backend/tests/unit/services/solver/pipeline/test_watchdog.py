@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import cast
@@ -5,11 +6,12 @@ from typing import cast
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from src.app.contracts.documents.part_record import PartRecord
 from src.app.contracts.documents.statuses import PartStatus
-from src.app.contracts.progress import ProgressEventType
+from src.app.contracts.progress import ProgressEvent, ProgressEventType
 from src.app.contracts.quota import LedgerOp
+from src.app.services.solver.pipeline.part_recovery import PartRecovery, RecoveryOutcome
 from src.app.services.solver.pipeline.watchdog import Watchdog
-from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
 from tests.support.fixtures.solver import RecoveryFixture, build_recovery
 
@@ -19,7 +21,7 @@ pytestmark = pytest.mark.unit
 def watchdog_for(case: RecoveryFixture) -> tuple[Watchdog, RecordingMetricsCollector]:
     metrics = RecordingMetricsCollector()
     watchdog = Watchdog(
-        session_factory=cast(async_sessionmaker[AsyncSession], lambda: FakeSession()),
+        session_factory=cast(async_sessionmaker[AsyncSession], lambda: case.session),
         parts=lambda _: case.parts,
         documents=lambda _: case.documents,
         recovery=case.recovery,
@@ -31,6 +33,19 @@ def watchdog_for(case: RecoveryFixture) -> tuple[Watchdog, RecordingMetricsColle
 
 def age(case: RecoveryFixture, minutes: int) -> None:
     case.parts.store_record(replace(case.part, stage_changed_at=datetime.now(UTC) - timedelta(minutes=minutes)))
+
+
+class _ExplodingRecovery:
+    """Recovery double that fails before producing any events."""
+
+    def __init__(self) -> None:
+        self.published: list[ProgressEvent] = []
+
+    async def retry_or_fail_in(self, session: AsyncSession, part: PartRecord, *, reason: str) -> RecoveryOutcome:
+        raise RuntimeError("poisoned part")
+
+    async def publish(self, events: Iterable[ProgressEvent]) -> None:
+        self.published.extend(events)
 
 
 async def test_watchdog_requeues_first_attempt() -> None:
@@ -69,6 +84,44 @@ async def test_watchdog_requeues_only_lost_queued_parts() -> None:
     assert part is not None and part.attempts == 0
     assert case.dispatcher.calls == [("enqueue_part", (case.part.id, False))]
     assert ("watchdog_actions_total", {"action": "lost"}, 1) in metrics.labeled_counters
+
+
+async def test_watchdog_events_are_published_after_commit() -> None:
+    case = await build_recovery(PartStatus.MAIN_PASS, 1)
+    age(case, 11)
+    watchdog, _ = watchdog_for(case)
+    await watchdog.tick()
+    assert case.session.committed == 1
+    assert case.notifier.committed_at_emit == [1]
+
+
+async def test_watchdog_touches_part_when_recovery_raises(caplog: pytest.LogCaptureFixture) -> None:
+    case = await build_recovery(PartStatus.MAIN_PASS, 1)
+    age(case, 11)
+    aged = await case.parts.get(case.part.id)
+    assert aged is not None
+    recovery = _ExplodingRecovery()
+    metrics = RecordingMetricsCollector()
+    watchdog = Watchdog(
+        session_factory=cast(async_sessionmaker[AsyncSession], lambda: case.session),
+        parts=lambda _: case.parts,
+        documents=lambda _: case.documents,
+        recovery=cast(PartRecovery, recovery),
+        dispatcher=case.dispatcher,
+        metrics=metrics,
+    )
+    report = await watchdog.tick()
+    assert report.requeued == 0 and report.failed == 0
+    assert recovery.published == []
+    touched = await case.parts.get(case.part.id)
+    assert touched is not None and touched.stage_changed_at > aged.stage_changed_at
+    assert ("watchdog_actions_total", {"action": "error"}, 1) in metrics.labeled_counters
+    assert "watchdog.part_failed" in caplog.text
+
+    # The touch moved the part out of the oldest-first batch, so the next tick
+    # does not log the same failure again.
+    assert (await watchdog.tick()).requeued == 0
+    assert metrics.labeled_counters == [("watchdog_actions_total", {"action": "error"}, 1)]
 
 
 async def test_watchdog_ignores_published_part() -> None:
