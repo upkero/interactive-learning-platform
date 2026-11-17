@@ -124,6 +124,12 @@ async def test_generate_publish_and_watchdog_refund(
     assert client.get("/api/v1/me/quota").json()["available"] == quota_before - 2
     async with session_factory() as session:
         entries = (await session.scalars(select(GenerationLedger).order_by(GenerationLedger.id))).all()
+        saved_periods = (
+            await session.scalars(
+                select(DocumentPart.quota_period_start).where(DocumentPart.document_id == document_id)
+            )
+        ).all()
+        assert saved_periods == [entries[0].period_start] * 3
         assert [(entry.op, entry.delta) for entry in entries] == [
             (LedgerOp.RESERVE.value, -3),
             (LedgerOp.CHARGE.value, 0),

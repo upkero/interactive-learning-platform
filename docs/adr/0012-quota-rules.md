@@ -29,12 +29,17 @@
   `backend/tests/integration/services/quota/test_quota_rules.py`; the real
   fallback-widget pipeline belongs to story 2.7 and is not implemented yet.
 - The journal belongs to the reservation's period, even if processing finishes
-  later. See `test_old_reservation_refunded_in_original_period` in
+  later or the document has a newer reservation. See
+  `test_old_part_refund_ignores_newer_document_reservation` and
+  `test_old_reservation_refunded_in_original_period` in
   `backend/tests/integration/services/quota/test_quota_ledger_postgres.py`.
+- Totals include exactly one billing period, not a range:
+  `test_sum_delta_excludes_other_periods` in the same file.
 - `FOR UPDATE` in reserve protects against overspending; the partial unique
   index and SAVEPOINT make duplicate part operations safe. See the tests in
   `backend/tests/integration/services/quota/test_quota_races.py` and
-  `test_duplicate_refund_preserves_outer_transaction`.
+  `test_duplicate_refund_preserves_outer_transaction` in
+  `backend/tests/integration/services/quota/test_quota_ledger_postgres.py`.
 - Planning and reading do not reserve anything: see
   `test_generate_publish_and_watchdog_refund` and
   `test_plan_preview_is_stable_and_leaves_the_quota_journal_untouched` in

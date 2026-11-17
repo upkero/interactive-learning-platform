@@ -21,7 +21,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.api.v1.middleware.rate_limit import limiter
 from src.app.bootstrap.container import ApplicationContainer
-from src.app.contracts.documents import DocumentErrorCode, DocumentStatus, MaterialRole, PartDraft, SourceType
+from src.app.contracts.documents import (
+    DocumentErrorCode,
+    DocumentStatus,
+    MaterialRole,
+    PartDraft,
+    PartStatus,
+    SourceType,
+)
 from src.app.contracts.quota import LedgerOp
 from src.app.contracts.widgets import UsageStatus, WidgetKind, WidgetUsageDraft
 from src.app.exceptions.tasks import TaskDispatchError
@@ -300,7 +307,7 @@ async def test_quiz_attempts_are_stored(client: TestClient, session_factory: asy
             update(DocumentPart)
             .where(DocumentPart.id == part_id)
             .values(
-                status="published",
+                status=PartStatus.PUBLISHED.value,
                 content={
                     "quizzes": [{"key": "q", "type": "single_choice"}],
                     "answer_keys": {"q": {"correct_id": "a", "explanation": "yes"}},
@@ -331,7 +338,7 @@ async def test_published_part_accepts_section_without_topic(
             update(DocumentPart)
             .where(DocumentPart.id == part.id)
             .values(
-                status="published",
+                status=PartStatus.PUBLISHED.value,
                 content={
                     "title": "Page",
                     "markdown": "# Unmatched",
@@ -363,7 +370,7 @@ async def test_corrupt_answer_key_is_internal_error_with_context(
             update(DocumentPart)
             .where(DocumentPart.id == part.id)
             .values(
-                status="published",
+                status=PartStatus.PUBLISHED.value,
                 content={"quizzes": [{"key": "q", "type": "single_choice"}], "answer_keys": {"q": {"correct_id": 5}}},
             )
         )
@@ -720,7 +727,7 @@ async def test_generate_reserves_creates_parts_and_dispatches(
     assert part is not None and part.index == 3 and part.source_markdown == "a" * 1200
     assert part.profile == {"level": "novice", "goal": "exam", "depth": "standard"}
     assert document is not None and document.status is DocumentStatus.GENERATING
-    assert [(entry.op, entry.delta) for entry in entries] == [("reserve", -1)]
+    assert [(entry.op, entry.delta) for entry in entries] == [(LedgerOp.RESERVE.value, -1)]
 
 
 async def test_upload_parse_topics_plan_generate_without_existing_parts(
@@ -782,7 +789,7 @@ async def test_generate_queue_failure_keeps_queued_part_and_reservation(
         parts = await DocumentPartRepository(session).list_by_document(document_id)
         entries = (await session.scalars(select(GenerationLedger))).all()
     assert len(parts) == 4 and parts[-1].status.value == "queued"
-    assert [(entry.op, entry.delta) for entry in entries] == [("reserve", -1)]
+    assert [(entry.op, entry.delta) for entry in entries] == [(LedgerOp.RESERVE.value, -1)]
 
 
 async def test_plan_rejects_empty_and_unknown_selections(
