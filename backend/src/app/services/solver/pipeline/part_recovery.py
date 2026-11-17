@@ -1,7 +1,6 @@
 """Recover timed-out parts, with quota refund in the same transaction."""
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -12,19 +11,11 @@ from src.app.contracts.documents.statuses import (
     TERMINAL_DOCUMENT_STATUSES,
     PartStatus,
 )
-from src.app.contracts.progress import ProgressEvent, ProgressEventType
+from src.app.contracts.progress import ProgressEvent, ProgressEventType, RecoveryOutcome
 from src.app.interfaces.repositories.documents import DocumentPartRepositoryProtocol, DocumentRepositoryProtocol
 from src.app.interfaces.services.progress_notifier import ProgressNotifier
 from src.app.interfaces.services.task_dispatcher import TaskDispatcher
 from src.app.services.quota.quota_ledger import QuotaLedger
-
-
-@dataclass(frozen=True, slots=True)
-class RecoveryOutcome:
-    """One recovery attempt and the events that may be published after commit."""
-
-    requeued: bool
-    events: tuple[ProgressEvent, ...] = ()
 
 
 class PartRecovery:
@@ -56,33 +47,31 @@ class PartRecovery:
         recovery cannot leak events from an uncommitted transaction.
         """
         if part.status not in ACTIVE_PART_STATUSES:
-            return RecoveryOutcome(requeued=False)
+            return RecoveryOutcome()
         parts = self._parts(session)
         if part.attempts < self._max_attempts:
             transitioned = await parts.transition(part.id, ACTIVE_PART_STATUSES, PartStatus.QUEUED, error=reason)
             events = (self._part_status_event(part, PartStatus.QUEUED),) if transitioned else ()
             return RecoveryOutcome(requeued=transitioned, events=events)
-        return RecoveryOutcome(requeued=False, events=await self._fail_in(session, part, reason=reason))
+        return await self._fail_in(session, part, reason=reason)
 
     async def retry_or_fail(self, part_id: UUID, *, reason: str) -> None:
         async with self._session_factory() as session, session.begin():
             part = await self._parts(session).lock(part_id)
             outcome = (
-                await self.retry_or_fail_in(session, part, reason=reason)
-                if part is not None
-                else RecoveryOutcome(requeued=False)
+                await self.retry_or_fail_in(session, part, reason=reason) if part is not None else RecoveryOutcome()
             )
         await self.publish(outcome.events)
         if outcome.requeued:
             await self._dispatcher.enqueue_part(part_id, high=False)
 
     async def fail(self, part_id: UUID, *, reason: str) -> None:
-        events: tuple[ProgressEvent, ...] = ()
+        outcome = RecoveryOutcome()
         async with self._session_factory() as session, session.begin():
             part = await self._parts(session).lock(part_id)
             if part is not None:
-                events = await self._fail_in(session, part, reason=reason)
-        await self.publish(events)
+                outcome = await self._fail_in(session, part, reason=reason)
+        await self.publish(outcome.events)
 
     async def publish(self, events: Iterable[ProgressEvent]) -> None:
         """Publish events after the caller's transaction has committed."""
@@ -95,10 +84,10 @@ class PartRecovery:
                 message=event.message,
             )
 
-    async def _fail_in(self, session: AsyncSession, part: PartRecord, *, reason: str) -> tuple[ProgressEvent, ...]:
+    async def _fail_in(self, session: AsyncSession, part: PartRecord, *, reason: str) -> RecoveryOutcome:
         """Fail and refund once, returning the events for the caller to publish."""
         if not await self._parts(session).transition(part.id, ACTIVE_PART_STATUSES, PartStatus.FAILED, error=reason):
-            return ()
+            return RecoveryOutcome()
         await self._ledger.refund(session, part_id=part.id)
         documents = self._documents(session)
         await documents.refresh_status(part.document_id)
@@ -106,7 +95,7 @@ class PartRecovery:
         events = [self._part_status_event(part, PartStatus.FAILED)]
         if document is not None and document.status in TERMINAL_DOCUMENT_STATUSES:
             events.append(ProgressEvent(part.document_id, ProgressEventType.DOCUMENT_DONE))
-        return tuple(events)
+        return RecoveryOutcome(failed=True, events=tuple(events))
 
     @staticmethod
     def _part_status_event(part: PartRecord, stage: PartStatus) -> ProgressEvent:

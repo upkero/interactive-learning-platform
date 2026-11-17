@@ -8,9 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents.part_record import PartRecord
 from src.app.contracts.documents.statuses import PartStatus
-from src.app.contracts.progress import ProgressEvent, ProgressEventType
+from src.app.contracts.progress import ProgressEvent, ProgressEventType, RecoveryOutcome
 from src.app.contracts.quota import LedgerOp
-from src.app.services.solver.pipeline.part_recovery import PartRecovery, RecoveryOutcome
 from src.app.services.solver.pipeline.watchdog import Watchdog
 from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
 from tests.support.fixtures.solver import RecoveryFixture, build_recovery
@@ -43,6 +42,19 @@ class _ExplodingRecovery:
 
     async def retry_or_fail_in(self, session: AsyncSession, part: PartRecord, *, reason: str) -> RecoveryOutcome:
         raise RuntimeError("poisoned part")
+
+    async def publish(self, events: Iterable[ProgressEvent]) -> None:
+        self.published.extend(events)
+
+
+class _NoopRecovery:
+    """Recovery double for an attempt that changed nothing."""
+
+    def __init__(self) -> None:
+        self.published: list[ProgressEvent] = []
+
+    async def retry_or_fail_in(self, session: AsyncSession, part: PartRecord, *, reason: str) -> RecoveryOutcome:
+        return RecoveryOutcome()
 
     async def publish(self, events: Iterable[ProgressEvent]) -> None:
         self.published.extend(events)
@@ -106,7 +118,7 @@ async def test_watchdog_touches_part_when_recovery_raises(caplog: pytest.LogCapt
         session_factory=cast(async_sessionmaker[AsyncSession], lambda: case.session),
         parts=lambda _: case.parts,
         documents=lambda _: case.documents,
-        recovery=cast(PartRecovery, recovery),
+        recovery=recovery,
         dispatcher=case.dispatcher,
         metrics=metrics,
     )
@@ -122,6 +134,25 @@ async def test_watchdog_touches_part_when_recovery_raises(caplog: pytest.LogCapt
     # does not log the same failure again.
     assert (await watchdog.tick()).requeued == 0
     assert metrics.labeled_counters == [("watchdog_actions_total", {"action": "error"}, 1)]
+
+
+async def test_watchdog_does_not_count_noop_failure() -> None:
+    case = await build_recovery(PartStatus.MAIN_PASS, 2)
+    age(case, 11)
+    recovery = _NoopRecovery()
+    metrics = RecordingMetricsCollector()
+    watchdog = Watchdog(
+        session_factory=cast(async_sessionmaker[AsyncSession], lambda: case.session),
+        parts=lambda _: case.parts,
+        documents=lambda _: case.documents,
+        recovery=recovery,
+        dispatcher=case.dispatcher,
+        metrics=metrics,
+    )
+    report = await watchdog.tick()
+    assert report.requeued == 0 and report.failed == 0
+    assert metrics.labeled_counters == []
+    assert recovery.published == []
 
 
 async def test_watchdog_ignores_published_part() -> None:

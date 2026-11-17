@@ -29,7 +29,13 @@ def _metric_name(name: str) -> str | None:
 
 
 class PrometheusMetricsCollector(MetricsCollector):
-    """Create named metrics on first use and keep them in the default registry."""
+    """Create named metrics on first use and keep them in the default registry.
+
+    A counter fixes its label set on the first call: later calls with extra
+    labels log ``metrics.unexpected_labels`` and drop them. Story 1.8 must use
+    one stable label schema per metric name. Dots in names are normalized to
+    underscores; names Prometheus cannot register are logged and skipped.
+    """
 
     def increment_counter(self, name: str, *, labels: Mapping[str, str] | None = None, by: int = 1) -> None:
         metric_name = _metric_name(name)

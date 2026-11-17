@@ -13,8 +13,8 @@ from src.app.contracts.progress import ProgressEvent
 from src.app.exceptions.tasks import TaskDispatchError
 from src.app.interfaces.observability.metrics_collector import MetricsCollector
 from src.app.interfaces.repositories.documents import DocumentPartRepositoryProtocol, DocumentRepositoryProtocol
+from src.app.interfaces.services.part_recovery import PartRecoveryProtocol
 from src.app.interfaces.services.task_dispatcher import TaskDispatcher
-from src.app.services.solver.pipeline.part_recovery import PartRecovery
 
 logger = logging.getLogger(__name__)
 BATCH_SIZE = 50
@@ -36,7 +36,7 @@ class Watchdog:
         session_factory: async_sessionmaker[AsyncSession],
         parts: Callable[[AsyncSession], DocumentPartRepositoryProtocol],
         documents: Callable[[AsyncSession], DocumentRepositoryProtocol],
-        recovery: PartRecovery,
+        recovery: PartRecoveryProtocol,
         dispatcher: TaskDispatcher,
         metrics: MetricsCollector,
         stuck_after: timedelta = timedelta(minutes=10),
@@ -69,7 +69,7 @@ class Watchdog:
                     events.extend(outcome.events)
                     if outcome.requeued:
                         retry.append(part.id)
-                    else:
+                    elif outcome.failed:
                         failed += 1
                 except Exception:
                     errors += 1

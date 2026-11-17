@@ -2,5 +2,6 @@
 
 from src.app.contracts.progress.event import ProgressEvent
 from src.app.contracts.progress.event_type import ProgressEventType
+from src.app.contracts.progress.recovery import RecoveryOutcome
 
-__all__ = ["ProgressEvent", "ProgressEventType"]
+__all__ = ["ProgressEvent", "ProgressEventType", "RecoveryOutcome"]
