@@ -7,7 +7,7 @@ OpenAI-compatible API, so ``SystemBlock.cache`` is ignored here.
 """
 
 from collections.abc import Sequence
-from typing import Literal, cast
+from typing import cast
 
 import openai
 from openai import AsyncOpenAI, OpenAIError
@@ -28,9 +28,10 @@ from src.app.contracts.llm.image_part import ImagePart
 from src.app.contracts.llm.llm_message import LLMContent, LLMMessage
 from src.app.contracts.llm.llm_request import LLMRequest
 from src.app.contracts.llm.llm_response import LLMResponse
-from src.app.contracts.llm.structured_response import StructuredResponse, TokenUsage
+from src.app.contracts.llm.structured_response import StructuredResponse
+from src.app.contracts.llm.token_usage import TokenUsage
 from src.app.core.settings.llm import LLMSettings
-from src.app.exceptions.llm import LLMGenerationError, LLMInputError, LLMRateLimitError, LLMSchemaError
+from src.app.exceptions.llm import LLMGenerationError, LLMInputError, LLMRateLimitError, LLMSchemaError, LLMTimeoutError
 from src.app.interfaces.llm.llm_client import LLMClient
 
 
@@ -70,6 +71,8 @@ class OpenAICompatibleLLMClient(LLMClient):
             )
         except openai.RateLimitError as exc:
             raise LLMRateLimitError() from exc
+        except openai.APITimeoutError as exc:
+            raise LLMTimeoutError() from exc
         except OpenAIError as exc:
             raise LLMGenerationError("LLM provider request failed.") from exc
 
@@ -106,6 +109,8 @@ class OpenAICompatibleLLMClient(LLMClient):
             completion = await self._client.chat.completions.create(**params)
         except openai.RateLimitError as exc:
             raise LLMRateLimitError() from exc
+        except openai.APITimeoutError as exc:
+            raise LLMTimeoutError() from exc
         except OpenAIError as exc:
             raise LLMGenerationError("LLM provider request failed.") from exc
 
@@ -135,50 +140,34 @@ class OpenAICompatibleLLMClient(LLMClient):
         messages: list[ChatCompletionMessageParam] = [
             {"role": "system", "content": block.text} for block in request.system
         ]
-        # Literal roles let mypy pick the exact TypedDict per branch.
-        for message in request.messages:
-            if message.role == "user":
-                user: ChatCompletionUserMessageParam = {"role": "user", "content": self._content(message.content)}
-                messages.append(user)
-            else:
-                # Grasp never attaches images to assistant messages: the
-                # provider rejects image parts there, so the cast is safe.
-                messages.append(
-                    cast(
-                        "ChatCompletionAssistantMessageParam",
-                        {"role": "assistant", "content": self._content(message.content)},
-                    )
-                )
+        messages.extend(self._message_param(message) for message in request.messages)
         return messages
 
+    def _message_param(self, message: LLMMessage) -> ChatCompletionMessageParam:
+        # Literal roles let mypy pick the exact TypedDict per branch. Grasp
+        # never attaches images to assistant messages: the provider rejects
+        # image parts there, so the cast is safe.
+        if message.role == "user":
+            user: ChatCompletionUserMessageParam = {"role": "user", "content": self._content(message.content)}
+            return user
+        return cast(
+            "ChatCompletionAssistantMessageParam",
+            {"role": "assistant", "content": self._content(message.content)},
+        )
+
     def _completion_params(self, messages: Sequence[LLMMessage]) -> CompletionCreateParams:
-        built: list[ChatCompletionMessageParam] = []
-        for message in messages:
-            if message.role == "user":
-                user: ChatCompletionUserMessageParam = {"role": "user", "content": self._content(message.content)}
-                built.append(user)
-            else:
-                built.append(
-                    cast(
-                        "ChatCompletionAssistantMessageParam",
-                        {"role": "assistant", "content": self._content(message.content)},
-                    )
-                )
         params: CompletionCreateParams = {
             "model": self._settings.model,
-            "messages": built,
+            "messages": [self._message_param(message) for message in messages],
         }
         if self._settings.temperature is not None:
             params["temperature"] = self._settings.temperature
         if self._settings.max_tokens is not None:
             params["max_tokens"] = self._settings.max_tokens
         if self._settings.reasoning_effort is not None:
-            # Settings store the value as str; the SDK API takes the Literal
-            # set OpenAI accepts. The set is mirrored here for mypy.
-            params["reasoning_effort"] = cast(
-                "Literal['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']",
-                self._settings.reasoning_effort,
-            )
+            # ReasoningEffort in settings mirrors the SDK's own literal, so
+            # the value passes through without a cast.
+            params["reasoning_effort"] = self._settings.reasoning_effort
         return params
 
     @staticmethod

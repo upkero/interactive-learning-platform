@@ -3,7 +3,7 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from src.app.contracts.llm.structured_response import TokenUsage
+from src.app.contracts.llm.token_usage import TokenUsage
 
 
 @dataclass(frozen=True, slots=True)

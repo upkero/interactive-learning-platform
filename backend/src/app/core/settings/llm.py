@@ -14,6 +14,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LLMProvider = Literal["anthropic", "openai_compatible", "ollama"]
 
+# Reasoning effort for reasoning models (openai_compatible only); the set
+# mirrors the SDK's own ReasoningEffort literal so mypy checks the passthrough.
+ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"]
+
 # Providers that talk to a paid hosted API and therefore cannot work without
 # a key. "ollama" is the local no-key setup.
 _PROVIDERS_REQUIRING_KEY = ("anthropic", "openai_compatible")
@@ -30,11 +34,23 @@ class LLMSettings(BaseSettings):
             "Empty means the official OpenAI API."
         ),
     )
-    temperature: float = Field(default=0.0, ge=0.0, le=2.0)
-    timeout_seconds: float = Field(default=120.0, gt=0.0)
-    max_retries: int = Field(default=2, ge=0)
-    max_tokens: int | None = Field(default=None, ge=1)
-    reasoning_effort: str | None = Field(default=None)
+    temperature: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=2.0,
+        description="Sampling temperature (openai_compatible/ollama only; Anthropic rejects non-default values).",
+    )
+    timeout_seconds: float = Field(default=120.0, gt=0.0, description="Per-request timeout in seconds.")
+    max_retries: int = Field(default=2, ge=0, description="Network/429 retries the provider SDK performs itself.")
+    max_tokens: int | None = Field(
+        default=None,
+        ge=1,
+        description="Default max output tokens when LLMRequest.max_tokens is not set.",
+    )
+    reasoning_effort: ReasoningEffort | None = Field(
+        default=None,
+        description="Reasoning effort for reasoning models (openai_compatible only).",
+    )
     price_prompt_per_1m: float | None = Field(default=None, ge=0.0)
     price_completion_per_1m: float | None = Field(default=None, ge=0.0)
 
@@ -58,11 +74,27 @@ class CheapLLMSettings(BaseSettings):
     api_key: SecretStr | None = Field(default=None, description="API key for the cheap model.")
     model: str | None = Field(default=None, min_length=1, description="Cheap model.")
     base_url: str | None = Field(default=None, description="Base URL of the cheap provider.")
-    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
-    timeout_seconds: float | None = Field(default=None, gt=0.0)
-    max_retries: int | None = Field(default=None, ge=0)
-    max_tokens: int | None = Field(default=None, ge=1)
-    reasoning_effort: str | None = Field(default=None)
+    temperature: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=2.0,
+        description="Sampling temperature override (openai_compatible/ollama only).",
+    )
+    timeout_seconds: float | None = Field(default=None, gt=0.0, description="Per-request timeout override, seconds.")
+    max_retries: int | None = Field(
+        default=None,
+        ge=0,
+        description="SDK network/429 retries override for light tasks.",
+    )
+    max_tokens: int | None = Field(
+        default=None,
+        ge=1,
+        description="Max output tokens override for light tasks.",
+    )
+    reasoning_effort: ReasoningEffort | None = Field(
+        default=None,
+        description="Reasoning effort override for reasoning models (openai_compatible only).",
+    )
 
     def resolve(self, fallback: LLMSettings) -> LLMSettings:
         """Build a full profile: unset cheap fields come from the main one.

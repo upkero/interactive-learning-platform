@@ -12,6 +12,8 @@ from pydantic import SecretStr, ValidationError
 
 from src.app.core.settings.llm import CheapLLMSettings, LLMSettings
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture(autouse=True)
 def _clean_llm_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -33,7 +35,6 @@ def _fallback() -> LLMSettings:
     )
 
 
-@pytest.mark.unit
 def test_local_defaults_are_ollama() -> None:
     settings = LLMSettings(_env_file=None)
     assert settings.provider == "ollama"
@@ -42,7 +43,6 @@ def test_local_defaults_are_ollama() -> None:
     assert settings.max_retries == 2
 
 
-@pytest.mark.unit
 def test_anthropic_requires_api_key() -> None:
     with pytest.raises(ValidationError):
         LLMSettings(_env_file=None, provider="anthropic")
@@ -50,14 +50,12 @@ def test_anthropic_requires_api_key() -> None:
     LLMSettings(_env_file=None, provider="anthropic", api_key=SecretStr("sk"))
 
 
-@pytest.mark.unit
 def test_openai_compatible_requires_api_key() -> None:
     with pytest.raises(ValidationError):
         LLMSettings(_env_file=None, provider="openai_compatible", base_url="http://proxy/v1")
     LLMSettings(_env_file=None, provider="openai_compatible", api_key=SecretStr("sk"))
 
 
-@pytest.mark.unit
 def test_cheap_resolve_without_overrides_returns_fallback() -> None:
     fallback = _fallback()
     resolved = CheapLLMSettings(_env_file=None).resolve(fallback)
@@ -65,7 +63,6 @@ def test_cheap_resolve_without_overrides_returns_fallback() -> None:
     assert resolved == fallback
 
 
-@pytest.mark.unit
 def test_cheap_resolve_overrides_only_set_fields() -> None:
     cheap = CheapLLMSettings(_env_file=None, model="cheap-model", timeout_seconds=15.0)
     resolved = cheap.resolve(_fallback())
@@ -78,7 +75,6 @@ def test_cheap_resolve_overrides_only_set_fields() -> None:
     assert resolved.temperature == 0.2
 
 
-@pytest.mark.unit
 def test_cheap_resolve_full_override_with_provider() -> None:
     cheap = CheapLLMSettings(
         _env_file=None,
@@ -102,7 +98,6 @@ def test_cheap_resolve_full_override_with_provider() -> None:
     assert resolved.timeout_seconds == 12.0
 
 
-@pytest.mark.unit
 def test_cheap_resolve_provider_change_does_not_inherit_credentials() -> None:
     # Main = Ollama behind a compose URL, cheap = Anthropic: the Ollama
     # endpoint and the absence of a key must not leak into the Anthropic
@@ -120,7 +115,6 @@ def test_cheap_resolve_provider_change_does_not_inherit_credentials() -> None:
         cheap.resolve(fallback)
 
 
-@pytest.mark.unit
 def test_cheap_resolve_provider_change_uses_own_credentials() -> None:
     fallback = LLMSettings(
         _env_file=None,
@@ -142,7 +136,6 @@ def test_cheap_resolve_provider_change_uses_own_credentials() -> None:
     assert resolved.base_url == "http://cheap-proxy/v1"
 
 
-@pytest.mark.unit
 def test_cheap_resolve_same_provider_inherits_credentials() -> None:
     fallback = _fallback()
     cheap = CheapLLMSettings(_env_file=None, provider="anthropic", model="cheap-model")
@@ -153,7 +146,6 @@ def test_cheap_resolve_same_provider_inherits_credentials() -> None:
     assert resolved.provider == "anthropic"
 
 
-@pytest.mark.unit
 def test_cheap_settings_are_all_optional() -> None:
     settings = CheapLLMSettings(_env_file=None)
     assert settings.model is None

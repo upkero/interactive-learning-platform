@@ -3,7 +3,7 @@
 No hand-made SDK fakes: the transport replays canned responses, so the tests
 exercise the real request mapping (system blocks with cache_control, image
 blocks, no temperature) and the real error mapping (broken JSON, truncation,
-refusal, 429, 500).
+refusal, 429, 500, timeout).
 """
 
 import json
@@ -18,17 +18,20 @@ from src.app.contracts.llm.image_part import ImagePart
 from src.app.contracts.llm.llm_message import LLMMessage
 from src.app.contracts.llm.llm_request import LLMRequest
 from src.app.contracts.llm.llm_response import LLMResponse
-from src.app.contracts.llm.structured_response import TokenUsage
 from src.app.contracts.llm.system_block import SystemBlock
 from src.app.contracts.llm.text_part import TextPart
+from src.app.contracts.llm.token_usage import TokenUsage
 from src.app.core.settings.llm import LLMSettings
 from src.app.exceptions.llm import (
     LLMGenerationError,
     LLMOutputTruncatedError,
     LLMRateLimitError,
     LLMSchemaError,
+    LLMTimeoutError,
 )
 from src.app.llm.claude_client import ClaudeClient
+
+pytestmark = pytest.mark.unit
 
 
 class _Draft(BaseModel):
@@ -97,7 +100,6 @@ def _request(**overrides: Any) -> LLMRequest:
 _ERROR_BODY = {"type": "error", "error": {"type": "api_error", "message": "Internal error."}}
 
 
-@pytest.mark.unit
 async def test_structured_success_parses_value_and_usage() -> None:
     captured: list[httpx2.Request] = []
     client, _ = _sdk(_replaying(httpx2.Response(200, json=_message_response()), captured))
@@ -113,7 +115,6 @@ async def test_structured_success_parses_value_and_usage() -> None:
     )
 
 
-@pytest.mark.unit
 async def test_structured_request_body_maps_system_blocks_and_schema() -> None:
     captured: list[httpx2.Request] = []
     client, _ = _sdk(_replaying(httpx2.Response(200, json=_message_response()), captured))
@@ -134,7 +135,6 @@ async def test_structured_request_body_maps_system_blocks_and_schema() -> None:
     assert "temperature" not in body
 
 
-@pytest.mark.unit
 async def test_structured_request_body_maps_image_blocks() -> None:
     captured: list[httpx2.Request] = []
     client, _ = _sdk(_replaying(httpx2.Response(200, json=_message_response()), captured))
@@ -154,7 +154,6 @@ async def test_structured_request_body_maps_image_blocks() -> None:
     assert blocks[1] == {"type": "text", "text": "describe this"}
 
 
-@pytest.mark.unit
 async def test_structured_broken_json_raises_schema_error() -> None:
     # On the pre-review code this path raised the raw SDK ValidationError;
     # now it must become LLMSchemaError so call_structured can retry.
@@ -165,7 +164,6 @@ async def test_structured_broken_json_raises_schema_error() -> None:
         await client.complete_structured(_request(), _Draft)
 
 
-@pytest.mark.unit
 async def test_structured_truncated_output_raises_truncated_error() -> None:
     # Truncation must NOT map to LLMSchemaError: call_structured retries
     # schema errors, and a retry with the same max_tokens would fail the
@@ -182,7 +180,6 @@ async def test_structured_truncated_output_raises_truncated_error() -> None:
         await client.complete_structured(_request(), _Draft)
 
 
-@pytest.mark.unit
 async def test_structured_refusal_raises_generation_error() -> None:
     captured: list[httpx2.Request] = []
     client, _ = _sdk(
@@ -193,7 +190,6 @@ async def test_structured_refusal_raises_generation_error() -> None:
         await client.complete_structured(_request(), _Draft)
 
 
-@pytest.mark.unit
 async def test_structured_rate_limit_is_mapped() -> None:
     captured: list[httpx2.Request] = []
     client, _ = _sdk(
@@ -210,7 +206,6 @@ async def test_structured_rate_limit_is_mapped() -> None:
         await client.complete_structured(_request(), _Draft)
 
 
-@pytest.mark.unit
 async def test_structured_500_is_mapped_to_generation_error() -> None:
     captured: list[httpx2.Request] = []
     client, _ = _sdk(_replaying(httpx2.Response(500, json=_ERROR_BODY), captured))
@@ -219,7 +214,19 @@ async def test_structured_500_is_mapped_to_generation_error() -> None:
         await client.complete_structured(_request(), _Draft)
 
 
-@pytest.mark.unit
+async def test_structured_timeout_is_mapped() -> None:
+    # The SDK maps httpx.TimeoutException to anthropic.APITimeoutError; the
+    # client must turn it into LLMTimeoutError (own outcome "timeout"), not
+    # the generic generation_error.
+    def timing_out(request: httpx2.Request) -> httpx2.Response:
+        raise httpx2.ReadTimeout("timed out")
+
+    client, _ = _sdk(timing_out)
+
+    with pytest.raises(LLMTimeoutError):
+        await client.complete_structured(_request(), _Draft)
+
+
 async def test_plain_complete_returns_text_and_usage_mapping() -> None:
     captured: list[httpx2.Request] = []
     client, _ = _sdk(_replaying(httpx2.Response(200, json=_message_response(text="hello")), captured))
@@ -240,7 +247,6 @@ async def test_plain_complete_returns_text_and_usage_mapping() -> None:
     assert "temperature" not in body
 
 
-@pytest.mark.unit
 async def test_plain_complete_empty_content_raises_generation_error() -> None:
     captured: list[httpx2.Request] = []
     client, _ = _sdk(_replaying(httpx2.Response(200, json=_message_response(content=[])), captured))
@@ -249,21 +255,18 @@ async def test_plain_complete_empty_content_raises_generation_error() -> None:
         await client.complete((LLMMessage(role="user", content="hi"),))
 
 
-@pytest.mark.unit
 async def test_ping_true_on_200() -> None:
     client, _ = _sdk(_replaying(httpx2.Response(200, json={"data": [], "has_more": False}), []))
 
     assert await client.ping() is True
 
 
-@pytest.mark.unit
 async def test_ping_false_on_500() -> None:
     client, _ = _sdk(_replaying(httpx2.Response(500, json=_ERROR_BODY), []))
 
     assert await client.ping() is False
 
 
-@pytest.mark.unit
 async def test_close_closes_the_sdk_http_client() -> None:
     client, http_client = _sdk(_replaying(httpx2.Response(200, json=_message_response()), []))
 

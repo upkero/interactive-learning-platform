@@ -3,7 +3,7 @@
 The transport replays canned responses, so the tests exercise the real
 request body (json_schema response_format with strict mode, system first,
 image_url parts, temperature passthrough) and real error mapping
-(broken JSON, empty content, 429, 500).
+(broken JSON, empty content, 429, 500, timeout).
 """
 
 import json
@@ -17,12 +17,19 @@ from pydantic import BaseModel, SecretStr
 from src.app.contracts.llm.image_part import ImagePart
 from src.app.contracts.llm.llm_message import LLMMessage
 from src.app.contracts.llm.llm_request import LLMRequest
-from src.app.contracts.llm.structured_response import TokenUsage
 from src.app.contracts.llm.system_block import SystemBlock
 from src.app.contracts.llm.text_part import TextPart
+from src.app.contracts.llm.token_usage import TokenUsage
 from src.app.core.settings.llm import LLMSettings
-from src.app.exceptions.llm import LLMGenerationError, LLMRateLimitError, LLMSchemaError
+from src.app.exceptions.llm import (
+    LLMGenerationError,
+    LLMRateLimitError,
+    LLMSchemaError,
+    LLMTimeoutError,
+)
 from src.app.llm.openai_compatible_llm_client import OpenAICompatibleLLMClient
+
+pytestmark = pytest.mark.unit
 
 
 class _Draft(BaseModel):
@@ -98,7 +105,6 @@ def _request(**overrides: Any) -> LLMRequest:
 _ERROR_BODY = {"error": {"message": "boom", "type": "server_error", "code": None}}
 
 
-@pytest.mark.unit
 async def test_structured_success_parses_value_and_usage() -> None:
     captured: list[httpx2.Request] = []
     client, _ = _client(_replaying(httpx2.Response(200, json=_completion_response()), captured))
@@ -111,7 +117,6 @@ async def test_structured_success_parses_value_and_usage() -> None:
     )
 
 
-@pytest.mark.unit
 async def test_structured_request_body_uses_strict_json_schema() -> None:
     captured: list[httpx2.Request] = []
     client, _ = _client(_replaying(httpx2.Response(200, json=_completion_response()), captured))
@@ -134,7 +139,6 @@ async def test_structured_request_body_uses_strict_json_schema() -> None:
     assert body["temperature"] == 0.0
 
 
-@pytest.mark.unit
 async def test_structured_request_body_maps_image_parts() -> None:
     captured: list[httpx2.Request] = []
     client, _ = _client(_replaying(httpx2.Response(200, json=_completion_response()), captured))
@@ -154,7 +158,6 @@ async def test_structured_request_body_maps_image_parts() -> None:
     assert parts[1] == {"type": "text", "text": "describe this"}
 
 
-@pytest.mark.unit
 async def test_structured_broken_json_raises_schema_error() -> None:
     captured: list[httpx2.Request] = []
     client, _ = _client(_replaying(httpx2.Response(200, json=_completion_response(content="not json")), captured))
@@ -163,7 +166,6 @@ async def test_structured_broken_json_raises_schema_error() -> None:
         await client.complete_structured(_request(), _Draft)
 
 
-@pytest.mark.unit
 async def test_structured_empty_content_raises_schema_error() -> None:
     captured: list[httpx2.Request] = []
     client, _ = _client(_replaying(httpx2.Response(200, json=_completion_response(content="")), captured))
@@ -172,7 +174,6 @@ async def test_structured_empty_content_raises_schema_error() -> None:
         await client.complete_structured(_request(), _Draft)
 
 
-@pytest.mark.unit
 async def test_structured_rate_limit_is_mapped() -> None:
     captured: list[httpx2.Request] = []
     rate_limit_body = {"error": {"message": "slow down", "type": "rate_limit_error", "code": None}}
@@ -182,7 +183,6 @@ async def test_structured_rate_limit_is_mapped() -> None:
         await client.complete_structured(_request(), _Draft)
 
 
-@pytest.mark.unit
 async def test_structured_500_is_mapped_to_generation_error() -> None:
     captured: list[httpx2.Request] = []
     client, _ = _client(_replaying(httpx2.Response(500, json=_ERROR_BODY), captured))
@@ -191,7 +191,19 @@ async def test_structured_500_is_mapped_to_generation_error() -> None:
         await client.complete_structured(_request(), _Draft)
 
 
-@pytest.mark.unit
+async def test_structured_timeout_is_mapped() -> None:
+    # The SDK maps httpx.TimeoutException to openai.APITimeoutError; the
+    # client must turn it into LLMTimeoutError (own outcome "timeout"), not
+    # the generic generation_error.
+    def timing_out(request: httpx2.Request) -> httpx2.Response:
+        raise httpx2.ReadTimeout("timed out")
+
+    client, _ = _client(timing_out)
+
+    with pytest.raises(LLMTimeoutError):
+        await client.complete_structured(_request(), _Draft)
+
+
 async def test_plain_complete_sends_settings_and_returns_usage_mapping() -> None:
     captured: list[httpx2.Request] = []
     usage = {"prompt_tokens": 3, "completion_tokens": 5, "total_tokens": 8}
@@ -223,21 +235,18 @@ async def test_plain_complete_sends_settings_and_returns_usage_mapping() -> None
     assert body["max_tokens"] == 128
 
 
-@pytest.mark.unit
 async def test_ping_true_on_200() -> None:
     client, _ = _client(_replaying(httpx2.Response(200, json={"data": []}), []))
 
     assert await client.ping() is True
 
 
-@pytest.mark.unit
 async def test_ping_false_on_500() -> None:
     client, _ = _client(_replaying(httpx2.Response(500, json=_ERROR_BODY), []))
 
     assert await client.ping() is False
 
 
-@pytest.mark.unit
 async def test_close_closes_the_sdk_http_client() -> None:
     client, http_client = _client(_replaying(httpx2.Response(200, json=_completion_response()), []))
 

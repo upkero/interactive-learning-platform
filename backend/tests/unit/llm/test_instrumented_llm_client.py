@@ -8,18 +8,21 @@ from pydantic import BaseModel
 from src.app.contracts.llm.llm_message import LLMMessage
 from src.app.contracts.llm.llm_request import LLMPurpose, LLMRequest
 from src.app.contracts.llm.llm_response import LLMResponse
-from src.app.contracts.llm.structured_response import StructuredResponse, TokenUsage
 from src.app.contracts.llm.system_block import SystemBlock
+from src.app.contracts.llm.token_usage import TokenUsage
 from src.app.exceptions.llm import (
     LLMGenerationError,
     LLMInputError,
     LLMOutputTruncatedError,
     LLMRateLimitError,
     LLMSchemaError,
+    LLMTimeoutError,
 )
 from src.app.llm.instrumented_llm_client import InstrumentedLLMClient
 from tests.support.fakes.llm.llm_client import FakeLLMClient
 from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
+
+pytestmark = pytest.mark.unit
 
 
 class _Draft(BaseModel):
@@ -40,23 +43,16 @@ def _instrumented(fake: FakeLLMClient, metrics: RecordingMetricsCollector) -> In
     return InstrumentedLLMClient(client=fake, logger=getLogger("test.grasp.llm"), metrics=metrics)
 
 
-def _request(
-    purpose: LLMPurpose = "main_pass",
-    *,
-    system: tuple[SystemBlock, ...] = (),
-    metadata: dict[str, str] | None = None,
-) -> LLMRequest:
+def _request(purpose: LLMPurpose = "main_pass", *, system: tuple[SystemBlock, ...] = ()) -> LLMRequest:
     return LLMRequest(
         purpose=purpose,
         messages=(LLMMessage(role="user", content="go"),),
         system=system,
-        metadata=metadata or {},
     )
 
 
-@pytest.mark.unit
 async def test_structured_success_records_all_metrics(caplog: pytest.LogCaptureFixture) -> None:
-    fake = FakeLLMClient(responses=[StructuredResponse(_Draft(), usage=TokenUsage(10, 5, 2, 1))])
+    fake = FakeLLMClient(structured=[_Draft()], usage=TokenUsage(10, 5, 2, 1))
     metrics = RecordingMetricsCollector()
     caplog.set_level("INFO")
 
@@ -90,9 +86,8 @@ async def test_structured_success_records_all_metrics(caplog: pytest.LogCaptureF
     assert record.__dict__["cache_read_input_tokens"] == 2
 
 
-@pytest.mark.unit
 async def test_structured_schema_error_maps_outcome(caplog: pytest.LogCaptureFixture) -> None:
-    fake = FakeLLMClient(responses=[LLMSchemaError("bad json")])
+    fake = FakeLLMClient(structured=[LLMSchemaError("bad json")])
     metrics = RecordingMetricsCollector()
     instrumented = _instrumented(fake, metrics)
 
@@ -110,9 +105,8 @@ async def test_structured_schema_error_maps_outcome(caplog: pytest.LogCaptureFix
     assert not metrics.histograms_named("llm.complete.usage.input_tokens")
 
 
-@pytest.mark.unit
 async def test_structured_rate_limit_maps_outcome() -> None:
-    fake = FakeLLMClient(responses=[LLMRateLimitError()])
+    fake = FakeLLMClient(structured=[LLMRateLimitError()])
     metrics = RecordingMetricsCollector()
     instrumented = _instrumented(fake, metrics)
 
@@ -122,9 +116,19 @@ async def test_structured_rate_limit_maps_outcome() -> None:
     assert _counter_labels(metrics, "rate_limit_error", "judge")
 
 
-@pytest.mark.unit
+async def test_structured_timeout_maps_outcome() -> None:
+    fake = FakeLLMClient(structured=[LLMTimeoutError("provider timed out")])
+    metrics = RecordingMetricsCollector()
+    instrumented = _instrumented(fake, metrics)
+
+    with pytest.raises(LLMTimeoutError):
+        await instrumented.complete_structured(_request("judge"), _Draft)
+
+    assert _counter_labels(metrics, "timeout", "judge")
+
+
 async def test_structured_generation_error_maps_outcome() -> None:
-    fake = FakeLLMClient(responses=[LLMGenerationError("sdk boom")])
+    fake = FakeLLMClient(structured=[LLMGenerationError("sdk boom")])
     metrics = RecordingMetricsCollector()
     instrumented = _instrumented(fake, metrics)
 
@@ -134,9 +138,8 @@ async def test_structured_generation_error_maps_outcome() -> None:
     assert _counter_labels(metrics, "generation_error", "codegen")
 
 
-@pytest.mark.unit
 async def test_structured_unexpected_error_maps_outcome() -> None:
-    fake = FakeLLMClient(responses=[RuntimeError("surprise")])
+    fake = FakeLLMClient(structured=[RuntimeError("surprise")])
     metrics = RecordingMetricsCollector()
     instrumented = _instrumented(fake, metrics)
 
@@ -146,12 +149,11 @@ async def test_structured_unexpected_error_maps_outcome() -> None:
     assert _counter_labels(metrics, "unexpected_error", "vision")
 
 
-@pytest.mark.unit
 async def test_structured_truncated_error_gets_its_own_outcome() -> None:
     # Truncated output is a subclass of LLMGenerationError but must NOT be
     # counted as generation_error: it would hide the "raise max_tokens"
     # signal behind generic failures.
-    fake = FakeLLMClient(responses=[LLMOutputTruncatedError("cut off")])
+    fake = FakeLLMClient(structured=[LLMOutputTruncatedError("cut off")])
     metrics = RecordingMetricsCollector()
     instrumented = _instrumented(fake, metrics)
 
@@ -161,9 +163,8 @@ async def test_structured_truncated_error_gets_its_own_outcome() -> None:
     assert _counter_labels(metrics, "output_truncated", "main_pass")
 
 
-@pytest.mark.unit
 async def test_plain_complete_success_and_invalid_input() -> None:
-    ok = FakeLLMClient(responses=[LLMResponse(content="hello", usage=TokenUsage(input_tokens=3, output_tokens=5))])
+    ok = FakeLLMClient(completions=[LLMResponse(content="hello", usage=TokenUsage(input_tokens=3, output_tokens=5))])
     metrics = RecordingMetricsCollector()
     instrumented = _instrumented(ok, metrics)
 
@@ -175,7 +176,7 @@ async def test_plain_complete_success_and_invalid_input() -> None:
     output_records = metrics.histograms_named("llm.complete.usage.output_tokens")
     assert output_records and output_records[0].value == 5.0
 
-    bad = FakeLLMClient(responses=[LLMInputError("empty")])
+    bad = FakeLLMClient(completions=[LLMInputError("empty")])
     metrics2 = RecordingMetricsCollector()
     instrumented2 = _instrumented(bad, metrics2)
     with pytest.raises(LLMInputError):
@@ -184,14 +185,14 @@ async def test_plain_complete_success_and_invalid_input() -> None:
     assert _counter_labels(metrics2, "invalid_input")
 
 
-@pytest.mark.unit
 async def test_plain_complete_error_branches() -> None:
     for exception, outcome in (
         (LLMRateLimitError(), "rate_limit_error"),
+        (LLMTimeoutError("slow"), "timeout"),
         (LLMGenerationError("boom"), "generation_error"),
         (RuntimeError("surprise"), "unexpected_error"),
     ):
-        fake = FakeLLMClient(responses=[exception])
+        fake = FakeLLMClient(completions=[exception])
         metrics = RecordingMetricsCollector()
         instrumented = _instrumented(fake, metrics)
 
@@ -202,9 +203,8 @@ async def test_plain_complete_error_branches() -> None:
         assert _counter_labels(metrics, outcome)
 
 
-@pytest.mark.unit
 async def test_structured_without_usage_records_no_usage_metrics() -> None:
-    fake = FakeLLMClient(responses=[StructuredResponse(_Draft())])
+    fake = FakeLLMClient(structured=[_Draft()])
     metrics = RecordingMetricsCollector()
     instrumented = _instrumented(fake, metrics)
 
@@ -215,9 +215,8 @@ async def test_structured_without_usage_records_no_usage_metrics() -> None:
     assert len(metrics.counters_named("llm.complete.requests")) == 1
 
 
-@pytest.mark.unit
 async def test_missing_usage_records_nothing() -> None:
-    fake = FakeLLMClient(responses=[LLMResponse(content="x", usage=None)])
+    fake = FakeLLMClient(completions=[LLMResponse(content="x", usage=None)])
     metrics = RecordingMetricsCollector()
     instrumented = _instrumented(fake, metrics)
 
@@ -226,7 +225,6 @@ async def test_missing_usage_records_nothing() -> None:
     assert not metrics.histograms_named("llm.complete.usage.input_tokens")
 
 
-@pytest.mark.unit
 async def test_ping_and_close_are_pass_through() -> None:
     fake = FakeLLMClient()
     instrumented = _instrumented(fake, RecordingMetricsCollector())
@@ -237,9 +235,8 @@ async def test_ping_and_close_are_pass_through() -> None:
     assert fake.closed is True
 
 
-@pytest.mark.unit
 async def test_cache_true_call_without_cache_tokens_logs_debug(caplog: pytest.LogCaptureFixture) -> None:
-    fake = FakeLLMClient(responses=[StructuredResponse(_Draft(), usage=TokenUsage(10, 5, 0, 0))])
+    fake = FakeLLMClient(structured=[_Draft()], usage=TokenUsage(10, 5, 0, 0))
     instrumented = _instrumented(fake, RecordingMetricsCollector())
     caplog.set_level("DEBUG")
 
@@ -250,9 +247,8 @@ async def test_cache_true_call_without_cache_tokens_logs_debug(caplog: pytest.Lo
     assert record.__dict__["purpose"] == "main_pass"
 
 
-@pytest.mark.unit
 async def test_cache_hit_does_not_log_cache_miss(caplog: pytest.LogCaptureFixture) -> None:
-    fake = FakeLLMClient(responses=[StructuredResponse(_Draft(), usage=TokenUsage(10, 5, 8, 0))])
+    fake = FakeLLMClient(structured=[_Draft()], usage=TokenUsage(10, 5, 8, 0))
     instrumented = _instrumented(fake, RecordingMetricsCollector())
     caplog.set_level("DEBUG")
 
@@ -261,10 +257,9 @@ async def test_cache_hit_does_not_log_cache_miss(caplog: pytest.LogCaptureFixtur
     assert "cache miss" not in caplog.text
 
 
-@pytest.mark.unit
 async def test_success_log_carries_structured_fields(caplog: pytest.LogCaptureFixture) -> None:
     """Rule 1.8: constant message text, data goes to extra fields."""
-    fake = FakeLLMClient(responses=[StructuredResponse(_Draft(), usage=TokenUsage(10, 5, 2, 1))])
+    fake = FakeLLMClient(structured=[_Draft()], usage=TokenUsage(10, 5, 2, 1))
     instrumented = _instrumented(fake, RecordingMetricsCollector())
     caplog.set_level("INFO", logger="test.grasp.llm")
 
@@ -282,23 +277,8 @@ async def test_success_log_carries_structured_fields(caplog: pytest.LogCaptureFi
     assert record.__dict__["cache_creation_input_tokens"] == 1
 
 
-@pytest.mark.unit
-async def test_request_metadata_lands_in_log_fields(caplog: pytest.LogCaptureFixture) -> None:
-    fake = FakeLLMClient(responses=[StructuredResponse(_Draft(), usage=TokenUsage(10, 5, 0, 0))])
-    instrumented = _instrumented(fake, RecordingMetricsCollector())
-    caplog.set_level("INFO", logger="test.grasp.llm")
-
-    request = _request(metadata={"document_id": "doc-1", "part_id": "part-9"})
-    await instrumented.complete_structured(request, _Draft)
-
-    record = caplog.records[-1]
-    assert record.__dict__["document_id"] == "doc-1"
-    assert record.__dict__["part_id"] == "part-9"
-
-
-@pytest.mark.unit
 async def test_failure_log_carries_structured_fields(caplog: pytest.LogCaptureFixture) -> None:
-    fake = FakeLLMClient(responses=[LLMSchemaError("bad shape")])
+    fake = FakeLLMClient(structured=[LLMSchemaError("bad shape")])
     instrumented = _instrumented(fake, RecordingMetricsCollector())
     caplog.set_level("WARNING", logger="test.grasp.llm")
 
@@ -312,10 +292,9 @@ async def test_failure_log_carries_structured_fields(caplog: pytest.LogCaptureFi
     assert isinstance(record.__dict__["duration_s"], float)
 
 
-@pytest.mark.unit
 async def test_without_metrics_calls_still_log(caplog: pytest.LogCaptureFixture) -> None:
     """No collector wired: no metric calls, the INFO line is always written."""
-    fake = FakeLLMClient(responses=[StructuredResponse(_Draft(), usage=TokenUsage(10, 5, 0, 0))])
+    fake = FakeLLMClient(structured=[_Draft()], usage=TokenUsage(10, 5, 0, 0))
     instrumented = InstrumentedLLMClient(client=fake, logger=getLogger("test.grasp.llm"))
     caplog.set_level("INFO", logger="test.grasp.llm")
 

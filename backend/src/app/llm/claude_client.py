@@ -34,14 +34,16 @@ from src.app.contracts.llm.image_part import ImagePart
 from src.app.contracts.llm.llm_message import LLMContent, LLMMessage
 from src.app.contracts.llm.llm_request import LLMRequest
 from src.app.contracts.llm.llm_response import LLMResponse
-from src.app.contracts.llm.structured_response import StructuredResponse, TokenUsage
+from src.app.contracts.llm.structured_response import StructuredResponse
 from src.app.contracts.llm.system_block import SystemBlock
+from src.app.contracts.llm.token_usage import TokenUsage
 from src.app.core.settings.llm import LLMSettings
 from src.app.exceptions.llm import (
     LLMGenerationError,
     LLMOutputTruncatedError,
     LLMRateLimitError,
     LLMSchemaError,
+    LLMTimeoutError,
 )
 from src.app.interfaces.llm.llm_client import LLMClient
 
@@ -74,6 +76,8 @@ class ClaudeClient(LLMClient):
             )
         except anthropic.RateLimitError as exc:
             raise LLMRateLimitError() from exc
+        except anthropic.APITimeoutError as exc:
+            raise LLMTimeoutError() from exc
         except anthropic.APIError as exc:
             raise LLMGenerationError("Claude request failed.") from exc
 
@@ -104,6 +108,8 @@ class ClaudeClient(LLMClient):
             )
         except anthropic.RateLimitError as exc:
             raise LLMRateLimitError() from exc
+        except anthropic.APITimeoutError as exc:
+            raise LLMTimeoutError() from exc
         except anthropic.APIError as exc:
             raise LLMGenerationError("Claude request failed.") from exc
 

@@ -2,13 +2,7 @@
 
 from dataclasses import dataclass
 
-
-@dataclass(frozen=True, slots=True)
-class TokenUsage:
-    input_tokens: int
-    output_tokens: int
-    cache_read_input_tokens: int = 0
-    cache_creation_input_tokens: int = 0
+from src.app.contracts.llm.token_usage import TokenUsage
 
 
 @dataclass(frozen=True, slots=True)

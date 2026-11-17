@@ -10,9 +10,9 @@ the 1.8 MetricsCollector facade keeps histograms label-free; outcome and
 purpose live in the structured log line). One INFO log line per call.
 
 Expected errors are mapped to log level and outcome via a single table
-(``_ERROR_HANDLERS``): schema, rate-limit and truncation failures are
-routine (one line, no traceback), input/generation/unexpected failures
-keep the traceback.
+(``_ERROR_HANDLERS``); every failure is one log line without a traceback —
+the provider error text goes into the ``error`` field (5xx handlers log
+the traceback themselves).
 
 Metrics are optional: with ``metrics=None`` no metric is written and the
 logs are always emitted. Implementations arrive with story 1.8.1.
@@ -28,13 +28,15 @@ from pydantic import BaseModel
 from src.app.contracts.llm.llm_message import LLMMessage
 from src.app.contracts.llm.llm_request import LLMRequest
 from src.app.contracts.llm.llm_response import LLMResponse
-from src.app.contracts.llm.structured_response import StructuredResponse, TokenUsage
+from src.app.contracts.llm.structured_response import StructuredResponse
+from src.app.contracts.llm.token_usage import TokenUsage
 from src.app.exceptions.llm import (
     LLMGenerationError,
     LLMInputError,
     LLMOutputTruncatedError,
     LLMRateLimitError,
     LLMSchemaError,
+    LLMTimeoutError,
 )
 from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.interfaces.observability.metrics_collector import MetricsCollector
@@ -50,15 +52,17 @@ _UNSET_PURPOSE = "unspecified"
 
 _METRIC_PREFIX = "llm.complete"
 
-# Exception type -> (outcome tag, log level, keep traceback in the log line).
-# Order matters: Exception is the catch-all for unexpected errors.
-_ERROR_HANDLERS: tuple[tuple[type[BaseException], str, int, bool], ...] = (
-    (LLMInputError, "invalid_input", WARNING, True),
-    (LLMSchemaError, "schema_error", WARNING, False),
-    (LLMRateLimitError, "rate_limit_error", WARNING, False),
-    (LLMOutputTruncatedError, "output_truncated", WARNING, False),
-    (LLMGenerationError, "generation_error", ERROR, True),
-    (Exception, "unexpected_error", ERROR, True),
+# Exception type -> (outcome tag, log level). Order matters: Exception is
+# the catch-all for unexpected errors, LLMTimeoutError must precede
+# LLMGenerationError (it is a subclass).
+_ERROR_HANDLERS: tuple[tuple[type[BaseException], str, int], ...] = (
+    (LLMInputError, "invalid_input", WARNING),
+    (LLMSchemaError, "schema_error", WARNING),
+    (LLMRateLimitError, "rate_limit_error", WARNING),
+    (LLMOutputTruncatedError, "output_truncated", WARNING),
+    (LLMTimeoutError, "timeout", WARNING),
+    (LLMGenerationError, "generation_error", ERROR),
+    (Exception, "unexpected_error", ERROR),
 )
 
 
@@ -135,7 +139,6 @@ class InstrumentedLLMClient(LLMClient):
                 "outcome": "success",
                 "duration_s": round(duration, 3),
                 **_usage_log_fields(usage),
-                **request.metadata,
             },
         )
         return response
@@ -154,7 +157,7 @@ class InstrumentedLLMClient(LLMClient):
         purpose: str,
     ) -> NoReturn:
         """Observe metrics and log the failure; always re-raises ``exc``."""
-        for exc_type, outcome, level, with_traceback in _ERROR_HANDLERS:
+        for exc_type, outcome, level in _ERROR_HANDLERS:
             if isinstance(exc, exc_type):
                 duration = self._observe_duration(started_at=started_at, outcome=outcome, purpose=purpose)
                 self._record_request(outcome=outcome, purpose=purpose)
@@ -168,7 +171,6 @@ class InstrumentedLLMClient(LLMClient):
                         "duration_s": round(duration, 3),
                         "error": str(exc),
                     },
-                    exc_info=exc if with_traceback else None,
                 )
                 break
         raise exc

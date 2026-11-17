@@ -1,10 +1,10 @@
 """Structured call with schema validation and one retry.
 
 Services never parse JSON by hand: they define a pydantic model and call
-``call_structured``. On ``LLMSchemaError`` the error text goes into the last
-message as a hint ("Ответ не прошёл проверку схемы: …") and the request is
-retried exactly once. Network/429 retries belong to the SDK — our own
-retries are applied only to schema errors.
+``call_structured``. On ``LLMSchemaError`` the English retry hint
+(``SCHEMA_RETRY_PROMPT`` from ``prompts.py``) is appended as a user message
+and the request is retried exactly once. Network/429 retries belong to the
+SDK — our own retries are applied only to schema errors.
 """
 
 from dataclasses import replace
@@ -15,6 +15,7 @@ from src.app.contracts.llm.llm_message import LLMMessage
 from src.app.contracts.llm.llm_request import LLMRequest
 from src.app.exceptions.llm import LLMSchemaError
 from src.app.interfaces.llm.llm_client import LLMClient
+from src.app.llm.prompts import SCHEMA_RETRY_PROMPT
 
 
 async def call_structured[T: BaseModel](
@@ -38,7 +39,7 @@ async def call_structured[T: BaseModel](
                     *request.messages,
                     LLMMessage(
                         role="user",
-                        content=f"Ответ не прошёл проверку схемы: {exc}. Верни исправленный JSON.",
+                        content=SCHEMA_RETRY_PROMPT.format(error=exc),
                     ),
                 ),
             )

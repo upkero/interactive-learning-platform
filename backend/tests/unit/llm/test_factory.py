@@ -8,8 +8,9 @@ from src.app.llm.claude_client import ClaudeClient
 from src.app.llm.factory import create_llm_client
 from src.app.llm.openai_compatible_llm_client import OpenAICompatibleLLMClient
 
+pytestmark = pytest.mark.unit
 
-@pytest.mark.unit
+
 def test_anthropic_creates_claude_client() -> None:
     settings = LLMSettings(provider="anthropic", api_key=SecretStr("sk"), model="claude-x")
 
@@ -20,7 +21,6 @@ def test_anthropic_creates_claude_client() -> None:
     assert client.provider_name == "anthropic"
 
 
-@pytest.mark.unit
 def test_ollama_creates_openai_compatible_client_with_default_url() -> None:
     settings = LLMSettings(provider="ollama", model="llama3.2")
 
@@ -31,7 +31,6 @@ def test_ollama_creates_openai_compatible_client_with_default_url() -> None:
     assert str(client._client.base_url).rstrip("/").endswith("11434/v1")
 
 
-@pytest.mark.unit
 def test_openai_compatible_honors_custom_base_url() -> None:
     settings = LLMSettings(provider="openai_compatible", base_url="http://proxy:8080/v1", api_key=SecretStr("k"))
 

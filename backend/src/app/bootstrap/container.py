@@ -17,6 +17,7 @@ from src.app.core.settings.storage import get_storage_settings
 from src.app.core.settings.upload import get_upload_settings
 from src.app.db.session import build_engine, build_session_factory
 from src.app.interfaces.llm.llm_client import LLMClient
+from src.app.interfaces.observability.metrics_collector import MetricsCollector
 from src.app.interfaces.services.part_pipeline import PartPipeline
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.llm.factory import create_llm_client
@@ -242,11 +243,15 @@ class ApplicationContainer:
         return get_cheap_llm_settings()
 
     @cached_property
+    def metrics_collector(self) -> MetricsCollector:
+        return PrometheusMetricsCollector()
+
+    @cached_property
     def main_llm(self) -> LLMClient:
         return InstrumentedLLMClient(
             client=create_llm_client(self.llm_settings),
             logger=getLogger("grasp.llm"),
-            metrics=PrometheusMetricsCollector(),
+            metrics=self.metrics_collector,
         )
 
     @cached_property
@@ -254,7 +259,7 @@ class ApplicationContainer:
         return InstrumentedLLMClient(
             client=create_llm_client(self.cheap_llm_overrides.resolve(self.llm_settings)),
             logger=getLogger("grasp.llm.cheap"),
-            metrics=PrometheusMetricsCollector(),
+            metrics=self.metrics_collector,
         )
 
     @cached_property

@@ -27,6 +27,17 @@ class LLMGenerationError(LLMError):
     error_code = "llm_generation_error"
 
 
+class LLMTimeoutError(LLMGenerationError):
+    """Raised when the provider does not answer within the timeout.
+
+    Own outcome (``timeout``) on the dashboard: a timeout is a slow
+    generation, not a failed one — the model might still be sound.
+    """
+
+    error_code = "llm_timeout_error"
+    default_detail = "LLM provider request timed out."
+
+
 class LLMOutputTruncatedError(LLMGenerationError):
     """Raised when the provider cut the reply off (stop_reason=max_tokens).
 
