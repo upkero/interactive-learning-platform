@@ -35,9 +35,10 @@ async def call_structured[T: BaseModel](
                 raise
             # Show the model its own broken reply as the last assistant
             # message (when the client reported it), then the correction
-            # hint as a user message.
+            # hint as a user message. An empty reply is skipped: providers
+            # require non-empty content in every message but the last.
             follow_up: tuple[LLMMessage, ...] = ()
-            if exc.raw_output is not None:
+            if exc.raw_output:
                 follow_up = (LLMMessage(role="assistant", content=exc.raw_output),)
             attempt_request = replace(
                 request,

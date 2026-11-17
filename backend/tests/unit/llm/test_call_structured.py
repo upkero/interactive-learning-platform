@@ -50,6 +50,22 @@ async def test_schema_error_triggers_exactly_one_retry() -> None:
     assert SCHEMA_RETRY_PROMPT.format(error="bad json") in hint
 
 
+async def test_empty_raw_output_is_not_sent_back_as_assistant_message() -> None:
+    # An empty provider reply must not become an assistant message:
+    # Anthropic requires non-empty content in every message but the last,
+    # so the retry would answer 400 instead of the corrected draft.
+    fake = FakeLLMClient(structured=[LLMSchemaError("no text block", raw_output=""), _Draft(count=4)])
+
+    result = await call_structured(fake, _request(), _Draft)
+
+    assert result == _Draft(count=4)
+    retry_messages = fake.requests[1].messages
+    assert len(retry_messages) == 2
+    assert retry_messages[-1].role == "user"
+    assert isinstance(retry_messages[-1].content, str)
+    assert SCHEMA_RETRY_PROMPT.format(error="no text block") in retry_messages[-1].content
+
+
 async def test_permanent_schema_error_raises_after_last_retry() -> None:
     fake = FakeLLMClient(structured=[LLMSchemaError("bad 1"), LLMSchemaError("bad 2")])
 

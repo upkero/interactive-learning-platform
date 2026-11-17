@@ -68,16 +68,19 @@ def test_histograms_and_gauges_are_supported() -> None:
 def test_histogram_fixes_labels_and_buckets_on_first_call() -> None:
     name = unique("histogram")
     collector = PrometheusMetricsCollector()
-    collector.observe_histogram(name, 1.5, labels={"purpose": "main_pass"}, buckets=(1.0, 5.0))
+    # 3.0 and 30.0 are NOT in Histogram.DEFAULT_BUCKETS: the mutation
+    # "ignore buckets" must flip le=3.0 and le=2.5 checks below.
+    collector.observe_histogram(name, 1.5, labels={"purpose": "main_pass"}, buckets=(3.0, 30.0))
     collector.observe_histogram(name, 7.0, labels={"purpose": "quiz_gen"})
     assert REGISTRY.get_sample_value(f"{name}_count", {"purpose": "main_pass"}) == 1
     assert REGISTRY.get_sample_value(f"{name}_count", {"purpose": "quiz_gen"}) == 1
     # Labeled samples carry the label set, so _sum is queried per label.
     assert REGISTRY.get_sample_value(f"{name}_sum", {"purpose": "main_pass"}) == 1.5
     assert REGISTRY.get_sample_value(f"{name}_sum", {"purpose": "quiz_gen"}) == 7.0
-    # 7.0 exceeds the fixed buckets, so it lands in +Inf for main_pass and
-    # quiz_gen alike (le=5.0 keeps only the first call's 1.5).
-    assert REGISTRY.get_sample_value(f"{name}_bucket", {"purpose": "main_pass", "le": "5.0"}) == 1
+    # Custom buckets are applied: 1.5 lands under le=3.0...
+    assert REGISTRY.get_sample_value(f"{name}_bucket", {"purpose": "main_pass", "le": "3.0"}) == 1
+    # ...and a default bucket boundary (2.5) does not exist at all.
+    assert REGISTRY.get_sample_value(f"{name}_bucket", {"purpose": "main_pass", "le": "2.5"}) is None
 
 
 def test_histogram_with_different_buckets_logs_warning_and_keeps_the_original(
