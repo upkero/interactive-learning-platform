@@ -210,14 +210,13 @@ async def test_plain_complete_sends_settings_and_returns_usage_mapping() -> None
     assert response.content == "hello"
     assert response.model == "llama3.2"
     assert response.finish_reason == "stop"
-    # Usage is normalized to the canonical TokenUsage field names; this
-    # reply has no prompt_tokens_details, so cache_read is 0.
-    assert response.usage == {
-        "input_tokens": 3,
-        "output_tokens": 5,
-        "cache_read_input_tokens": 0,
-        "cache_creation_input_tokens": 0,
-    }
+    # This reply has no prompt_tokens_details, so cache_read is 0.
+    assert response.usage == TokenUsage(
+        input_tokens=3,
+        output_tokens=5,
+        cache_read_input_tokens=0,
+        cache_creation_input_tokens=0,
+    )
     assert response.metadata == {"id": "chatcmpl-1", "created": 1700000000}
     body = json.loads(captured[0].content)
     assert body["temperature"] == 0.5

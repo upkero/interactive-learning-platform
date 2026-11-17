@@ -230,12 +230,12 @@ async def test_plain_complete_returns_text_and_usage_mapping() -> None:
     assert response.content == "hello"
     assert response.model == "claude-sonnet-5-5"
     assert response.finish_reason == "end_turn"
-    assert response.usage == {
-        "input_tokens": 10,
-        "output_tokens": 5,
-        "cache_read_input_tokens": 2,
-        "cache_creation_input_tokens": 1,
-    }
+    assert response.usage == TokenUsage(
+        input_tokens=10,
+        output_tokens=5,
+        cache_read_input_tokens=2,
+        cache_creation_input_tokens=1,
+    )
     body = json.loads(captured[0].content)
     assert "temperature" not in body
 

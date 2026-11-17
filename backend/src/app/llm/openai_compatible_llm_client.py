@@ -7,12 +7,21 @@ OpenAI-compatible API, so ``SystemBlock.cache`` is ignored here.
 """
 
 from collections.abc import Sequence
-from dataclasses import asdict
-from typing import Any
+from typing import Literal, cast
 
 import openai
-from openai import OpenAIError
+from openai import AsyncOpenAI, OpenAIError
 from openai.lib._pydantic import to_strict_json_schema
+from openai.types import CompletionUsage
+from openai.types.chat import (
+    ChatCompletion,
+    ChatCompletionAssistantMessageParam,
+    ChatCompletionContentPartParam,
+    ChatCompletionMessageParam,
+    ChatCompletionUserMessageParam,
+    CompletionCreateParams,
+)
+from openai.types.chat.chat_completion import Choice
 from pydantic import BaseModel, ValidationError
 
 from src.app.contracts.llm.image_part import ImagePart
@@ -24,15 +33,13 @@ from src.app.core.settings.llm import LLMSettings
 from src.app.exceptions.llm import LLMGenerationError, LLMInputError, LLMRateLimitError, LLMSchemaError
 from src.app.interfaces.llm.llm_client import LLMClient
 
-_USAGE_FIELDS = ("prompt_tokens", "completion_tokens", "total_tokens")
-
 
 class OpenAICompatibleLLMClient(LLMClient):
     def __init__(
         self,
         *,
         settings: LLMSettings,
-        client: Any,
+        client: AsyncOpenAI,
     ) -> None:
         self._settings = settings
         self._client = client
@@ -73,7 +80,7 @@ class OpenAICompatibleLLMClient(LLMClient):
         request: LLMRequest,
         schema: type[T],
     ) -> StructuredResponse[T]:
-        params: dict[str, object] = {
+        params: CompletionCreateParams = {
             "model": self._settings.model,
             "messages": self._chat_messages(request),
             "response_format": {
@@ -103,8 +110,8 @@ class OpenAICompatibleLLMClient(LLMClient):
             raise LLMGenerationError("LLM provider request failed.") from exc
 
         choice = self._first_choice(completion)
-        content = getattr(getattr(choice, "message", None), "content", None)
-        if not content or not isinstance(content, str):
+        content = choice.message.content
+        if content is None:
             raise LLMSchemaError("Model returned no parsed output.")
 
         try:
@@ -112,10 +119,7 @@ class OpenAICompatibleLLMClient(LLMClient):
         except ValidationError as exc:
             raise LLMSchemaError(f"Response failed schema validation: {exc}") from exc
 
-        return StructuredResponse(
-            value=value,
-            usage=self._token_usage(getattr(completion, "usage", None)),
-        )
+        return StructuredResponse(value=value, usage=self._token_usage(completion.usage))
 
     async def ping(self) -> bool:
         try:
@@ -127,37 +131,61 @@ class OpenAICompatibleLLMClient(LLMClient):
     async def close(self) -> None:
         await self._client.close()
 
-    def _chat_messages(self, request: LLMRequest) -> list[dict[str, object]]:
-        messages: list[dict[str, object]] = [{"role": "system", "content": block.text} for block in request.system]
-        messages.extend(
-            {"role": message.role, "content": self._content(message.content)} for message in request.messages
-        )
+    def _chat_messages(self, request: LLMRequest) -> list[ChatCompletionMessageParam]:
+        messages: list[ChatCompletionMessageParam] = [
+            {"role": "system", "content": block.text} for block in request.system
+        ]
+        # Literal roles let mypy pick the exact TypedDict per branch.
+        for message in request.messages:
+            if message.role == "user":
+                user: ChatCompletionUserMessageParam = {"role": "user", "content": self._content(message.content)}
+                messages.append(user)
+            else:
+                # Grasp never attaches images to assistant messages: the
+                # provider rejects image parts there, so the cast is safe.
+                messages.append(
+                    cast(
+                        "ChatCompletionAssistantMessageParam",
+                        {"role": "assistant", "content": self._content(message.content)},
+                    )
+                )
         return messages
 
-    def _completion_params(self, messages: Sequence[LLMMessage]) -> dict[str, object]:
-        params: dict[str, object] = {
+    def _completion_params(self, messages: Sequence[LLMMessage]) -> CompletionCreateParams:
+        built: list[ChatCompletionMessageParam] = []
+        for message in messages:
+            if message.role == "user":
+                user: ChatCompletionUserMessageParam = {"role": "user", "content": self._content(message.content)}
+                built.append(user)
+            else:
+                built.append(
+                    cast(
+                        "ChatCompletionAssistantMessageParam",
+                        {"role": "assistant", "content": self._content(message.content)},
+                    )
+                )
+        params: CompletionCreateParams = {
             "model": self._settings.model,
-            "messages": [
-                {
-                    "role": message.role,
-                    "content": self._content(message.content),
-                }
-                for message in messages
-            ],
+            "messages": built,
         }
         if self._settings.temperature is not None:
             params["temperature"] = self._settings.temperature
         if self._settings.max_tokens is not None:
             params["max_tokens"] = self._settings.max_tokens
         if self._settings.reasoning_effort is not None:
-            params["reasoning_effort"] = self._settings.reasoning_effort
+            # Settings store the value as str; the SDK API takes the Literal
+            # set OpenAI accepts. The set is mirrored here for mypy.
+            params["reasoning_effort"] = cast(
+                "Literal['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']",
+                self._settings.reasoning_effort,
+            )
         return params
 
     @staticmethod
-    def _content(content: LLMContent) -> str | list[dict[str, object]]:
+    def _content(content: LLMContent) -> str | list[ChatCompletionContentPartParam]:
         if isinstance(content, str):
             return content
-        parts: list[dict[str, object]] = []
+        parts: list[ChatCompletionContentPartParam] = []
         for part in content:
             if isinstance(part, ImagePart):
                 parts.append(
@@ -170,48 +198,40 @@ class OpenAICompatibleLLMClient(LLMClient):
                 parts.append({"type": "text", "text": part.text})
         return parts
 
-    def _build_response(self, completion: Any) -> LLMResponse:
+    def _build_response(self, completion: ChatCompletion) -> LLMResponse:
         choice = self._first_choice(completion)
-        message = getattr(choice, "message", None)
-        content = getattr(message, "content", None)
+        content = choice.message.content
         if content is None:
             raise LLMGenerationError("LLM provider returned empty message content.")
 
         return LLMResponse(
             content=content,
-            model=getattr(completion, "model", None) or self.model_name,
-            finish_reason=getattr(choice, "finish_reason", None),
-            usage=asdict(token_usage)
-            if (token_usage := self._token_usage(getattr(completion, "usage", None))) is not None
-            else None,
+            model=completion.model,
+            finish_reason=choice.finish_reason,
+            usage=self._token_usage(completion.usage),
             metadata=self._metadata(completion),
         )
 
     @staticmethod
-    def _first_choice(completion: Any) -> Any:
-        choices = getattr(completion, "choices", None) or []
+    def _first_choice(completion: ChatCompletion) -> Choice:
+        choices = completion.choices
         if not choices:
             raise LLMGenerationError("LLM provider returned no choices.")
         return choices[0]
 
     @staticmethod
-    def _token_usage(usage: Any) -> TokenUsage | None:
+    def _token_usage(usage: CompletionUsage | None) -> TokenUsage | None:
         if usage is None:
             return None
-        details = getattr(usage, "prompt_tokens_details", None)
+        details = usage.prompt_tokens_details
+        # prompt_tokens_details and cached_tokens are both optional in the
+        # CompletionUsage contract (providers may omit them).
         return TokenUsage(
-            input_tokens=getattr(usage, "prompt_tokens", 0) or 0,
-            output_tokens=getattr(usage, "completion_tokens", 0) or 0,
-            cache_read_input_tokens=getattr(details, "cached_tokens", 0) or 0,
+            input_tokens=usage.prompt_tokens,
+            output_tokens=usage.completion_tokens,
+            cache_read_input_tokens=(details.cached_tokens if details is not None else 0) or 0,
         )
 
     @staticmethod
-    def _metadata(completion: Any) -> dict[str, object]:
-        metadata: dict[str, object] = {}
-        completion_id = getattr(completion, "id", None)
-        created = getattr(completion, "created", None)
-        if completion_id is not None:
-            metadata["id"] = completion_id
-        if created is not None:
-            metadata["created"] = created
-        return metadata
+    def _metadata(completion: ChatCompletion) -> dict[str, object]:
+        return {"id": completion.id, "created": completion.created}

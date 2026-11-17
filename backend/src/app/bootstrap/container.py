@@ -61,6 +61,7 @@ from src.app.storage.s3_object_storage_client import S3ObjectStorageClient, buil
 from src.app.tasks.dispatcher import CeleryTaskDispatcher
 
 
+
 class ApplicationContainer:
     """Composition root: the only place concrete classes are constructed."""
 
@@ -244,16 +245,10 @@ class ApplicationContainer:
         return get_cheap_llm_settings()
 
     @cached_property
-    def metrics_collector(self) -> MetricsCollectorProtocol:
-        # The real Prometheus exporter arrives with story 1.9.
-        return NoopMetricsCollector()
-
-    @cached_property
     def main_llm(self) -> LLMClient:
         return InstrumentedLLMClient(
             client=create_llm_client(self.llm_settings),
             logger=getLogger("grasp.llm"),
-            metrics=self.metrics_collector,
         )
 
     @cached_property
@@ -261,7 +256,6 @@ class ApplicationContainer:
         return InstrumentedLLMClient(
             client=create_llm_client(self.cheap_llm_overrides.resolve(self.llm_settings)),
             logger=getLogger("grasp.llm.cheap"),
-            metrics=self.metrics_collector,
         )
 
     @cached_property

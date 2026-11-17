@@ -20,23 +20,27 @@ _OLLAMA_DEFAULT_BASE_URL = "http://localhost:11434/v1"
 
 def create_llm_client(settings: LLMSettings) -> LLMClient:
     """Build the provider client for the given settings profile."""
+    # The settings validator requires api_key for anthropic and
+    # openai_compatible; ollama may omit it (handled below).
+    api_key = settings.api_key.get_secret_value() if settings.api_key else None
+
     if settings.provider == "anthropic":
         client = AsyncAnthropic(
-            api_key=settings.api_key.get_secret_value() if settings.api_key else None,
+            api_key=api_key,
             base_url=settings.base_url,
             timeout=settings.timeout_seconds,
             max_retries=settings.max_retries,
         )
         return ClaudeClient(client=client, settings=settings)
 
-    api_key = settings.api_key.get_secret_value() if settings.api_key else None
     base_url = settings.base_url
     if settings.provider == "ollama":
+        # AsyncOpenAI refuses to construct without a key; ollama ignores it.
         api_key = api_key or "ollama"
         base_url = base_url or _OLLAMA_DEFAULT_BASE_URL
 
     openai_client = AsyncOpenAI(
-        api_key=api_key or "dummy-key",
+        api_key=api_key,
         base_url=base_url,
         timeout=settings.timeout_seconds,
         max_retries=settings.max_retries,

@@ -24,7 +24,6 @@ See https://docs.claude.com/en/docs/build-with-claude/prompt-caching.
 """
 
 from collections.abc import Sequence
-from dataclasses import asdict
 
 import anthropic
 from anthropic import AsyncAnthropic
@@ -82,10 +81,7 @@ class ClaudeClient(LLMClient):
         if not text:
             raise LLMGenerationError("Claude returned empty content.")
         return LLMResponse(
-            content=text,
-            model=response.model,
-            finish_reason=response.stop_reason,
-            usage=asdict(token_usage) if (token_usage := self._usage(response.usage)) is not None else None,
+            content=text, model=response.model, finish_reason=response.stop_reason, usage=self._usage(response.usage)
         )
 
     async def complete_structured[T: BaseModel](
@@ -111,8 +107,8 @@ class ClaudeClient(LLMClient):
         except anthropic.APIError as exc:
             raise LLMGenerationError("Claude request failed.") from exc
 
-        # The API returns schema violations as plain text (or truncates the
-        # reply), so the failure mode is visible only through stop_reason.
+        # Refusal and truncation are visible through stop_reason; schema
+        # violations are caught by the local model_validate_json below.
         if response.stop_reason == "refusal":
             raise LLMGenerationError("Claude refused the request.")
         if response.stop_reason == "max_tokens":

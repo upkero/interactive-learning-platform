@@ -23,6 +23,7 @@ Covered criteria:
 """
 
 import os
+import random
 
 import pytest
 from pydantic import BaseModel
@@ -59,8 +60,9 @@ def _client() -> ClaudeClient:
 
 def _cached_context() -> SystemBlock:
     """A system block comfortably above the 512-token cacheable minimum."""
+    rand_num = random.randint(1, 10)
     return SystemBlock(
-        "You are a careful technical writer. " * 40,
+        f"{rand_num} You are a careful technical writer. " * 40,
         cache=True,
     )
 

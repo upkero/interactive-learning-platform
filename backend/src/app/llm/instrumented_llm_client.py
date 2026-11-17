@@ -7,12 +7,17 @@ from TokenUsage (input / output / cache read / cache creation).
 Metrics with the ``llm.complete`` prefix: duration_seconds (histogram,
 buckets 1..180), requests (counter), usage.* (histogram — per-call token
 distribution). Tags: model, provider, outcome (success | invalid_input |
-schema_error | rate_limit_error | generation_error | unexpected_error) and
-purpose for structured calls. One INFO log line per call.
+schema_error | rate_limit_error | output_truncated | generation_error |
+unexpected_error) and purpose for structured calls. One INFO log line per
+call.
 
 Expected errors are mapped to log level and outcome via a single table
-(``_ERROR_HANDLERS``): schema and rate-limit failures are routine (one line,
-no traceback), input/generation/unexpected failures keep the traceback.
+(``_ERROR_HANDLERS``): schema, rate-limit and truncation failures are
+routine (one line, no traceback), input/generation/unexpected failures
+keep the traceback.
+
+Metrics are optional: with ``metrics=None`` no metric is written and the
+logs are always emitted. Implementations arrive with story 1.8.1.
 """
 
 from collections.abc import Sequence
@@ -34,7 +39,7 @@ from src.app.exceptions.llm import (
     LLMSchemaError,
 )
 from src.app.interfaces.llm.llm_client import LLMClient
-from src.app.interfaces.observability.metrics_collector import MetricsCollectorProtocol, MetricTags
+from src.app.interfaces.observability.metrics_collector import MetricsCollector, MetricTags
 
 _LLM_DURATION_BUCKETS = (1.0, 2.0, 5.0, 10.0, 20.0, 30.0, 60.0, 90.0, 120.0, 180.0)
 _TOKENS_BUCKETS = (100.0, 250.0, 500.0, 1000.0, 2500.0, 5000.0, 10000.0, 25000.0, 50000.0)
@@ -62,13 +67,20 @@ _ERROR_HANDLERS: tuple[tuple[type[BaseException], str, int, bool], ...] = (
 )
 
 
+def _usage_log_fields(usage: TokenUsage | None) -> dict[str, int | None]:
+    """Token counters as structured log fields (None when usage is absent)."""
+    if usage is None:
+        return dict.fromkeys(_USAGE_FIELDS)
+    return {field: getattr(usage, field) for field in _USAGE_FIELDS}
+
+
 class InstrumentedLLMClient(LLMClient):
     def __init__(
         self,
         *,
         client: LLMClient,
         logger: Logger,
-        metrics: MetricsCollectorProtocol,
+        metrics: MetricsCollector | None = None,
     ) -> None:
         self._client = client
         self._logger = logger
@@ -91,13 +103,16 @@ class InstrumentedLLMClient(LLMClient):
 
         duration = self._observe_duration(started_at=started_at, outcome="success", purpose=_UNSET_PURPOSE)
         self._record_request(outcome="success", purpose=_UNSET_PURPOSE)
-        self._record_plain_usage(response)
+        self._record_usage(response.usage)
         self._logger.info(
-            "LLM complete: purpose=%s model=%s in %.3fs usage=%s",
-            _UNSET_PURPOSE,
-            self.model_name,
-            duration,
-            response.usage or {},
+            "LLM call completed.",
+            extra={
+                "purpose": _UNSET_PURPOSE,
+                "model": self.model_name,
+                "outcome": "success",
+                "duration_s": round(duration, 3),
+                **_usage_log_fields(response.usage),
+            },
         )
         return response
 
@@ -118,15 +133,15 @@ class InstrumentedLLMClient(LLMClient):
         usage = response.usage
         self._log_cache_miss(request, usage)
         self._logger.info(
-            "LLM structured: purpose=%s model=%s in %.3fs in_tokens=%s out_tokens=%s "
-            "cache_read_tokens=%s cache_creation_tokens=%s",
-            request.purpose,
-            self.model_name,
-            duration,
-            usage.input_tokens if usage else "-",
-            usage.output_tokens if usage else "-",
-            usage.cache_read_input_tokens if usage else "-",
-            usage.cache_creation_input_tokens if usage else "-",
+            "LLM call completed.",
+            extra={
+                "purpose": request.purpose,
+                "model": self.model_name,
+                "outcome": "success",
+                "duration_s": round(duration, 3),
+                **_usage_log_fields(usage),
+                **request.metadata,
+            },
         )
         return response
 
@@ -150,12 +165,14 @@ class InstrumentedLLMClient(LLMClient):
                 self._record_request(outcome=outcome, purpose=purpose)
                 self._logger.log(
                     level,
-                    "LLM call failed: outcome=%s purpose=%s model=%s in %.3fs error=%s.",
-                    outcome,
-                    purpose,
-                    self.model_name,
-                    duration,
-                    exc,
+                    "LLM call failed.",
+                    extra={
+                        "outcome": outcome,
+                        "purpose": purpose,
+                        "model": self.model_name,
+                        "duration_s": round(duration, 3),
+                        "error": str(exc),
+                    },
                     exc_info=exc if with_traceback else None,
                 )
                 break
@@ -171,8 +188,8 @@ class InstrumentedLLMClient(LLMClient):
             and usage.cache_creation_input_tokens == 0
         ):
             self._logger.debug(
-                "LLM prompt cache miss: purpose=%s — cached block is likely below the provider minimum.",
-                request.purpose,
+                "LLM prompt cache miss: cached block is likely below the provider minimum.",
+                extra={"purpose": request.purpose, "model": self.model_name},
             )
 
     def _metric_tags(self, *, outcome: str, purpose: str) -> MetricTags:
@@ -184,6 +201,8 @@ class InstrumentedLLMClient(LLMClient):
         }
 
     def _record_request(self, *, outcome: str, purpose: str) -> None:
+        if self._metrics is None:
+            return
         self._metrics.increment_counter(
             f"{_METRIC_PREFIX}.requests",
             tags=self._metric_tags(outcome=outcome, purpose=purpose),
@@ -191,16 +210,17 @@ class InstrumentedLLMClient(LLMClient):
 
     def _observe_duration(self, *, started_at: float, outcome: str, purpose: str) -> float:
         duration_seconds = perf_counter() - started_at
-        self._metrics.observe_histogram(
-            f"{_METRIC_PREFIX}.duration_seconds",
-            duration_seconds,
-            tags=self._metric_tags(outcome=outcome, purpose=purpose),
-            buckets=_LLM_DURATION_BUCKETS,
-        )
+        if self._metrics is not None:
+            self._metrics.observe_histogram(
+                f"{_METRIC_PREFIX}.duration_seconds",
+                duration_seconds,
+                tags=self._metric_tags(outcome=outcome, purpose=purpose),
+                buckets=_LLM_DURATION_BUCKETS,
+            )
         return duration_seconds
 
     def _record_usage(self, usage: TokenUsage | None, *, purpose: str = _UNSET_PURPOSE) -> None:
-        if usage is None:
+        if self._metrics is None or usage is None:
             return
         for field in _USAGE_FIELDS:
             self._metrics.observe_histogram(
@@ -209,18 +229,3 @@ class InstrumentedLLMClient(LLMClient):
                 tags=self._metric_tags(outcome="success", purpose=purpose),
                 buckets=_TOKENS_BUCKETS,
             )
-
-    def _record_plain_usage(self, response: LLMResponse) -> None:
-        """Plain completion usage is a mapping with the canonical TokenUsage
-        field names (clients normalize provider names before returning)."""
-        usage = response.usage
-        if not usage or not any(usage.values()):
-            return
-        self._record_usage(
-            TokenUsage(
-                input_tokens=usage.get("input_tokens", 0),
-                output_tokens=usage.get("output_tokens", 0),
-                cache_read_input_tokens=usage.get("cache_read_input_tokens", 0),
-                cache_creation_input_tokens=usage.get("cache_creation_input_tokens", 0),
-            )
-        )
