@@ -6,8 +6,8 @@ from typing import Protocol
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.documents.part_record import PartRecord
+from src.app.contracts.documents.recovery_outcome import RecoveryOutcome
 from src.app.contracts.progress import ProgressEvent
-from src.app.contracts.progress.recovery import RecoveryOutcome
 
 
 class PartRecoveryProtocol(Protocol):
