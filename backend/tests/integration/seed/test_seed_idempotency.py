@@ -5,13 +5,11 @@ inserts the demo dataset, the second one must be a no-op returning
 ``"already seeded"`` without duplicating rows.
 """
 
-from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import func, select, update
 
-from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.documents.statuses import DocumentStatus, PartStatus, SourceType
 from src.app.contracts.quota import LedgerOp
 from src.app.core.settings.quota import QuotaSettings
@@ -27,24 +25,12 @@ from src.app.repositories.document_repository import DocumentRepository
 from src.app.seed import dev_seed
 from src.app.seed.dev_seed import ALICE_EMAIL, BOB_EMAIL, seed_dev
 from src.app.services.quota.quota_ledger import QuotaLedger
-from src.app.services.solver.pipeline.part_recovery import PartRecovery
 from src.app.services.solver.pipeline.stub_pipeline import StubPipeline
 from src.app.services.solver.pipeline.watchdog import Watchdog
-from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
 from tests.support.fakes.services.progress_notifier import FakeProgressNotifier
-from tests.support.fakes.services.task_dispatcher import FakeTaskDispatcher
 from tests.support.types import SessionFactory
 
 pytestmark = pytest.mark.integration
-
-
-@pytest.fixture
-async def ledger() -> AsyncIterator[QuotaLedger]:
-    container = ApplicationContainer()
-    try:
-        yield container.quota_ledger
-    finally:
-        await container.close()
 
 
 @pytest.mark.parametrize("monthly_limit", [20, 50])
@@ -115,7 +101,7 @@ async def test_seed_dev_is_idempotent(
 
 
 async def test_seeded_parts_can_publish_and_watchdog_can_refund(
-    session_factory: SessionFactory, ledger: QuotaLedger
+    session_factory: SessionFactory, ledger: QuotaLedger, watchdog: Watchdog
 ) -> None:
     await seed_dev(session_factory, password="seed-test-password", ledger=ledger, fake_embeddings=True)
     async with session_factory() as session:
@@ -127,17 +113,17 @@ async def test_seeded_parts_can_publish_and_watchdog_can_refund(
             )
         ).all()
     assert len(parts) == 3
-    notifier, dispatcher = FakeProgressNotifier(), FakeTaskDispatcher()
     pipeline = StubPipeline(
         session_factory=session_factory,
         parts=DocumentPartRepository,
         documents=DocumentRepository,
         ledger=ledger,
-        notifier=notifier,
+        notifier=FakeProgressNotifier(),
         delay=0,
     )
     for part in parts[:2]:
         await pipeline.process(part.id)
+        # Re-delivery must not publish again or append another charge.
         await pipeline.process(part.id)
     async with session_factory() as session, session.begin():
         repository = DocumentPartRepository(session)
@@ -152,22 +138,6 @@ async def test_seeded_parts_can_publish_and_watchdog_can_refund(
             .where(DocumentPart.id == parts[2].id)
             .values(stage_changed_at=datetime.now(UTC) - timedelta(minutes=11))
         )
-    recovery = PartRecovery(
-        session_factory=session_factory,
-        parts=DocumentPartRepository,
-        documents=DocumentRepository,
-        ledger=ledger,
-        dispatcher=dispatcher,
-        notifier=notifier,
-    )
-    watchdog = Watchdog(
-        session_factory=session_factory,
-        parts=DocumentPartRepository,
-        documents=DocumentRepository,
-        recovery=recovery,
-        dispatcher=dispatcher,
-        metrics=RecordingMetricsCollector(),
-    )
     assert (await watchdog.tick()).failed == 1
     assert (await watchdog.tick()).failed == 0
     async with session_factory() as session:
