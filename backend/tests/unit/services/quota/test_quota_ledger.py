@@ -146,6 +146,6 @@ async def test_part_operations_reject_missing_part_and_reservation() -> None:
     part_id = uuid4()
     with pytest.raises(QuotaPartNotFoundError):
         await ledger.refund(session, part_id=part_id)
-    parts.owners[part_id] = PartOwner(user_id=user.id, document_id=uuid4())
+    parts.owners[part_id] = PartOwner(user_id=user.id, document_id=uuid4(), quota_period_start=None)
     with pytest.raises(QuotaReservationNotFoundError):
         await ledger.charge(session, part_id=part_id)

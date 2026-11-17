@@ -16,6 +16,6 @@ class PartDraft:
     topic_ids: list[str]
     source_markdown: str
     token_count: int
+    quota_period_start: date | None
     profile: dict[str, Any] | None = None
     content: dict[str, JsonValue] | None = None
-    quota_period_start: date | None = None

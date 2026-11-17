@@ -200,7 +200,17 @@ async def test_upload_browse_quiz_and_report_do_not_spend(
             [topic_node("t", "Notes", 0, 15, 2)],
         )
         (part,) = await DocumentPartRepository(session).add_many(
-            document_id, [PartDraft(index=0, title="Notes", topic_ids=["t"], source_markdown="text", token_count=2)]
+            document_id,
+            [
+                PartDraft(
+                    index=0,
+                    title="Notes",
+                    topic_ids=["t"],
+                    source_markdown="text",
+                    token_count=2,
+                    quota_period_start=None,
+                )
+            ],
         )
         await session.execute(
             update(DocumentPart)

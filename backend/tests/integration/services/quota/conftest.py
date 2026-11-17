@@ -25,9 +25,15 @@ async def container() -> AsyncIterator[ApplicationContainer]:
 
 
 @pytest.fixture
-def watchdog(session_factory: async_sessionmaker[AsyncSession], container: ApplicationContainer) -> Watchdog:
-    dispatcher = FakeTaskDispatcher()
-    recovery = PartRecovery(
+def dispatcher() -> FakeTaskDispatcher:
+    return FakeTaskDispatcher()
+
+
+@pytest.fixture
+def recovery(
+    session_factory: async_sessionmaker[AsyncSession], container: ApplicationContainer, dispatcher: FakeTaskDispatcher
+) -> PartRecovery:
+    return PartRecovery(
         session_factory=session_factory,
         parts=DocumentPartRepository,
         documents=DocumentRepository,
@@ -35,6 +41,12 @@ def watchdog(session_factory: async_sessionmaker[AsyncSession], container: Appli
         dispatcher=dispatcher,
         notifier=FakeProgressNotifier(),
     )
+
+
+@pytest.fixture
+def watchdog(
+    session_factory: async_sessionmaker[AsyncSession], recovery: PartRecovery, dispatcher: FakeTaskDispatcher
+) -> Watchdog:
     return Watchdog(
         session_factory=session_factory,
         parts=DocumentPartRepository,

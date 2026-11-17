@@ -41,6 +41,7 @@ from src.app.repositories.widget_repository import WidgetRepository
 from src.app.repositories.widget_usage_repository import WidgetUsageRepository
 from src.app.seed.embeddings import fake_embedding
 from src.app.seed.primitives_seed import seed_primitives_from_catalog
+from src.app.services.quota.quota_ledger import QuotaLedger
 
 ALICE_EMAIL: Final[str] = "alice@grasp.local"
 BOB_EMAIL: Final[str] = "bob@grasp.local"
@@ -161,7 +162,7 @@ async def _seed_users(session: AsyncSession, password_hash: str) -> tuple[UserRe
 
 
 async def _seed_documents(
-    session: AsyncSession, alice: UserRecord, bob: UserRecord
+    session: AsyncSession, alice: UserRecord, bob: UserRecord, ledger: QuotaLedger
 ) -> tuple[DocumentRecord, list[PartRecord]]:
     """Create the parsed and the done document, both with a topic tree."""
     document_repository = DocumentRepository(session)
@@ -182,6 +183,7 @@ async def _seed_documents(
     if parsed is None:  # pragma: no cover - impossible on a fresh row
         raise RuntimeError("Fresh document not found after create")
     await document_repository.set_topic_tree(parsed.id, TOPIC_TREE)
+    overview_quota = await ledger.reserve(session, user_id=alice.id, document_id=parsed.id, parts=3)
     overview_parts = await part_repository.add_many(
         parsed.id,
         [
@@ -191,6 +193,7 @@ async def _seed_documents(
                 topic_ids=["topic-adaptive", "topic-chunking"],
                 source_markdown="# What adaptive learning is\nContent of part one.",
                 token_count=142,
+                quota_period_start=overview_quota.period.start,
                 profile={"difficulty": "beginner"},
             ),
             PartDraft(
@@ -199,6 +202,7 @@ async def _seed_documents(
                 topic_ids=["topic-chunking", "topic-tree"],
                 source_markdown="# Topic tree and semantic chunks\nContent of part two.",
                 token_count=178,
+                quota_period_start=overview_quota.period.start,
                 profile={"difficulty": "beginner"},
             ),
             PartDraft(
@@ -207,6 +211,7 @@ async def _seed_documents(
                 topic_ids=["topic-quota"],
                 source_markdown="# Quota and generation pipeline\nContent of part three.",
                 token_count=96,
+                quota_period_start=overview_quota.period.start,
                 profile={"difficulty": "intermediate"},
             ),
         ],
@@ -229,6 +234,7 @@ async def _seed_documents(
     await document_repository.set_topic_tree(done.id, DONE_TOPIC_TREE)
 
     published = json.loads(await asyncio.to_thread(PUBLISHED_PART_FIXTURE.read_text, encoding="utf-8"))
+    published_quota = await ledger.reserve(session, user_id=bob.id, document_id=done.id, parts=1)
     (part,) = await part_repository.add_many(
         done.id,
         [
@@ -238,6 +244,7 @@ async def _seed_documents(
                 topic_ids=list(published.get("topic_ids", [])),
                 source_markdown=str(published["source_markdown"]),
                 token_count=int(published["token_count"]),
+                quota_period_start=published_quota.period.start,
                 profile=dict(published["profile"]),
                 content=dict(published["content"]),
             )
@@ -250,6 +257,7 @@ async def _seed_documents(
     )
     if not transitioned:  # pragma: no cover - impossible on a fresh base
         raise RuntimeError("Seeded part failed to publish from the queued state")
+    await ledger.charge(session, part_id=part.id)
 
     await material_repository.create(user_id=alice.id, document_id=parsed.id, role=MaterialRole.OWNER)
     await material_repository.create(user_id=bob.id, document_id=done.id, role=MaterialRole.OWNER)
@@ -314,6 +322,7 @@ async def seed_dev(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     password: str,
+    ledger: QuotaLedger,
     fake_embeddings: bool = False,
 ) -> str:
     """Fill the database with demo data; safe to run repeatedly.
@@ -322,7 +331,7 @@ async def seed_dev(
     ``"seeded ..."`` with the counts after the inserts complete.
     """
     hasher = PasswordHash.recommended()
-    password_hash = hasher.hash(password)
+    password_hash = await asyncio.to_thread(hasher.hash, password)
 
     async with session_factory() as session, session.begin():
         user_repository = UserRepository(session)
@@ -331,7 +340,7 @@ async def seed_dev(
 
         primitives_count = await _seed_primitives(session)
         alice, bob = await _seed_users(session, password_hash)
-        doc_parsed, overview_parts = await _seed_documents(session, alice, bob)
+        doc_parsed, overview_parts = await _seed_documents(session, alice, bob, ledger)
         widgets_count = await _seed_widgets(session, overview_parts, fake_embeddings=fake_embeddings)
 
     summary = (

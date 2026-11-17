@@ -9,7 +9,6 @@ them.
 """
 
 from collections.abc import Callable
-from dataclasses import replace
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -94,18 +93,7 @@ class GenerationService:
             existing = await parts.list_by_document(document_id)
             next_index = max((part.index for part in existing), default=-1) + 1
             profile = answers.as_dict()
-            drafts = [
-                PartDraft(
-                    index=next_index + part.index,
-                    title=part.title,
-                    topic_ids=list(part.topic_ids),
-                    source_markdown=part.markdown,
-                    token_count=part.tokens,
-                    profile=profile,
-                )
-                for part in plan.parts
-            ]
-            if any(not draft.source_markdown.strip() for draft in drafts):
+            if any(not part.markdown.strip() for part in plan.parts):
                 raise DocumentNotReadyError(detail="Source text for selected topics is not available.")
             quota = await self._ledger.reserve(
                 session,
@@ -113,9 +101,19 @@ class GenerationService:
                 document_id=document_id,
                 parts=len(plan.parts),
             )
-            created = await parts.add_many(
-                document_id, [replace(draft, quota_period_start=quota.period.start) for draft in drafts]
-            )
+            drafts = [
+                PartDraft(
+                    index=next_index + part.index,
+                    title=part.title,
+                    topic_ids=list(part.topic_ids),
+                    source_markdown=part.markdown,
+                    token_count=part.tokens,
+                    quota_period_start=quota.period.start,
+                    profile=profile,
+                )
+                for part in plan.parts
+            ]
+            created = await parts.add_many(document_id, drafts)
             await documents.set_status(document_id, DocumentStatus.GENERATING)
             await self._users(session).save_last_answers(user_id, profile)
         for index, part in enumerate(created):

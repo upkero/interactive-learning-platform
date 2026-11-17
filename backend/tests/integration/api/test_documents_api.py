@@ -531,6 +531,7 @@ async def test_topics_tree_of_a_parsed_document(
                     topic_ids=["topic-adaptive", "topic-chunking"],
                     source_markdown="part one",
                     token_count=142,
+                    quota_period_start=None,
                     profile={},
                 ),
                 PartDraft(
@@ -539,6 +540,7 @@ async def test_topics_tree_of_a_parsed_document(
                     topic_ids=["topic-chunking"],
                     source_markdown="part two",
                     token_count=178,
+                    quota_period_start=None,
                     profile={},
                 ),
             ],
@@ -931,6 +933,7 @@ async def _make_parsed(
                         topic_ids=["topic-adaptive", "topic-chunking"],
                         source_markdown="part one",
                         token_count=142,
+                        quota_period_start=None,
                         profile={},
                     ),
                     PartDraft(
@@ -939,6 +942,7 @@ async def _make_parsed(
                         topic_ids=["topic-chunking", "topic-tree"],
                         source_markdown="part two",
                         token_count=178,
+                        quota_period_start=None,
                         profile={},
                     ),
                     PartDraft(
@@ -947,6 +951,7 @@ async def _make_parsed(
                         topic_ids=["topic-quota"],
                         source_markdown="part three",
                         token_count=96,
+                        quota_period_start=None,
                         profile={},
                     ),
                 ],

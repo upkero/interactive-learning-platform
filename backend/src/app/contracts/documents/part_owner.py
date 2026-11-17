@@ -9,4 +9,4 @@ from uuid import UUID
 class PartOwner:
     user_id: UUID
     document_id: UUID
-    quota_period_start: date | None = None
+    quota_period_start: date | None

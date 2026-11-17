@@ -65,7 +65,7 @@ async def _create_part(session: AsyncSession, document_id: UUID) -> PartRecord:
     repository = DocumentPartRepository(session)
     (part,) = await repository.add_many(
         document_id,
-        [PartDraft(index=0, title="P", topic_ids=[], source_markdown="m", token_count=1)],
+        [PartDraft(index=0, title="P", topic_ids=[], source_markdown="m", token_count=1, quota_period_start=None)],
     )
     return part
 
@@ -146,8 +146,12 @@ async def test_document_part_repository_roundtrip(session_factory: SessionFactor
         created = await repository.add_many(
             document_id,
             [
-                PartDraft(index=1, title="B", topic_ids=["t"], source_markdown="b", token_count=2),
-                PartDraft(index=0, title="A", topic_ids=[], source_markdown="a", token_count=1),
+                PartDraft(
+                    index=1, title="B", topic_ids=["t"], source_markdown="b", token_count=2, quota_period_start=None
+                ),
+                PartDraft(
+                    index=0, title="A", topic_ids=[], source_markdown="a", token_count=1, quota_period_start=None
+                ),
             ],
         )
         listed = await repository.list_by_document(document_id)

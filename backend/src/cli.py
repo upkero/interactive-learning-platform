@@ -14,6 +14,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from src.app.bootstrap.container import ApplicationContainer
 from src.app.core.settings.app import get_app_settings
 from src.app.core.settings.seed import get_seed_settings
 from src.app.db.session import build_engine, build_session_factory
@@ -25,12 +26,16 @@ async def _run_seed_dev(fake_embeddings: bool) -> int:
     """Open a dedicated engine for the CLI process and seed demo data."""
     settings = get_app_settings()
     engine = build_engine(str(settings.db_url), null_pool=True)
+    container = ApplicationContainer()
     try:
         session_factory = build_session_factory(engine)
         password = get_seed_settings().seed_password
-        outcome = await seed_dev(session_factory, password=password, fake_embeddings=fake_embeddings)
+        outcome = await seed_dev(
+            session_factory, password=password, ledger=container.quota_ledger, fake_embeddings=fake_embeddings
+        )
         print(f"seed-dev: {outcome}")
     finally:
+        await container.close()
         await engine.dispose()
     return 0
 

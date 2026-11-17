@@ -1,25 +1,30 @@
 # ADR-0012: Generation quota accounting
 
-- Статус: Принято
-- Дата: 2026-11-17
-- Автор: команда backend
-- Затрагивает: 1.6, 1.9, 2.7
+- Status: Accepted
+- Date: 2026-11-17
+- Author: ExoLiter
+- Affects: Stories 1.6, 1.9, 2.7
 
-## Контекст
+## Context
 
-Генерации ограничены по периодам, и одновременные запросы не должны перерасходовать лимит.
-Один документ может запускаться несколько раз в разные периоды.
+Generation quotas are scoped to billing periods. Concurrent requests must not
+overspend the limit. A document can have multiple generation batches in different
+periods. Demo parts must obey the same accounting rules as generated parts.
 
-## Варианты
+## Options
 
-1. Определять период части по последнему резерву документа или времени создания — неоднозначно при нескольких запусках.
-2. Сохранять период резерва непосредственно на каждой части — явная связь без зависимости от порядка транзакций.
+1. Infer a part's period from the document's latest reservation or creation time:
+   ambiguous when multiple batches exist.
+2. Store the reservation period on each part: an explicit association independent
+   of transaction order, timestamps and document statuses.
 
-## Решение
+## Decision
 
-Выбран второй вариант. `DocumentPartRepository.part_owner` возвращает владельца и период части.
-Миграция заполняет существующие части последним резервом документа: для старых данных с несколькими
-запусками в разные периоды истинную связь восстановить невозможно.
+Choose the second option. `DocumentPartRepository.part_owner` returns the owner
+and reservation period; part ownership belongs in the parts repository, not the
+ledger repository. `PartDraft` and `PartOwner` require an explicit period or `None`.
+The migration backfills existing parts from the document's latest reservation;
+the original association cannot be recovered for historical multi-batch data.
 
 - One generated part consumes one generation. The caller reserves all parts
   in the same transaction that creates them; publication records a zero-delta
@@ -36,8 +41,12 @@
 - Totals include exactly one billing period, not a range:
   `test_sum_delta_excludes_other_periods` in the same file.
 - `FOR UPDATE` in reserve protects against overspending; the partial unique
-  index and SAVEPOINT make duplicate part operations safe. See the tests in
-  `backend/tests/integration/services/quota/test_quota_races.py` and
+  index and SAVEPOINT make duplicate part operations safe. In
+  `backend/tests/integration/services/quota/test_quota_races.py`,
+  `test_parallel_reserves_never_overspend` checks competing reservations and
+  `test_reserve_waits_for_uncommitted_refund` checks that reserve waits until
+  a concurrent refund commits. Duplicate operations are covered by
+  `test_parallel_refunds_are_recorded_once`, `test_worker_and_watchdog_refund_only_once` and
   `test_duplicate_refund_preserves_outer_transaction` in
   `backend/tests/integration/services/quota/test_quota_ledger_postgres.py`.
 - Planning and reading do not reserve anything: see
@@ -47,6 +56,12 @@
 - Recovery retries do not spend again: see `test_watchdog_retry_does_not_spend_again`.
 - Sharing and receiving material do not spend quota: see
   `test_receiving_shared_material_does_not_spend_quota`.
+- Demo seeding reserves all parts in the transaction that creates them and
+  records a zero-delta charge for the published part. Repeated seeding does not
+  reserve again. See `test_seed_dev_is_idempotent`,
+  `test_seeded_parts_can_publish_and_watchdog_can_refund` and
+  `test_seed_quota_failure_rolls_back_all_demo_data` in
+  `backend/tests/integration/seed/test_seed_idempotency.py`.
 - Upload, parsing, topic browsing, quizzes, reports, and finishing pending
   widgets do not spend generations. Parsing and pending-widget finishing are
   currently explicit placeholders, not working implementations.
@@ -54,9 +69,12 @@
   Upload, document/topic browsing, quiz attempts and reports are checked by
   `test_upload_browse_quiz_and_report_do_not_spend`.
 
-## Последствия
+## Consequences
 
-Для старых частей без резерва период отсутствует и учёт отклоняется. Тестирование
-реального разбора относится к 1.9, pending и fallback-виджетов — к 2.7.
+Legacy parts without a reservation retain a null period; accounting for them is
+rejected instead of crediting an unrelated period. New demo parts have reservations,
+so publication and terminal recovery can account for them normally. A configured
+limit below the demo's required parts rejects the seed and rolls back all demo data.
+Real parsing must be tested in Story 1.9, and pending/fallback widgets in Story 2.7.
 
 Unqualified test names above refer to `backend/tests/integration/services/quota/test_quota_rules.py`.

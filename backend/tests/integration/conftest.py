@@ -9,7 +9,6 @@ whole integration suite is skipped, so local unit-only runs stay green.
 import asyncio
 import os
 from collections.abc import AsyncIterator, Iterator
-from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
@@ -22,10 +21,12 @@ from sqlalchemy.pool import NullPool
 
 from src.app.contracts.documents.part_draft import PartDraft
 from src.app.contracts.documents.statuses import SourceType
+from src.app.core.clock import SystemClock
 from src.app.core.settings.app import get_app_settings
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
 from src.app.repositories.user_repository import UserRepository
+from src.app.services.quota.period import current_period
 
 BACKEND_DIR: Path = Path(__file__).resolve().parents[2]
 
@@ -114,7 +115,7 @@ async def part_ids(session_factory: async_sessionmaker[AsyncSession]) -> tuple[U
                     topic_ids=[],
                     source_markdown="# part",
                     token_count=1,
-                    quota_period_start=datetime.now(UTC).date().replace(day=1),
+                    quota_period_start=current_period(SystemClock().today(), None).start,
                 )
             ],
         )

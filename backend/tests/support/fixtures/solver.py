@@ -56,11 +56,6 @@ async def build_recovery(status: PartStatus, attempts: int) -> RecoveryFixture:
     updated = await documents.set_status(document.id, DocumentStatus.GENERATING)
     assert updated is not None
     document = updated
-    (part,) = await parts.add_many(
-        document.id, [PartDraft(index=0, title="part", topic_ids=[], source_markdown="x", token_count=1)]
-    )
-    part = replace(part, status=status, attempts=attempts)
-    parts.store_record(part)
     quota = QuotaLedger(
         users_factory=lambda _: users,
         ledger_factory=lambda _: entries,
@@ -68,6 +63,21 @@ async def build_recovery(status: PartStatus, attempts: int) -> RecoveryFixture:
         clock=SystemClock(),
     )
     state = await quota.reserve(cast(AsyncSession, session), user_id=user.id, document_id=document.id, parts=1)
+    (part,) = await parts.add_many(
+        document.id,
+        [
+            PartDraft(
+                index=0,
+                title="part",
+                topic_ids=[],
+                source_markdown="x",
+                token_count=1,
+                quota_period_start=state.period.start,
+            )
+        ],
+    )
+    part = replace(part, status=status, attempts=attempts)
+    parts.store_record(part)
     parts.owners[part.id] = PartOwner(user_id=user.id, document_id=document.id, quota_period_start=state.period.start)
     dispatcher = FakeTaskDispatcher()
     recovery = PartRecovery(

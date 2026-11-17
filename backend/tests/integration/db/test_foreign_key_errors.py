@@ -55,7 +55,11 @@ async def test_part_fk_for_missing_document_is_generic(
         with pytest.raises(DocumentsIntegrityError) as exc_info:
             await DocumentPartRepository(session).add_many(
                 uuid4(),
-                [PartDraft(index=0, title="T", topic_ids=[], source_markdown="m", token_count=1)],
+                [
+                    PartDraft(
+                        index=0, title="T", topic_ids=[], source_markdown="m", token_count=1, quota_period_start=None
+                    )
+                ],
             )
         assert not isinstance(exc_info.value, DocumentPartDuplicateError)
 

@@ -10,11 +10,13 @@ from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.documents.part_draft import PartDraft
 from src.app.contracts.documents.statuses import DocumentStatus, PartStatus
 from src.app.contracts.quota import LedgerOp
+from src.app.core.clock import SystemClock
 from src.app.models.document import Document
 from src.app.models.document_part import DocumentPart
 from src.app.models.generation_ledger import GenerationLedger
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
+from src.app.services.quota.period import current_period
 from src.app.services.solver.pipeline.part_recovery import PartRecovery
 from src.app.services.solver.pipeline.stub_pipeline import StubPipeline
 from src.app.services.solver.pipeline.watchdog import Watchdog
@@ -42,7 +44,7 @@ async def test_concurrent_watchdog_ticks_refund_only_once(
                     topic_ids=[],
                     source_markdown="x",
                     token_count=1,
-                    quota_period_start=datetime.now(UTC).date().replace(day=1),
+                    quota_period_start=current_period(SystemClock().today(), None).start,
                 )
             ],
         )
@@ -134,7 +136,12 @@ async def test_poison_part_does_not_block_other_parts(
     async with session_factory() as session, session.begin():
         parts = DocumentPartRepository(session)
         (poison,) = await parts.add_many(
-            document_id, [PartDraft(index=1, title="poison", topic_ids=[], source_markdown="x", token_count=1)]
+            document_id,
+            [
+                PartDraft(
+                    index=1, title="poison", topic_ids=[], source_markdown="x", token_count=1, quota_period_start=None
+                )
+            ],
         )
         for part_id in (first_id, poison.id):
             await parts.transition(part_id, frozenset({PartStatus.QUEUED}), PartStatus.MAIN_PASS, bump_attempts=True)

@@ -13,10 +13,7 @@ from src.app.contracts.quota import LedgerOp
 from src.app.exceptions.quota import QuotaExceededError
 from src.app.models.generation_ledger import GenerationLedger
 from src.app.repositories.document_part_repository import DocumentPartRepository
-from src.app.repositories.document_repository import DocumentRepository
 from src.app.services.solver.pipeline.part_recovery import PartRecovery
-from tests.support.fakes.services.progress_notifier import FakeProgressNotifier
-from tests.support.fakes.services.task_dispatcher import FakeTaskDispatcher
 
 pytestmark = pytest.mark.integration
 
@@ -48,6 +45,7 @@ async def test_worker_and_watchdog_refund_only_once(
     session_factory: async_sessionmaker[AsyncSession],
     part_ids: tuple[UUID, UUID, UUID],
     container: ApplicationContainer,
+    recovery: PartRecovery,
 ) -> None:
     user_id, document_id, part_id = part_ids
     async with session_factory() as session, session.begin():
@@ -56,14 +54,6 @@ async def test_worker_and_watchdog_refund_only_once(
         await parts.transition(part_id, frozenset({PartStatus.QUEUED}), PartStatus.MAIN_PASS, bump_attempts=True)
         await parts.transition(part_id, frozenset({PartStatus.MAIN_PASS}), PartStatus.QUEUED)
         await parts.transition(part_id, frozenset({PartStatus.QUEUED}), PartStatus.MAIN_PASS, bump_attempts=True)
-    recovery = PartRecovery(
-        session_factory=session_factory,
-        parts=DocumentPartRepository,
-        documents=DocumentRepository,
-        ledger=container.quota_ledger,
-        dispatcher=FakeTaskDispatcher(),
-        notifier=FakeProgressNotifier(),
-    )
     await asyncio.gather(recovery.fail(part_id, reason="worker"), recovery.retry_or_fail(part_id, reason="watchdog"))
     async with session_factory() as session:
         assert (await container.quota_ledger.available(session, user_id=user_id)).available == 20
@@ -100,7 +90,7 @@ async def test_parallel_refunds_are_recorded_once(
         )
 
 
-async def test_reserve_racing_refund_never_overspends(
+async def test_reserve_waits_for_uncommitted_refund(
     session_factory: async_sessionmaker[AsyncSession],
     part_ids: tuple[UUID, UUID, UUID],
     container: ApplicationContainer,

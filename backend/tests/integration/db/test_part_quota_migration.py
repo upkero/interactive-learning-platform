@@ -40,7 +40,12 @@ async def test_part_quota_migration_backfills_latest_reservation_and_keeps_unres
             checksum="d" * 64,
         )
         (unreserved,) = await DocumentPartRepository(session).add_many(
-            document.id, [PartDraft(index=0, title="Seed", topic_ids=[], source_markdown="x", token_count=1)]
+            document.id,
+            [
+                PartDraft(
+                    index=0, title="Seed", topic_ids=[], source_markdown="x", token_count=1, quota_period_start=None
+                )
+            ],
         )
     config = Config(str(BACKEND_DIR / "alembic.ini"))
     config.set_main_option("script_location", str(BACKEND_DIR / "migrations"))

@@ -50,7 +50,12 @@ async def test_three_concurrent_reports_exclude_widget(session_factory: async_se
             )
         part = (
             await DocumentPartRepository(session).add_many(
-                document.id, [PartDraft(index=0, title="T", topic_ids=[], source_markdown="T", token_count=1)]
+                document.id,
+                [
+                    PartDraft(
+                        index=0, title="T", topic_ids=[], source_markdown="T", token_count=1, quota_period_start=None
+                    )
+                ],
             )
         )[0]
         widget = await WidgetRepository(session).create(kind=WidgetKind.CODE, source_tsx="x", compiled_js="x")

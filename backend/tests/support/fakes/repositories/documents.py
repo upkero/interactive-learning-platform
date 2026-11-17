@@ -171,6 +171,7 @@ class FakeDocumentPartRepository(DocumentPartRepositoryProtocol):
 
     def __init__(self) -> None:
         self._parts: dict[UUID, PartRecord] = {}
+        self.drafts: dict[UUID, PartDraft] = {}
         self.owners: dict[UUID, PartOwner] = {}
 
     async def get(self, part_id: UUID) -> PartRecord | None:
@@ -224,6 +225,7 @@ class FakeDocumentPartRepository(DocumentPartRepositoryProtocol):
                 published_at=None,
             )
             self._parts[record.id] = record
+            self.drafts[record.id] = draft
             created.append(record)
         return created
 
