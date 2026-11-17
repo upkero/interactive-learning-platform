@@ -31,17 +31,21 @@ async def test_success_needs_single_call() -> None:
 
 
 async def test_schema_error_triggers_exactly_one_retry() -> None:
-    fake = FakeLLMClient(structured=[LLMSchemaError("bad json"), _Draft(count=2)])
+    broken = '{"count": '
+    fake = FakeLLMClient(structured=[LLMSchemaError("bad json", raw_output=broken), _Draft(count=2)])
 
     result = await call_structured(fake, _request(), _Draft)
 
     assert result == _Draft(count=2)
     assert len(fake.requests) == 2
 
-    # The retry request repeats the original messages and appends the
-    # English retry hint as one more user message.
-    assert fake.requests[1].messages[:-1] == _request().messages
-    hint = fake.requests[1].messages[-1].content
+    retry_messages = fake.requests[1].messages
+    # The model sees its own broken reply as the last assistant message and
+    # the correction hint as one more user message.
+    assert retry_messages[:-2] == _request().messages
+    assert retry_messages[-2].role == "assistant"
+    assert retry_messages[-2].content == broken
+    hint = retry_messages[-1].content
     assert isinstance(hint, str)
     assert SCHEMA_RETRY_PROMPT.format(error="bad json") in hint
 

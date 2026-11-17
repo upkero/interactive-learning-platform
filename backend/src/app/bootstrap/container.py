@@ -102,7 +102,7 @@ class ApplicationContainer:
             documents=DocumentRepository,
             recovery=self.part_recovery,
             dispatcher=self.task_dispatcher,
-            metrics=PrometheusMetricsCollector(),
+            metrics=self.metrics_collector,
         )
 
     @cached_property

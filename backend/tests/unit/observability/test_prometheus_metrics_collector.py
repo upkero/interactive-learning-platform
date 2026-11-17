@@ -63,3 +63,42 @@ def test_histograms_and_gauges_are_supported() -> None:
     assert REGISTRY.get_sample_value(f"{histogram}_count") == 1
     assert REGISTRY.get_sample_value(f"{histogram}_sum") == 2.5
     assert REGISTRY.get_sample_value(gauge) == 3
+
+
+def test_histogram_fixes_labels_and_buckets_on_first_call() -> None:
+    name = unique("histogram")
+    collector = PrometheusMetricsCollector()
+    collector.observe_histogram(name, 1.5, labels={"purpose": "main_pass"}, buckets=(1.0, 5.0))
+    collector.observe_histogram(name, 7.0, labels={"purpose": "quiz_gen"})
+    assert REGISTRY.get_sample_value(f"{name}_count", {"purpose": "main_pass"}) == 1
+    assert REGISTRY.get_sample_value(f"{name}_count", {"purpose": "quiz_gen"}) == 1
+    # Labeled samples carry the label set, so _sum is queried per label.
+    assert REGISTRY.get_sample_value(f"{name}_sum", {"purpose": "main_pass"}) == 1.5
+    assert REGISTRY.get_sample_value(f"{name}_sum", {"purpose": "quiz_gen"}) == 7.0
+    # 7.0 exceeds the fixed buckets, so it lands in +Inf for main_pass and
+    # quiz_gen alike (le=5.0 keeps only the first call's 1.5).
+    assert REGISTRY.get_sample_value(f"{name}_bucket", {"purpose": "main_pass", "le": "5.0"}) == 1
+
+
+def test_histogram_with_different_buckets_logs_warning_and_keeps_the_original(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    name = unique("histogram")
+    collector = PrometheusMetricsCollector()
+    collector.observe_histogram(name, 1.0, buckets=(1.0, 5.0))
+    with caplog.at_level("WARNING"):
+        collector.observe_histogram(name, 2.0, buckets=(0.5, 10.0))
+    assert [record.message for record in caplog.records] == ["metrics.buckets_mismatch"]
+    # The observation still lands in the histogram created by the first call.
+    assert REGISTRY.get_sample_value(f"{name}_count") == 2
+    assert REGISTRY.get_sample_value(f"{name}_sum") == 3.0
+
+
+def test_histogram_unexpected_labels_are_dropped_with_warning(caplog: pytest.LogCaptureFixture) -> None:
+    name = unique("histogram")
+    collector = PrometheusMetricsCollector()
+    collector.observe_histogram(name, 1.0)
+    with caplog.at_level("WARNING"):
+        collector.observe_histogram(name, 2.0, labels={"purpose": "main_pass"})
+    assert [record.message for record in caplog.records] == ["metrics.unexpected_labels"]
+    assert REGISTRY.get_sample_value(f"{name}_count") == 2

@@ -31,7 +31,14 @@ from src.app.contracts.llm.llm_response import LLMResponse
 from src.app.contracts.llm.structured_response import StructuredResponse
 from src.app.contracts.llm.token_usage import TokenUsage
 from src.app.core.settings.llm import LLMSettings
-from src.app.exceptions.llm import LLMGenerationError, LLMInputError, LLMRateLimitError, LLMSchemaError, LLMTimeoutError
+from src.app.exceptions.llm import (
+    LLMGenerationError,
+    LLMInputError,
+    LLMOutputTruncatedError,
+    LLMRateLimitError,
+    LLMSchemaError,
+    LLMTimeoutError,
+)
 from src.app.interfaces.llm.llm_client import LLMClient
 
 
@@ -52,14 +59,6 @@ class OpenAICompatibleLLMClient(LLMClient):
     @property
     def provider_name(self) -> str:
         return self._settings.provider
-
-    @property
-    def price_prompt_per_1m(self) -> float | None:
-        return self._settings.price_prompt_per_1m
-
-    @property
-    def price_completion_per_1m(self) -> float | None:
-        return self._settings.price_completion_per_1m
 
     async def complete(self, messages: Sequence[LLMMessage]) -> LLMResponse:
         if not messages:
@@ -115,6 +114,13 @@ class OpenAICompatibleLLMClient(LLMClient):
             raise LLMGenerationError("LLM provider request failed.") from exc
 
         choice = self._first_choice(completion)
+        # Same stop semantics as ClaudeClient: refusal is a generation
+        # failure, a length-cut reply is a deterministic truncation (a retry
+        # with the same max_tokens would fail the same way).
+        if choice.message.refusal:
+            raise LLMGenerationError(f"Model refused the request: {choice.message.refusal}")
+        if choice.finish_reason == "length":
+            raise LLMOutputTruncatedError("OpenAI-compatible provider cut the output off (finish_reason=length).")
         content = choice.message.content
         if content is None:
             raise LLMSchemaError("Model returned no parsed output.")
@@ -122,7 +128,7 @@ class OpenAICompatibleLLMClient(LLMClient):
         try:
             value = schema.model_validate_json(content)
         except ValidationError as exc:
-            raise LLMSchemaError(f"Response failed schema validation: {exc}") from exc
+            raise LLMSchemaError(str(exc), raw_output=content) from exc
 
         return StructuredResponse(value=value, usage=self._token_usage(completion.usage))
 
@@ -156,18 +162,12 @@ class OpenAICompatibleLLMClient(LLMClient):
         )
 
     def _completion_params(self, messages: Sequence[LLMMessage]) -> CompletionCreateParams:
+        # Plain complete is not used by the resolver; sampling knobs live on
+        # the request (complete_structured), the provider defaults apply here.
         params: CompletionCreateParams = {
             "model": self._settings.model,
             "messages": [self._message_param(message) for message in messages],
         }
-        if self._settings.temperature is not None:
-            params["temperature"] = self._settings.temperature
-        if self._settings.max_tokens is not None:
-            params["max_tokens"] = self._settings.max_tokens
-        if self._settings.reasoning_effort is not None:
-            # ReasoningEffort in settings mirrors the SDK's own literal, so
-            # the value passes through without a cast.
-            params["reasoning_effort"] = self._settings.reasoning_effort
         return params
 
     @staticmethod

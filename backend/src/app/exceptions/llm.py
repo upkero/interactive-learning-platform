@@ -59,8 +59,17 @@ class LLMRateLimitError(LLMError):
 
 
 class LLMSchemaError(LLMError):
-    """Raised when the model response does not match the expected schema."""
+    """Raised when the model response does not match the expected schema.
+
+    ``raw_output`` carries the unvalidated provider reply: call_structured
+    feeds it back as an assistant message so the retry shows the model its
+    own broken output next to the correction hint.
+    """
 
     status_code = 502
     error_code = "llm_schema_error"
     default_detail = "LLM response does not match the expected schema."
+
+    def __init__(self, detail: str | None = None, *, raw_output: str | None = None) -> None:
+        super().__init__(detail)
+        self.raw_output = raw_output

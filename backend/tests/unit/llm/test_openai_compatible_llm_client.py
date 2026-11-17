@@ -23,6 +23,7 @@ from src.app.contracts.llm.token_usage import TokenUsage
 from src.app.core.settings.llm import LLMSettings
 from src.app.exceptions.llm import (
     LLMGenerationError,
+    LLMOutputTruncatedError,
     LLMRateLimitError,
     LLMSchemaError,
     LLMTimeoutError,
@@ -67,9 +68,10 @@ def _replaying(response: httpx2.Response, captured: list[httpx2.Request]) -> Any
 
 def _completion_response(
     *,
-    content: str = '{"title": "ok"}',
+    content: str | None = '{"title": "ok"}',
     usage: dict[str, Any] | None = None,
     model: str = "llama3.2",
+    finish_reason: str = "stop",
 ) -> dict[str, Any]:
     return {
         "id": "chatcmpl-1",
@@ -80,7 +82,7 @@ def _completion_response(
             {
                 "index": 0,
                 "message": {"role": "assistant", "content": content},
-                "finish_reason": "stop",
+                "finish_reason": finish_reason,
             }
         ],
         "usage": usage
@@ -204,7 +206,29 @@ async def test_structured_timeout_is_mapped() -> None:
         await client.complete_structured(_request(), _Draft)
 
 
-async def test_plain_complete_sends_settings_and_returns_usage_mapping() -> None:
+async def test_structured_length_cut_raises_truncated_error() -> None:
+    # Same stop semantics as ClaudeClient: finish_reason=length is a
+    # deterministic truncation, not a schema error (a retry with the same
+    # max_tokens would fail the same way).
+    captured: list[httpx2.Request] = []
+    body = _completion_response(content='{"title": "unclosed', finish_reason="length")
+    client, _ = _client(_replaying(httpx2.Response(200, json=body), captured))
+
+    with pytest.raises(LLMOutputTruncatedError, match="length"):
+        await client.complete_structured(_request(), _Draft)
+
+
+async def test_structured_refusal_raises_generation_error() -> None:
+    captured: list[httpx2.Request] = []
+    body = _completion_response(content=None)
+    body["choices"][0]["message"]["refusal"] = "I cannot help with that."
+    client, _ = _client(_replaying(httpx2.Response(200, json=body), captured))
+
+    with pytest.raises(LLMGenerationError):
+        await client.complete_structured(_request(), _Draft)
+
+
+async def test_plain_complete_returns_usage_mapping() -> None:
     captured: list[httpx2.Request] = []
     usage = {"prompt_tokens": 3, "completion_tokens": 5, "total_tokens": 8}
     http_client = httpx2.AsyncClient(
@@ -213,7 +237,7 @@ async def test_plain_complete_sends_settings_and_returns_usage_mapping() -> None
         )
     )
     plain_client = OpenAICompatibleLLMClient(
-        settings=_settings(max_tokens=128, temperature=0.5),
+        settings=_settings(),
         client=AsyncOpenAI(api_key="test-key", base_url=_BASE_URL, max_retries=0, http_client=http_client),
     )
 
@@ -231,8 +255,9 @@ async def test_plain_complete_sends_settings_and_returns_usage_mapping() -> None
     )
     assert response.metadata == {"id": "chatcmpl-1", "created": 1700000000}
     body = json.loads(captured[0].content)
-    assert body["temperature"] == 0.5
-    assert body["max_tokens"] == 128
+    # Plain complete sends no sampling knobs: provider defaults apply.
+    assert "temperature" not in body
+    assert "max_tokens" not in body
 
 
 async def test_ping_true_on_200() -> None:

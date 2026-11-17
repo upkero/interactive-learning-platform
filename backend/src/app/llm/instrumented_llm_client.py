@@ -4,10 +4,13 @@ Ported from faq-assistant and taught two Grasp-specific things: the purpose
 tag (every resolver request has a step name) and the four usage counters
 from TokenUsage (input / output / cache read / cache creation).
 
-Metrics with the ``llm.complete`` prefix: requests (counter, labels
-model/provider/outcome/purpose) and duration/usage histograms (unlabeled —
-the 1.8 MetricsCollector facade keeps histograms label-free; outcome and
-purpose live in the structured log line). One INFO log line per call.
+Metrics with the ``llm.complete`` prefix: requests (counter) and
+duration/usage histograms. Labels on every metric: model, provider,
+outcome (success | invalid_input | schema_error | rate_limit_error |
+output_truncated | timeout | generation_error | unexpected_error) and
+purpose for structured calls. Histograms carry explicit buckets sized for
+their real ranges (durations up to 180 s, token counts up to 50000). One
+INFO log line per call.
 
 Expected errors are mapped to log level and outcome via a single table
 (``_ERROR_HANDLERS``); every failure is one log line without a traceback —
@@ -51,6 +54,13 @@ _USAGE_FIELDS = (
 _UNSET_PURPOSE = "unspecified"
 
 _METRIC_PREFIX = "llm.complete"
+
+# Durations of LLM calls: most calls land between 2 and 120 s, 180 s covers
+# slow reasoning models without inflating the series.
+_LLM_DURATION_BUCKETS = (1.0, 2.0, 5.0, 10.0, 20.0, 30.0, 60.0, 90.0, 120.0, 180.0)
+# Token counts (per call, one histogram per field): prompts with cached
+# context reach tens of thousands of tokens.
+_TOKENS_BUCKETS = (100.0, 250.0, 500.0, 1000.0, 2500.0, 5000.0, 10000.0, 25000.0, 50000.0)
 
 # Exception type -> (outcome tag, log level). Order matters: Exception is
 # the catch-all for unexpected errors, LLMTimeoutError must precede
@@ -208,13 +218,21 @@ class InstrumentedLLMClient(LLMClient):
     def _observe_duration(self, *, started_at: float, outcome: str, purpose: str) -> float:
         duration_seconds = perf_counter() - started_at
         if self._metrics is not None:
-            # The 1.8 facade keeps histograms label-free: outcome/purpose go
-            # to the counter above and the structured log line.
-            self._metrics.observe_histogram(f"{_METRIC_PREFIX}.duration_seconds", duration_seconds)
+            self._metrics.observe_histogram(
+                f"{_METRIC_PREFIX}.duration_seconds",
+                duration_seconds,
+                labels=self._metric_tags(outcome=outcome, purpose=purpose),
+                buckets=_LLM_DURATION_BUCKETS,
+            )
         return duration_seconds
 
     def _record_usage(self, usage: TokenUsage | None, *, purpose: str = _UNSET_PURPOSE) -> None:
         if self._metrics is None or usage is None:
             return
         for field in _USAGE_FIELDS:
-            self._metrics.observe_histogram(f"{_METRIC_PREFIX}.usage.{field}", float(getattr(usage, field)))
+            self._metrics.observe_histogram(
+                f"{_METRIC_PREFIX}.usage.{field}",
+                float(getattr(usage, field)),
+                labels=self._metric_tags(outcome="success", purpose=purpose),
+                buckets=_TOKENS_BUCKETS,
+            )

@@ -33,14 +33,18 @@ async def call_structured[T: BaseModel](
         except LLMSchemaError as exc:
             if attempt == retries:
                 raise
+            # Show the model its own broken reply as the last assistant
+            # message (when the client reported it), then the correction
+            # hint as a user message.
+            follow_up: tuple[LLMMessage, ...] = ()
+            if exc.raw_output is not None:
+                follow_up = (LLMMessage(role="assistant", content=exc.raw_output),)
             attempt_request = replace(
                 request,
                 messages=(
                     *request.messages,
-                    LLMMessage(
-                        role="user",
-                        content=SCHEMA_RETRY_PROMPT.format(error=exc),
-                    ),
+                    *follow_up,
+                    LLMMessage(role="user", content=SCHEMA_RETRY_PROMPT.format(error=exc)),
                 ),
             )
     raise AssertionError("unreachable")

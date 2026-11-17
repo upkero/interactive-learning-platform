@@ -28,10 +28,8 @@ def _fallback() -> LLMSettings:
         provider="anthropic",
         api_key=SecretStr("sk-main"),
         model="main-model",
-        temperature=0.2,
         timeout_seconds=12.0,
         max_retries=3,
-        max_tokens=100,
     )
 
 
@@ -72,7 +70,6 @@ def test_cheap_resolve_overrides_only_set_fields() -> None:
     assert resolved.provider == "anthropic"
     assert resolved.api_key == SecretStr("sk-main")
     assert resolved.max_retries == 3
-    assert resolved.temperature == 0.2
 
 
 def test_cheap_resolve_full_override_with_provider() -> None:
@@ -81,8 +78,6 @@ def test_cheap_resolve_full_override_with_provider() -> None:
         provider="openai_compatible",
         api_key=SecretStr("sk-cheap"),
         base_url="http://local/v1",
-        temperature=0.5,
-        max_tokens=77,
         max_retries=0,
     )
     resolved = cheap.resolve(_fallback())
@@ -90,8 +85,6 @@ def test_cheap_resolve_full_override_with_provider() -> None:
     assert resolved.provider == "openai_compatible"
     assert resolved.api_key == SecretStr("sk-cheap")
     assert resolved.base_url == "http://local/v1"
-    assert resolved.temperature == 0.5
-    assert resolved.max_tokens == 77
     assert resolved.max_retries == 0
     # Non-overridden fields stay from the main profile
     assert resolved.model == "main-model"

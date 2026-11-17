@@ -17,6 +17,8 @@ class RecordedCounter:
 class RecordedHistogram:
     name: str
     value: float
+    labels: dict[str, str]
+    buckets: tuple[float, ...] | None
 
 
 @dataclass(frozen=True)
@@ -39,8 +41,15 @@ class RecordingMetricsCollector(NoopMetricsCollector):
         if self.on_increment is not None:
             self.on_increment()
 
-    def observe_histogram(self, name: str, value: float) -> None:
-        self.histograms.append(RecordedHistogram(name=name, value=value))
+    def observe_histogram(
+        self,
+        name: str,
+        value: float,
+        *,
+        labels: Mapping[str, str] | None = None,
+        buckets: tuple[float, ...] | None = None,
+    ) -> None:
+        self.histograms.append(RecordedHistogram(name=name, value=value, labels=dict(labels or {}), buckets=buckets))
 
     def set_gauge(self, name: str, value: float) -> None:
         self.gauges.append(RecordedGauge(name=name, value=value))

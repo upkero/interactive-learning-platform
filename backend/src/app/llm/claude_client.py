@@ -71,7 +71,11 @@ class ClaudeClient(LLMClient):
         try:
             response = await self._client.messages.create(
                 model=self._settings.model,
-                max_tokens=self._settings.max_tokens or 4096,
+                # Plain complete is not used by the resolver; the 4096 token
+                # default matches LLMRequest.max_tokens, provider-side
+                # sampling defaults apply (see the settings note: the task
+                # defines limits per request, not per profile).
+                max_tokens=4096,
                 messages=[self._message(m) for m in messages],
             )
         except anthropic.RateLimitError as exc:
@@ -128,7 +132,7 @@ class ClaudeClient(LLMClient):
         try:
             value = schema.model_validate_json(text)
         except ValidationError as exc:
-            raise LLMSchemaError(f"Response failed schema validation: {exc}") from exc
+            raise LLMSchemaError(str(exc), raw_output=text) from exc
 
         return StructuredResponse(value=value, usage=self._usage(response.usage))
 

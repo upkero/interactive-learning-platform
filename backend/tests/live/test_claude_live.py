@@ -60,42 +60,48 @@ def _client() -> ClaudeClient:
 
 def _cached_context() -> SystemBlock:
     """A system block comfortably above the 512-token cacheable minimum."""
-    rand_num = uuid.uuid4().hex
+    cache_salt = uuid.uuid4().hex
     return SystemBlock(
-        f"{rand_num} You are a careful technical writer. " * 40,
+        f"{cache_salt} You are a careful technical writer. " * 40,
         cache=True,
     )
 
 
 async def test_call_structured_returns_page_draft() -> None:
     client = _client()
-    request = LLMRequest(
-        purpose="main_pass",
-        system=(_cached_context(),),
-        messages=(LLMMessage(role="user", content="Draft a page about photosynthesis: title and summary."),),
-    )
+    try:
+        request = LLMRequest(
+            purpose="main_pass",
+            system=(_cached_context(),),
+            messages=(LLMMessage(role="user", content="Draft a page about photosynthesis: title and summary."),),
+        )
 
-    draft = await call_structured(client, request, PageDraft)
+        draft = await call_structured(client, request, PageDraft)
 
-    assert isinstance(draft, PageDraft)
-    assert draft.title.strip()
-    assert draft.summary.strip()
+        assert isinstance(draft, PageDraft)
+        assert draft.title.strip()
+        assert draft.summary.strip()
+    finally:
+        await client.close()
 
 
 async def test_prompt_caching_fires_on_second_call() -> None:
     client = _client()
-    request = LLMRequest(
-        purpose="main_pass",
-        system=(_cached_context(),),
-        messages=(LLMMessage(role="user", content="Reply with the single word: ready."),),
-    )
+    try:
+        request = LLMRequest(
+            purpose="main_pass",
+            system=(_cached_context(),),
+            messages=(LLMMessage(role="user", content="Reply with the single word: ready."),),
+        )
 
-    first = await client.complete_structured(request, PageDraft)
-    second = await client.complete_structured(request, PageDraft)
+        first = await client.complete_structured(request, PageDraft)
+        second = await client.complete_structured(request, PageDraft)
 
-    # The cacheable prefix sits close to the 512-token minimum, so make sure
-    # the first call actually created the cache entry.
-    assert first.usage is not None
-    assert first.usage.cache_creation_input_tokens > 0
-    assert second.usage is not None
-    assert second.usage.cache_read_input_tokens > 0
+        # The cacheable prefix sits close to the 512-token minimum, so make sure
+        # the first call actually created the cache entry.
+        assert first.usage is not None
+        assert first.usage.cache_creation_input_tokens > 0
+        assert second.usage is not None
+        assert second.usage.cache_read_input_tokens > 0
+    finally:
+        await client.close()

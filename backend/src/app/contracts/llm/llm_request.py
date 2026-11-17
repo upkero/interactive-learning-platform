@@ -35,5 +35,5 @@ class LLMRequest:
     # Applies to openai_compatible/ollama only: the Anthropic API rejects
     # non-default sampling on claude-sonnet-5-5, so ClaudeClient never sends it.
     temperature: float | None = 0.0
-    # document_id, part_id — for logs and the decision journal
+    # document_id, part_id — for the decision journal (2.7)
     metadata: dict[str, str] = field(default_factory=dict)

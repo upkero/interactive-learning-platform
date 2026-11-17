@@ -18,7 +18,11 @@ from src.app.exceptions.llm import (
     LLMSchemaError,
     LLMTimeoutError,
 )
-from src.app.llm.instrumented_llm_client import InstrumentedLLMClient
+from src.app.llm.instrumented_llm_client import (
+    _LLM_DURATION_BUCKETS,
+    _TOKENS_BUCKETS,
+    InstrumentedLLMClient,
+)
 from tests.support.fakes.llm.llm_client import FakeLLMClient
 from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
 
@@ -37,6 +41,12 @@ def _counter_labels(metrics: RecordingMetricsCollector, outcome: str, purpose: s
     """Every llm.complete.requests counter carries exactly these labels."""
     counters = metrics.counters_named("llm.complete.requests")
     return bool(counters) and all(counter.labels == _tags(outcome, purpose) for counter in counters)
+
+
+def _duration_labels(metrics: RecordingMetricsCollector, outcome: str, purpose: str = "unspecified") -> bool:
+    """Every duration histogram carries exactly these labels."""
+    durations = metrics.histograms_named("llm.complete.duration_seconds")
+    return bool(durations) and all(d.labels == _tags(outcome, purpose) for d in durations)
 
 
 def _instrumented(fake: FakeLLMClient, metrics: RecordingMetricsCollector) -> InstrumentedLLMClient:
@@ -68,6 +78,8 @@ async def test_structured_success_records_all_metrics(caplog: pytest.LogCaptureF
 
     durations = metrics.histograms_named("llm.complete.duration_seconds")
     assert len(durations) == 1
+    assert durations[0].labels == _tags("success", "main_pass")
+    assert durations[0].buckets == _LLM_DURATION_BUCKETS
 
     usage_names = (
         "llm.complete.usage.input_tokens",
@@ -77,7 +89,12 @@ async def test_structured_success_records_all_metrics(caplog: pytest.LogCaptureF
     )
     for name, value in zip(usage_names, (10.0, 5.0, 2.0, 1.0), strict=True):
         records = metrics.histograms_named(name)
-        assert any(record.value == value for record in records), f"missing usage histogram {name}"
+        assert any(
+            record.value == value
+            and record.labels == _tags("success", "main_pass")
+            and record.buckets == _TOKENS_BUCKETS
+            for record in records
+        ), f"missing usage histogram {name}"
 
     assert "LLM call completed." in caplog.text
     record = caplog.records[-1]
@@ -96,12 +113,11 @@ async def test_structured_schema_error_maps_outcome(caplog: pytest.LogCaptureFix
 
     durations = metrics.histograms_named("llm.complete.duration_seconds")
     assert durations
+    assert _duration_labels(metrics, "schema_error", "quiz_gen")
     assert _counter_labels(metrics, "schema_error", "quiz_gen")
     assert "LLM call failed." in caplog.text
     assert caplog.records[-1].__dict__["outcome"] == "schema_error"
     assert caplog.records[-1].__dict__["purpose"] == "quiz_gen"
-    # Routine schema failures must not spam the log with tracebacks.
-    assert "ValidationError" not in caplog.text
     assert not metrics.histograms_named("llm.complete.usage.input_tokens")
 
 
@@ -114,6 +130,7 @@ async def test_structured_rate_limit_maps_outcome() -> None:
         await instrumented.complete_structured(_request("judge"), _Draft)
 
     assert _counter_labels(metrics, "rate_limit_error", "judge")
+    assert _duration_labels(metrics, "rate_limit_error", "judge")
 
 
 async def test_structured_timeout_maps_outcome() -> None:
@@ -125,6 +142,7 @@ async def test_structured_timeout_maps_outcome() -> None:
         await instrumented.complete_structured(_request("judge"), _Draft)
 
     assert _counter_labels(metrics, "timeout", "judge")
+    assert _duration_labels(metrics, "timeout", "judge")
 
 
 async def test_structured_generation_error_maps_outcome() -> None:
@@ -136,6 +154,7 @@ async def test_structured_generation_error_maps_outcome() -> None:
         await instrumented.complete_structured(_request("codegen"), _Draft)
 
     assert _counter_labels(metrics, "generation_error", "codegen")
+    assert _duration_labels(metrics, "generation_error", "codegen")
 
 
 async def test_structured_unexpected_error_maps_outcome() -> None:
@@ -147,6 +166,7 @@ async def test_structured_unexpected_error_maps_outcome() -> None:
         await instrumented.complete_structured(_request("vision"), _Draft)
 
     assert _counter_labels(metrics, "unexpected_error", "vision")
+    assert _duration_labels(metrics, "unexpected_error", "vision")
 
 
 async def test_structured_truncated_error_gets_its_own_outcome() -> None:
@@ -161,6 +181,7 @@ async def test_structured_truncated_error_gets_its_own_outcome() -> None:
         await instrumented.complete_structured(_request("main_pass"), _Draft)
 
     assert _counter_labels(metrics, "output_truncated", "main_pass")
+    assert _duration_labels(metrics, "output_truncated", "main_pass")
 
 
 async def test_plain_complete_success_and_invalid_input() -> None:
@@ -173,6 +194,8 @@ async def test_plain_complete_success_and_invalid_input() -> None:
     assert _counter_labels(metrics, "success")
     input_records = metrics.histograms_named("llm.complete.usage.input_tokens")
     assert input_records and input_records[0].value == 3.0
+    assert input_records[0].labels == _tags("success")
+    assert input_records[0].buckets == _TOKENS_BUCKETS
     output_records = metrics.histograms_named("llm.complete.usage.output_tokens")
     assert output_records and output_records[0].value == 5.0
 
@@ -183,6 +206,7 @@ async def test_plain_complete_success_and_invalid_input() -> None:
         await instrumented2.complete((LLMMessage(role="user", content="q"),))
     assert metrics2.histograms_named("llm.complete.duration_seconds")
     assert _counter_labels(metrics2, "invalid_input")
+    assert _duration_labels(metrics2, "invalid_input")
 
 
 async def test_plain_complete_error_branches() -> None:
@@ -201,6 +225,38 @@ async def test_plain_complete_error_branches() -> None:
 
         assert metrics.histograms_named("llm.complete.duration_seconds")
         assert _counter_labels(metrics, outcome)
+        assert _duration_labels(metrics, outcome)
+
+
+@pytest.mark.parametrize(
+    ("exception", "outcome"),
+    (
+        (LLMInputError("bad input"), "invalid_input"),
+        (LLMSchemaError("bad json"), "schema_error"),
+        (LLMRateLimitError(), "rate_limit_error"),
+        (LLMOutputTruncatedError("cut off"), "output_truncated"),
+        (LLMTimeoutError("slow"), "timeout"),
+        (LLMGenerationError("boom"), "generation_error"),
+        (RuntimeError("surprise"), "unexpected_error"),
+    ),
+)
+async def test_failure_log_never_carries_traceback(
+    exception: BaseException,
+    outcome: str,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Every failure is one log line without exc_info: the API layer logs
+    5xx tracebacks itself (rule: do not log the same error twice)."""
+    fake = FakeLLMClient(structured=[exception])
+    instrumented = _instrumented(fake, RecordingMetricsCollector())
+    caplog.set_level("WARNING", logger="test.grasp.llm")
+
+    with pytest.raises(type(exception)):
+        await instrumented.complete_structured(_request(), _Draft)
+
+    record = caplog.records[-1]
+    assert record.__dict__["outcome"] == outcome
+    assert record.exc_info is None
 
 
 async def test_structured_without_usage_records_no_usage_metrics() -> None:
