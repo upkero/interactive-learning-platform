@@ -72,7 +72,8 @@ async def test_part_content_is_safe_and_resolves_three_directives() -> None:
     code = await widgets.create(kind=WidgetKind.CODE, compiled_js="export default 1")
     config = await widgets.create(kind=WidgetKind.CONFIG, primitive_id="graph", mode="default", params={"x": 1})
     (part,) = await parts.add_many(
-        doc, [PartDraft(index=0, title="Page", topic_ids=[], source_markdown="x", token_count=1)]
+        doc,
+        [PartDraft(index=0, title="Page", topic_ids=[], source_markdown="x", token_count=1, quota_period_start=None)],
     )
     original: dict[str, Any] = {
         "schema_version": 1,
@@ -127,7 +128,8 @@ async def test_unpublished_part_has_no_content() -> None:
     parts, images, materials = FakeDocumentPartRepository(), FakeImageRepository(), FakeUserMaterialRepository()
     await materials.create(user_id=user, document_id=doc, role=MaterialRole.OWNER)
     (part,) = await parts.add_many(
-        doc, [PartDraft(index=0, title="Page", topic_ids=[], source_markdown="x", token_count=1)]
+        doc,
+        [PartDraft(index=0, title="Page", topic_ids=[], source_markdown="x", token_count=1, quota_period_start=None)],
     )
     service = _service(
         parts=parts,

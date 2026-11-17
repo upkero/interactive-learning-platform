@@ -9,12 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.documents.part_draft import PartDraft
 from src.app.contracts.documents.statuses import DocumentStatus, PartStatus
+from src.app.contracts.quota import LedgerOp
+from src.app.core.clock import SystemClock
 from src.app.models.document import Document
 from src.app.models.document_part import DocumentPart
 from src.app.models.generation_ledger import GenerationLedger
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
-from src.app.repositories.generation_ledger_repository import GenerationLedgerRepository
+from src.app.services.quota.period import current_period
 from src.app.services.solver.pipeline.part_recovery import PartRecovery
 from src.app.services.solver.pipeline.stub_pipeline import StubPipeline
 from src.app.services.solver.pipeline.watchdog import Watchdog
@@ -34,7 +36,17 @@ async def test_concurrent_watchdog_ticks_refund_only_once(
     async with session_factory() as session, session.begin():
         parts = DocumentPartRepository(session)
         (second,) = await parts.add_many(
-            document_id, [PartDraft(index=1, title="second", topic_ids=[], source_markdown="x", token_count=1)]
+            document_id,
+            [
+                PartDraft(
+                    index=1,
+                    title="second",
+                    topic_ids=[],
+                    source_markdown="x",
+                    token_count=1,
+                    quota_period_start=current_period(SystemClock().today(), None).start,
+                )
+            ],
         )
         await container.quota_ledger.reserve(session, user_id=user_id, document_id=document_id, parts=2)
         await DocumentRepository(session).set_status(document_id, DocumentStatus.GENERATING)
@@ -74,7 +86,9 @@ async def test_concurrent_watchdog_ticks_refund_only_once(
         ("part_status", "queued"),
     ]
     async with session_factory() as session:
-        entries = (await session.scalars(select(GenerationLedger).where(GenerationLedger.op == "refund"))).all()
+        entries = (
+            await session.scalars(select(GenerationLedger).where(GenerationLedger.op == LedgerOp.REFUND.value))
+        ).all()
         assert len(entries) == 1 and entries[0].part_id == second.id and entries[0].delta == 1
         first = await DocumentPartRepository(session).get(first_id)
         assert first is not None and first.status is PartStatus.QUEUED and first.attempts == 1
@@ -104,7 +118,9 @@ async def test_stub_pipeline_publishes_and_charges_once(
         assert part is not None and part.status is PartStatus.PUBLISHED and part.attempts == 1 and part.content
         doc = await DocumentRepository(session).get(document_id)
         assert doc is not None and doc.status is DocumentStatus.DONE
-        entries = (await session.scalars(select(GenerationLedger).where(GenerationLedger.op == "charge"))).all()
+        entries = (
+            await session.scalars(select(GenerationLedger).where(GenerationLedger.op == LedgerOp.CHARGE.value))
+        ).all()
         assert len(entries) == 1 and entries[0].part_id == part_id
     assert [event[1] for event in notifier.events] == ["part_status"] * 4 + ["part_ready", "document_done"]
     await container.close()
@@ -120,7 +136,12 @@ async def test_poison_part_does_not_block_other_parts(
     async with session_factory() as session, session.begin():
         parts = DocumentPartRepository(session)
         (poison,) = await parts.add_many(
-            document_id, [PartDraft(index=1, title="poison", topic_ids=[], source_markdown="x", token_count=1)]
+            document_id,
+            [
+                PartDraft(
+                    index=1, title="poison", topic_ids=[], source_markdown="x", token_count=1, quota_period_start=None
+                )
+            ],
         )
         for part_id in (first_id, poison.id):
             await parts.transition(part_id, frozenset({PartStatus.QUEUED}), PartStatus.MAIN_PASS, bump_attempts=True)
@@ -236,7 +257,7 @@ async def test_uploaded_lock_touch_and_quota_lookup(
         assert [d.id for d in locked] == [document_id]
         owner = await DocumentPartRepository(session).part_owner(part_id)
         assert owner is not None and (owner.user_id, owner.document_id) == (user_id, document_id)
-        assert await GenerationLedgerRepository(session).reserve_period(document_id) is not None
+        assert owner.quota_period_start is not None
         await documents.touch(document_id)
     async with session_factory() as session, session.begin():
         assert await DocumentRepository(session).lock_stale_uploaded(older_than=timedelta(minutes=30), limit=50) == []

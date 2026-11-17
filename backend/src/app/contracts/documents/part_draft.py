@@ -1,6 +1,7 @@
 """Typed input for inserting new document parts (replaces raw dicts)."""
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
 from pydantic import JsonValue
@@ -15,5 +16,6 @@ class PartDraft:
     topic_ids: list[str]
     source_markdown: str
     token_count: int
+    quota_period_start: date | None
     profile: dict[str, Any] | None = None
     content: dict[str, JsonValue] | None = None

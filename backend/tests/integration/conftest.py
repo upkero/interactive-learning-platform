@@ -19,12 +19,21 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.documents.part_draft import PartDraft
 from src.app.contracts.documents.statuses import SourceType
+from src.app.core.clock import SystemClock
 from src.app.core.settings.app import get_app_settings
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
 from src.app.repositories.user_repository import UserRepository
+from src.app.services.quota.period import current_period
+from src.app.services.quota.quota_ledger import QuotaLedger
+from src.app.services.solver.pipeline.part_recovery import PartRecovery
+from src.app.services.solver.pipeline.watchdog import Watchdog
+from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
+from tests.support.fakes.services.progress_notifier import FakeProgressNotifier
+from tests.support.fakes.services.task_dispatcher import FakeTaskDispatcher
 
 BACKEND_DIR: Path = Path(__file__).resolve().parents[2]
 
@@ -91,10 +100,57 @@ def session_factory(db: AsyncEngine) -> async_sessionmaker[AsyncSession]:
 
 
 @pytest.fixture
+async def container() -> AsyncIterator[ApplicationContainer]:
+    instance = ApplicationContainer()
+    try:
+        yield instance
+    finally:
+        await instance.close()
+
+
+@pytest.fixture
+def ledger(container: ApplicationContainer) -> QuotaLedger:
+    return container.quota_ledger
+
+
+@pytest.fixture
+def dispatcher() -> FakeTaskDispatcher:
+    return FakeTaskDispatcher()
+
+
+@pytest.fixture
+def recovery(
+    session_factory: async_sessionmaker[AsyncSession], ledger: QuotaLedger, dispatcher: FakeTaskDispatcher
+) -> PartRecovery:
+    return PartRecovery(
+        session_factory=session_factory,
+        parts=DocumentPartRepository,
+        documents=DocumentRepository,
+        ledger=ledger,
+        dispatcher=dispatcher,
+        notifier=FakeProgressNotifier(),
+    )
+
+
+@pytest.fixture
+def watchdog(
+    session_factory: async_sessionmaker[AsyncSession], recovery: PartRecovery, dispatcher: FakeTaskDispatcher
+) -> Watchdog:
+    return Watchdog(
+        session_factory=session_factory,
+        parts=DocumentPartRepository,
+        documents=DocumentRepository,
+        recovery=recovery,
+        dispatcher=dispatcher,
+        metrics=RecordingMetricsCollector(),
+    )
+
+
+@pytest.fixture
 async def part_ids(session_factory: async_sessionmaker[AsyncSession]) -> tuple[UUID, UUID, UUID]:
     """Committed user -> document -> single queued part chain."""
     async with session_factory() as session, session.begin():
-        user = await UserRepository(session).create(email="part@grasp.test", password_hash="hash")
+        user = await UserRepository(session).create(email="part@grasp.test", password_hash="hash", monthly_limit=20)
         document = await DocumentRepository(session).create(
             owner_id=user.id,
             title="Race document",
@@ -106,6 +162,15 @@ async def part_ids(session_factory: async_sessionmaker[AsyncSession]) -> tuple[U
         )
         (part,) = await DocumentPartRepository(session).add_many(
             document.id,
-            [PartDraft(index=0, title="Part", topic_ids=[], source_markdown="# part", token_count=1)],
+            [
+                PartDraft(
+                    index=0,
+                    title="Part",
+                    topic_ids=[],
+                    source_markdown="# part",
+                    token_count=1,
+                    quota_period_start=current_period(SystemClock().today(), None).start,
+                )
+            ],
         )
     return user.id, document.id, part.id

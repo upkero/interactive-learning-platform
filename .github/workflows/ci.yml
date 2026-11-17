@@ -159,6 +159,11 @@ jobs:
       - name: Run tests
         run: uv run pytest -m "unit or integration" --maxfail=1
 
+      - name: Repeat quota race and spending-rule tests
+        run: >-
+          uv run pytest tests/integration/services/quota/test_quota_races.py
+          tests/integration/services/quota/test_quota_rules.py -m integration --count=20 --maxfail=1
+
   # ---------------------------------------------------------------------------
   # 2. Web package checks (frontend, sandbox, primitives)
   # ---------------------------------------------------------------------------

@@ -1,0 +1,1 @@
+"""Fakes of core services."""

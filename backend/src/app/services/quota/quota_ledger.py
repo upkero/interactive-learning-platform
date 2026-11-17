@@ -10,13 +10,12 @@ so parallel requests serialize on one quota balance.
 """
 
 from collections.abc import Callable
-from dataclasses import dataclass
 from datetime import date
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.app.contracts.quota import LedgerOp
+from src.app.contracts.quota import LedgerOp, QuotaState
 from src.app.core.clock import Clock
 from src.app.exceptions.quota import (
     LedgerEntryDuplicateError,
@@ -28,14 +27,7 @@ from src.app.exceptions.users import UserNotFoundError
 from src.app.interfaces.repositories.documents import DocumentPartRepositoryProtocol
 from src.app.interfaces.repositories.quota import GenerationLedgerRepositoryProtocol
 from src.app.interfaces.repositories.users import UserRepositoryProtocol
-from src.app.services.quota.period import QuotaPeriod, current_period
-
-
-@dataclass(frozen=True, slots=True)
-class QuotaState:
-    monthly_limit: int
-    available: int
-    period: QuotaPeriod
+from src.app.services.quota.period import current_period
 
 
 class QuotaLedger:
@@ -102,7 +94,7 @@ class QuotaLedger:
         user_id, document_id = owner.user_id, owner.document_id
         if await self._users_factory(session).lock_for_update(user_id) is None:
             raise UserNotFoundError()
-        period_start = await ledger.reserve_period(document_id)
+        period_start = owner.quota_period_start
         if period_start is None:
             raise QuotaReservationNotFoundError()
         try:
@@ -119,4 +111,4 @@ class QuotaLedger:
             return
 
 
-__all__ = ["QuotaLedger", "QuotaState"]
+__all__ = ["QuotaLedger"]

@@ -70,18 +70,9 @@ class GenerationLedgerRepository(GenerationLedgerRepositoryProtocol):
         return self._to_record(row)
 
     async def sum_delta(self, user_id: UUID, period_start: date) -> int:
-        """Sum deltas of all operations of the user since ``period_start``."""
+        """Sum deltas belonging to exactly one billing period."""
         stmt = select(func.coalesce(func.sum(GenerationLedger.delta), 0)).where(
             GenerationLedger.user_id == user_id,
-            GenerationLedger.period_start >= period_start,
+            GenerationLedger.period_start == period_start,
         )
         return int((await self._session.scalars(stmt)).one())
-
-    async def reserve_period(self, document_id: UUID) -> date | None:
-        stmt = (
-            select(GenerationLedger.period_start)
-            .where(GenerationLedger.document_id == document_id, GenerationLedger.op == LedgerOp.RESERVE.value)
-            .order_by(GenerationLedger.id.desc())
-            .limit(1)
-        )
-        return (await self._session.scalars(stmt)).first()

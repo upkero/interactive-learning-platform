@@ -29,7 +29,10 @@ async def test_three_concurrent_reports_exclude_widget(session_factory: async_se
     embedding = [1.0] + [0.0] * 1023
     async with session_factory() as session, session.begin():
         users = UserRepository(session)
-        owners = [await users.create(email=f"report-{i}@example.com", password_hash="hash") for i in range(3)]
+        owners = [
+            await users.create(email=f"report-{i}@example.com", password_hash="hash", monthly_limit=20)
+            for i in range(3)
+        ]
         document = await DocumentRepository(session).create(
             owner_id=owners[0].id,
             title="doc",
@@ -47,7 +50,12 @@ async def test_three_concurrent_reports_exclude_widget(session_factory: async_se
             )
         part = (
             await DocumentPartRepository(session).add_many(
-                document.id, [PartDraft(index=0, title="T", topic_ids=[], source_markdown="T", token_count=1)]
+                document.id,
+                [
+                    PartDraft(
+                        index=0, title="T", topic_ids=[], source_markdown="T", token_count=1, quota_period_start=None
+                    )
+                ],
             )
         )[0]
         widget = await WidgetRepository(session).create(kind=WidgetKind.CODE, source_tsx="x", compiled_js="x")

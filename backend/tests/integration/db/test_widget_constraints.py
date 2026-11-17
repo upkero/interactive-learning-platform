@@ -83,7 +83,7 @@ async def test_code_widget_params_is_sql_null(session_factory: SessionFactory) -
 async def test_second_report_from_same_user_conflicts(session_factory: SessionFactory) -> None:
     """The (widget_id, user_id) uniqueness blocks a duplicate complaint."""
     async with session_factory() as session, session.begin():
-        user = await UserRepository(session).create(email="report@grasp.test", password_hash="hash")
+        user = await UserRepository(session).create(email="report@grasp.test", password_hash="hash", monthly_limit=20)
         widget = await WidgetRepository(session).create(kind=WidgetKind.CODE, source_tsx="x", compiled_js="y")
         repository = ReportRepository(session)
         first = await repository.create_if_not_exists(widget_id=widget.id, user_id=user.id, reason=ReportReason.BROKEN)
@@ -99,7 +99,7 @@ async def test_raw_duplicate_report_violates_uniqueness(session_factory: Session
     from src.app.models.report import Report
 
     async with session_factory() as session, session.begin():
-        user = await UserRepository(session).create(email="report2@grasp.test", password_hash="hash")
+        user = await UserRepository(session).create(email="report2@grasp.test", password_hash="hash", monthly_limit=20)
         widget = await WidgetRepository(session).create(kind=WidgetKind.CODE, source_tsx="x", compiled_js="y")
         repository = ReportRepository(session)
         await repository.create_if_not_exists(widget_id=widget.id, user_id=user.id, reason=ReportReason.BROKEN)

@@ -90,6 +90,7 @@ async def test_tree_copies_parser_levels_and_total_tokens() -> None:
                 topic_ids=["topic-adaptive", "topic-chunking"],
                 source_markdown="part one",
                 token_count=142,
+                quota_period_start=None,
                 profile={},
             ),
             PartDraft(
@@ -98,6 +99,7 @@ async def test_tree_copies_parser_levels_and_total_tokens() -> None:
                 topic_ids=["topic-chunking", "topic-tree"],
                 source_markdown="part two",
                 token_count=178,
+                quota_period_start=None,
                 profile={},
             ),
             PartDraft(
@@ -106,6 +108,7 @@ async def test_tree_copies_parser_levels_and_total_tokens() -> None:
                 topic_ids=["topic-quota"],
                 source_markdown="part three",
                 token_count=96,
+                quota_period_start=None,
                 profile={},
             ),
         ],
@@ -181,6 +184,7 @@ async def test_parts_do_not_change_the_tree_token_sums() -> None:
                 topic_ids=["topic-quota"],
                 source_markdown="extra",
                 token_count=1000,
+                quota_period_start=None,
                 profile={},
             )
         ],

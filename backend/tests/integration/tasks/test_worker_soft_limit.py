@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.documents.statuses import DocumentStatus, PartStatus
+from src.app.contracts.quota import LedgerOp
 from src.app.models.generation_ledger import GenerationLedger
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
@@ -79,7 +80,9 @@ async def test_soft_limit_retries_then_refunds(
         assert part is not None and part.status is PartStatus.FAILED and part.attempts == 2
         assert part.error == "soft_time_limit"
         async with session_factory() as session:
-            entries = (await session.scalars(select(GenerationLedger).where(GenerationLedger.op == "refund"))).all()
+            entries = (
+                await session.scalars(select(GenerationLedger).where(GenerationLedger.op == LedgerOp.REFUND.value))
+            ).all()
             assert len(entries) == 1 and entries[0].part_id == part_id
         progress = redis.Redis.from_url(progress_url)
         try:

@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from src.app.contracts.users import UserRecord
 from src.app.core.security import create_session_token, decode_session_token, hash_password, verify_password
 from src.app.core.settings.auth import AuthSettings
+from src.app.core.settings.quota import QuotaSettings
 from src.app.exceptions.auth import EmailTakenError, InvalidCredentialsError, NotAuthenticatedError
 from src.app.exceptions.users import UserAlreadyExistsError
 from src.app.interfaces.repositories.users import UserRepositoryProtocol
@@ -31,10 +32,12 @@ class AuthService:
         session_factory: async_sessionmaker[AsyncSession],
         users: Callable[[AsyncSession], UserRepositoryProtocol],
         settings: AuthSettings,
+        quota_settings: QuotaSettings,
     ) -> None:
         self._session_factory = session_factory
         self._users = users
         self._settings = settings
+        self._quota_settings = quota_settings
 
     async def register(
         self,
@@ -50,6 +53,7 @@ class AuthService:
                     email=email.strip().lower(),
                     password_hash=password_hash,
                     display_name=display_name,
+                    monthly_limit=self._quota_settings.default_monthly_limit,
                 )
         except UserAlreadyExistsError as exc:
             # the API contract speaks in email_taken (409), the repository

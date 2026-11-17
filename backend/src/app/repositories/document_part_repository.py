@@ -57,9 +57,13 @@ class DocumentPartRepository(DocumentPartRepositoryProtocol):
         return self._to_record(row) if row is not None else None
 
     async def part_owner(self, part_id: UUID) -> PartOwner | None:
-        stmt = select(Document.owner_id, Document.id).join(DocumentPart).where(DocumentPart.id == part_id)
+        stmt = (
+            select(Document.owner_id, Document.id, DocumentPart.quota_period_start)
+            .join(DocumentPart)
+            .where(DocumentPart.id == part_id)
+        )
         row = (await self._session.execute(stmt)).one_or_none()
-        return PartOwner(user_id=row[0], document_id=row[1]) if row is not None else None
+        return PartOwner(user_id=row[0], document_id=row[1], quota_period_start=row[2]) if row is not None else None
 
     async def lock_stale(
         self, *, statuses: frozenset[PartStatus], older_than: timedelta, limit: int
@@ -99,6 +103,7 @@ class DocumentPartRepository(DocumentPartRepositoryProtocol):
                 token_count=draft.token_count,
                 profile=draft.profile or {},
                 content=draft.content,
+                quota_period_start=draft.quota_period_start,
                 status="queued",
             )
             for draft in parts

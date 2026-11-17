@@ -41,7 +41,9 @@ pytestmark = pytest.mark.integration
 async def _real_user(session_factory: SessionFactory) -> UUID:
     """Create a committed user so user_id FKs stay satisfiable."""
     async with session_factory() as session, session.begin():
-        user = await UserRepository(session).create(email=f"u-{uuid4()}@grasp.test", password_hash="hash")
+        user = await UserRepository(session).create(
+            email=f"u-{uuid4()}@grasp.test", password_hash="hash", monthly_limit=20
+        )
     return user.id
 
 
@@ -53,7 +55,11 @@ async def test_part_fk_for_missing_document_is_generic(
         with pytest.raises(DocumentsIntegrityError) as exc_info:
             await DocumentPartRepository(session).add_many(
                 uuid4(),
-                [PartDraft(index=0, title="T", topic_ids=[], source_markdown="m", token_count=1)],
+                [
+                    PartDraft(
+                        index=0, title="T", topic_ids=[], source_markdown="m", token_count=1, quota_period_start=None
+                    )
+                ],
             )
         assert not isinstance(exc_info.value, DocumentPartDuplicateError)
 

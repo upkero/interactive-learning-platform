@@ -1,5 +1,6 @@
 """Unit tests 1.4.6: GenerationService.plan — pure preview, no writes."""
 
+from dataclasses import replace
 from datetime import date
 from typing import cast
 from uuid import UUID, uuid4
@@ -9,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents import DocumentStatus, MaterialRole, PartDraft, SourceType
 from src.app.contracts.documents.generation import GenerationAnswers, GenerationCommand
-from src.app.core.clock import Clock
 from src.app.core.settings.processing import ProcessingSettings
 from src.app.exceptions.documents import DocumentNotFoundError, DocumentNotReadyError
 from src.app.exceptions.quota import QuotaExceededError
@@ -18,6 +18,7 @@ from src.app.interfaces.storage.object_storage_client import StorageBucket
 from src.app.services.documents.generation_service import GenerationService
 from src.app.services.documents.topic_per_part_planner import TopicPerPartPlanner
 from src.app.services.quota.quota_ledger import QuotaLedger
+from tests.support.fakes.core.clock import FixedClock
 from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.repositories.documents import (
     FakeDocumentPartRepository,
@@ -77,11 +78,6 @@ class _ParsedStorage(FakeObjectStorageClient):
         return ("a" * 1200 + "b" * 600).encode()
 
 
-class _FixedClock(Clock):
-    def today(self) -> date:
-        return date(2026, 11, 14)
-
-
 def _factory(session: FakeSession) -> async_sessionmaker[AsyncSession]:
     return cast(async_sessionmaker[AsyncSession], lambda: session)
 
@@ -91,7 +87,7 @@ def _ledger(users: FakeUserRepository, ledger_repo: FakeGenerationLedgerReposito
         users_factory=lambda _: users,
         ledger_factory=lambda _: ledger_repo,
         parts_factory=lambda _: FakeDocumentPartRepository(),
-        clock=_FixedClock(),
+        clock=FixedClock(date(2026, 11, 14)),
     )
 
 
@@ -154,6 +150,7 @@ async def _parsed_document(
                 topic_ids=["topic-adaptive", "topic-chunking"],
                 source_markdown="part one",
                 token_count=142,
+                quota_period_start=None,
                 profile={},
             ),
             PartDraft(
@@ -162,6 +159,7 @@ async def _parsed_document(
                 topic_ids=["topic-chunking", "topic-tree"],
                 source_markdown="part two",
                 token_count=178,
+                quota_period_start=None,
                 profile={},
             ),
             PartDraft(
@@ -170,6 +168,7 @@ async def _parsed_document(
                 topic_ids=["topic-quota"],
                 source_markdown="part three",
                 token_count=96,
+                quota_period_start=None,
                 profile={},
             ),
         ],
@@ -321,6 +320,45 @@ async def test_generate_fresh_parsed_document_without_existing_parts() -> None:
     assert part is not None and part.source_markdown == "a" * 1200
 
 
+@pytest.mark.parametrize("anchor", [None, date(2000, 1, 31)])
+async def test_start_assigns_reservation_period_to_every_part(anchor: date | None) -> None:
+    service, documents, materials, parts, ledger_repo, users = _service()
+    owner, document_id = await _parsed_document(users, documents, materials, parts)
+    users._users[owner] = replace(users._users[owner], period_anchor=anchor)
+    state = await _ledger(users, ledger_repo).available(cast(AsyncSession, FakeSession()), user_id=owner)
+    started = await service.start(
+        GenerationCommand(
+            user_id=owner,
+            document_id=document_id,
+            topic_ids=("topic-adaptive", "topic-quota"),
+            answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+        )
+    )
+    assert started.cost == len(started.part_ids) == 2
+    assert all(parts.drafts[part_id].quota_period_start == state.period.start for part_id in started.part_ids)
+    assert ledger_repo.entries[0].period_start == state.period.start
+
+
+async def test_start_rejects_empty_source_before_reserving(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def empty_markdown(self: _ParsedStorage, *, bucket: StorageBucket, key: str) -> bytes:
+        return b" " * 1800
+
+    monkeypatch.setattr(_ParsedStorage, "get_object", empty_markdown)
+    service, documents, materials, parts, ledger_repo, users = _service()
+    owner, document_id = await _parsed_document(users, documents, materials, parts)
+    with pytest.raises(DocumentNotReadyError):
+        await service.start(
+            GenerationCommand(
+                user_id=owner,
+                document_id=document_id,
+                topic_ids=("topic-adaptive",),
+                answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+            )
+        )
+    assert not ledger_repo.entries
+    assert len(await parts.list_by_document(document_id)) == 3
+
+
 async def test_queue_failure_keeps_committed_parts_and_reservation() -> None:
     _, documents, materials, parts, ledger_repo, users = _service()
     owner, document_id = await _parsed_document(users, documents, materials, parts)
@@ -354,8 +392,6 @@ async def test_queue_failure_keeps_committed_parts_and_reservation() -> None:
 async def test_start_rejects_insufficient_quota_without_writes() -> None:
     _, documents, materials, parts, ledger_repo, users = _service()
     owner, document_id = await _parsed_document(users, documents, materials, parts)
-    from dataclasses import replace
-
     users._users[owner] = replace(users._users[owner], monthly_limit=0)
     session = FakeSession()
     dispatcher = FakeTaskDispatcher()
