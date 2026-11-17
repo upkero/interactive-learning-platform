@@ -11,7 +11,7 @@
   fallback-widget pipeline belongs to story 2.7 and is not implemented yet.
 - The journal belongs to the reservation's period, even if processing finishes
   later. See `test_old_reservation_refunded_in_original_period` in
-  `backend/tests/integration/services/quota/test_quota_ledger.py`.
+  `backend/tests/integration/services/quota/test_quota_ledger_postgres.py`.
 - Concurrent reserves, refunds, and their combination are serialized by the
   user row lock. See the three tests in
   `backend/tests/integration/services/quota/test_quota_races.py`; duplicate
