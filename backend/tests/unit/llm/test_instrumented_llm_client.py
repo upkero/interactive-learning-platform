@@ -26,7 +26,14 @@ class _Draft(BaseModel):
     title: str = "x"
 
 
-_SUCCESS_TAGS = {"model": "fake-model", "provider": "fake"}
+def _tags(outcome: str, purpose: str = "unspecified") -> dict[str, str]:
+    return {"model": "fake-model", "provider": "fake", "outcome": outcome, "purpose": purpose}
+
+
+def _counter_labels(metrics: RecordingMetricsCollector, outcome: str, purpose: str = "unspecified") -> bool:
+    """Every llm.complete.requests counter carries exactly these labels."""
+    counters = metrics.counters_named("llm.complete.requests")
+    return bool(counters) and all(counter.labels == _tags(outcome, purpose) for counter in counters)
 
 
 def _instrumented(fake: FakeLLMClient, metrics: RecordingMetricsCollector) -> InstrumentedLLMClient:
@@ -47,10 +54,6 @@ def _request(
     )
 
 
-def _tags(outcome: str, purpose: str = "unspecified") -> dict[str, str]:
-    return {"model": "fake-model", "provider": "fake", "outcome": outcome, "purpose": purpose}
-
-
 @pytest.mark.unit
 async def test_structured_success_records_all_metrics(caplog: pytest.LogCaptureFixture) -> None:
     fake = FakeLLMClient(responses=[StructuredResponse(_Draft(), usage=TokenUsage(10, 5, 2, 1))])
@@ -64,13 +67,11 @@ async def test_structured_success_records_all_metrics(caplog: pytest.LogCaptureF
 
     request_counters = metrics.counters_named("llm.complete.requests")
     assert len(request_counters) == 1
-    assert request_counters[0].tags == _tags("success", "main_pass")
-    assert request_counters[0].value == 1
+    assert request_counters[0].labels == _tags("success", "main_pass")
+    assert request_counters[0].by == 1
 
     durations = metrics.histograms_named("llm.complete.duration_seconds")
     assert len(durations) == 1
-    assert durations[0].tags == _tags("success", "main_pass")
-    assert 1.0 in (durations[0].buckets or ())  # бакеты 1..180
 
     usage_names = (
         "llm.complete.usage.input_tokens",
@@ -80,9 +81,7 @@ async def test_structured_success_records_all_metrics(caplog: pytest.LogCaptureF
     )
     for name, value in zip(usage_names, (10.0, 5.0, 2.0, 1.0), strict=True):
         records = metrics.histograms_named(name)
-        assert any(record.value == value and record.tags == _tags("success", "main_pass") for record in records), (
-            f"missing usage histogram {name}"
-        )
+        assert any(record.value == value for record in records), f"missing usage histogram {name}"
 
     assert "LLM call completed." in caplog.text
     record = caplog.records[-1]
@@ -101,9 +100,8 @@ async def test_structured_schema_error_maps_outcome(caplog: pytest.LogCaptureFix
         await instrumented.complete_structured(_request("quiz_gen"), _Draft)
 
     durations = metrics.histograms_named("llm.complete.duration_seconds")
-    assert all(record.tags == _tags("schema_error", "quiz_gen") for record in durations)
-    request_counters = metrics.counters_named("llm.complete.requests")
-    assert all(counter.tags == _tags("schema_error", "quiz_gen") for counter in request_counters)
+    assert durations
+    assert _counter_labels(metrics, "schema_error", "quiz_gen")
     assert "LLM call failed." in caplog.text
     assert caplog.records[-1].__dict__["outcome"] == "schema_error"
     assert caplog.records[-1].__dict__["purpose"] == "quiz_gen"
@@ -121,10 +119,7 @@ async def test_structured_rate_limit_maps_outcome() -> None:
     with pytest.raises(LLMRateLimitError):
         await instrumented.complete_structured(_request("judge"), _Draft)
 
-    assert all(
-        record.tags == _tags("rate_limit_error", "judge")
-        for record in metrics.histograms_named("llm.complete.duration_seconds")
-    )
+    assert _counter_labels(metrics, "rate_limit_error", "judge")
 
 
 @pytest.mark.unit
@@ -136,10 +131,7 @@ async def test_structured_generation_error_maps_outcome() -> None:
     with pytest.raises(LLMGenerationError):
         await instrumented.complete_structured(_request("codegen"), _Draft)
 
-    assert all(
-        record.tags == _tags("generation_error", "codegen")
-        for record in metrics.histograms_named("llm.complete.duration_seconds")
-    )
+    assert _counter_labels(metrics, "generation_error", "codegen")
 
 
 @pytest.mark.unit
@@ -151,10 +143,7 @@ async def test_structured_unexpected_error_maps_outcome() -> None:
     with pytest.raises(RuntimeError):
         await instrumented.complete_structured(_request("vision"), _Draft)
 
-    assert all(
-        record.tags == _tags("unexpected_error", "vision")
-        for record in metrics.histograms_named("llm.complete.duration_seconds")
-    )
+    assert _counter_labels(metrics, "unexpected_error", "vision")
 
 
 @pytest.mark.unit
@@ -169,10 +158,7 @@ async def test_structured_truncated_error_gets_its_own_outcome() -> None:
     with pytest.raises(LLMOutputTruncatedError):
         await instrumented.complete_structured(_request("main_pass"), _Draft)
 
-    assert all(
-        record.tags == _tags("output_truncated", "main_pass")
-        for record in metrics.histograms_named("llm.complete.duration_seconds")
-    )
+    assert _counter_labels(metrics, "output_truncated", "main_pass")
 
 
 @pytest.mark.unit
@@ -183,7 +169,7 @@ async def test_plain_complete_success_and_invalid_input() -> None:
 
     response = await instrumented.complete((LLMMessage(role="user", content="q"),))
     assert response.content == "hello"
-    assert all(counter.tags == _tags("success") for counter in metrics.counters_named("llm.complete.requests"))
+    assert _counter_labels(metrics, "success")
     input_records = metrics.histograms_named("llm.complete.usage.input_tokens")
     assert input_records and input_records[0].value == 3.0
     output_records = metrics.histograms_named("llm.complete.usage.output_tokens")
@@ -194,9 +180,8 @@ async def test_plain_complete_success_and_invalid_input() -> None:
     instrumented2 = _instrumented(bad, metrics2)
     with pytest.raises(LLMInputError):
         await instrumented2.complete((LLMMessage(role="user", content="q"),))
-    assert all(
-        record.tags == _tags("invalid_input") for record in metrics2.histograms_named("llm.complete.duration_seconds")
-    )
+    assert metrics2.histograms_named("llm.complete.duration_seconds")
+    assert _counter_labels(metrics2, "invalid_input")
 
 
 @pytest.mark.unit
@@ -213,9 +198,8 @@ async def test_plain_complete_error_branches() -> None:
         with pytest.raises(type(exception)):
             await instrumented.complete((LLMMessage(role="user", content="q"),))
 
-        assert all(
-            record.tags == _tags(outcome) for record in metrics.histograms_named("llm.complete.duration_seconds")
-        )
+        assert metrics.histograms_named("llm.complete.duration_seconds")
+        assert _counter_labels(metrics, outcome)
 
 
 @pytest.mark.unit

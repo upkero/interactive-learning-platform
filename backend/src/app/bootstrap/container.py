@@ -17,12 +17,10 @@ from src.app.core.settings.storage import get_storage_settings
 from src.app.core.settings.upload import get_upload_settings
 from src.app.db.session import build_engine, build_session_factory
 from src.app.interfaces.llm.llm_client import LLMClient
-
 from src.app.interfaces.services.part_pipeline import PartPipeline
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.llm.factory import create_llm_client
 from src.app.llm.instrumented_llm_client import InstrumentedLLMClient
-from src.app.interfaces.observability.metrics_collector import MetricsCollector
 from src.app.observability.decision_log import DecisionLog
 from src.app.observability.noop_metrics_collector import NoopMetricsCollector
 from src.app.observability.progress_notifier import RedisProgressNotifier
@@ -59,7 +57,6 @@ from src.app.services.solver.pipeline.watchdog import Watchdog
 from src.app.services.users.profile_service import ProfileService
 from src.app.storage.s3_object_storage_client import S3ObjectStorageClient, build_ping_client, build_s3_client
 from src.app.tasks.dispatcher import CeleryTaskDispatcher
-
 
 
 class ApplicationContainer:
@@ -249,6 +246,7 @@ class ApplicationContainer:
         return InstrumentedLLMClient(
             client=create_llm_client(self.llm_settings),
             logger=getLogger("grasp.llm"),
+            metrics=PrometheusMetricsCollector(),
         )
 
     @cached_property
@@ -256,6 +254,7 @@ class ApplicationContainer:
         return InstrumentedLLMClient(
             client=create_llm_client(self.cheap_llm_overrides.resolve(self.llm_settings)),
             logger=getLogger("grasp.llm.cheap"),
+            metrics=PrometheusMetricsCollector(),
         )
 
     @cached_property
