@@ -53,7 +53,7 @@ class UserRepository(UserRepositoryProtocol):
         password_hash: str,
         display_name: str | None = None,
         locale: str = "ru",
-        monthly_limit: int = 20,
+        monthly_limit: int,
     ) -> UserRecord:
         row = User(
             email=email,
@@ -73,7 +73,8 @@ class UserRepository(UserRepositoryProtocol):
 
     async def lock_for_update(self, user_id: UUID) -> UserRecord | None:
         """Select a user with ``FOR UPDATE`` inside the caller's transaction."""
-        row = (await self._session.scalars(select(User).where(User.id == user_id).with_for_update())).first()
+        stmt = select(User).where(User.id == user_id).with_for_update().execution_options(populate_existing=True)
+        row = (await self._session.scalars(stmt)).first()
         return self._to_record(row) if row is not None else None
 
     async def save_last_answers(self, user_id: UUID, answers: dict[str, Any]) -> None:

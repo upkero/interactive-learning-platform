@@ -41,7 +41,9 @@ pytestmark = pytest.mark.integration
 async def _real_user(session_factory: SessionFactory) -> UUID:
     """Create a committed user so user_id FKs stay satisfiable."""
     async with session_factory() as session, session.begin():
-        user = await UserRepository(session).create(email=f"u-{uuid4()}@grasp.test", password_hash="hash")
+        user = await UserRepository(session).create(
+            email=f"u-{uuid4()}@grasp.test", password_hash="hash", monthly_limit=20
+        )
     return user.id
 
 

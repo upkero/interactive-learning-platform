@@ -9,6 +9,7 @@ whole integration suite is skipped, so local unit-only runs stay green.
 import asyncio
 import os
 from collections.abc import AsyncIterator, Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
@@ -94,7 +95,7 @@ def session_factory(db: AsyncEngine) -> async_sessionmaker[AsyncSession]:
 async def part_ids(session_factory: async_sessionmaker[AsyncSession]) -> tuple[UUID, UUID, UUID]:
     """Committed user -> document -> single queued part chain."""
     async with session_factory() as session, session.begin():
-        user = await UserRepository(session).create(email="part@grasp.test", password_hash="hash")
+        user = await UserRepository(session).create(email="part@grasp.test", password_hash="hash", monthly_limit=20)
         document = await DocumentRepository(session).create(
             owner_id=user.id,
             title="Race document",
@@ -106,6 +107,15 @@ async def part_ids(session_factory: async_sessionmaker[AsyncSession]) -> tuple[U
         )
         (part,) = await DocumentPartRepository(session).add_many(
             document.id,
-            [PartDraft(index=0, title="Part", topic_ids=[], source_markdown="# part", token_count=1)],
+            [
+                PartDraft(
+                    index=0,
+                    title="Part",
+                    topic_ids=[],
+                    source_markdown="# part",
+                    token_count=1,
+                    quota_period_start=datetime.now(UTC).date().replace(day=1),
+                )
+            ],
         )
     return user.id, document.id, part.id

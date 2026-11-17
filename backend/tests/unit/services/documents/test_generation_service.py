@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents import DocumentStatus, MaterialRole, PartDraft, SourceType
 from src.app.contracts.documents.generation import GenerationAnswers, GenerationCommand
-from src.app.core.clock import Clock
 from src.app.core.settings.processing import ProcessingSettings
 from src.app.exceptions.documents import DocumentNotFoundError, DocumentNotReadyError
 from src.app.exceptions.quota import QuotaExceededError
@@ -18,6 +17,7 @@ from src.app.interfaces.storage.object_storage_client import StorageBucket
 from src.app.services.documents.generation_service import GenerationService
 from src.app.services.documents.topic_per_part_planner import TopicPerPartPlanner
 from src.app.services.quota.quota_ledger import QuotaLedger
+from tests.support.fakes.core.clock import FixedClock
 from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.repositories.documents import (
     FakeDocumentPartRepository,
@@ -77,11 +77,6 @@ class _ParsedStorage(FakeObjectStorageClient):
         return ("a" * 1200 + "b" * 600).encode()
 
 
-class _FixedClock(Clock):
-    def today(self) -> date:
-        return date(2026, 11, 14)
-
-
 def _factory(session: FakeSession) -> async_sessionmaker[AsyncSession]:
     return cast(async_sessionmaker[AsyncSession], lambda: session)
 
@@ -91,7 +86,7 @@ def _ledger(users: FakeUserRepository, ledger_repo: FakeGenerationLedgerReposito
         users_factory=lambda _: users,
         ledger_factory=lambda _: ledger_repo,
         parts_factory=lambda _: FakeDocumentPartRepository(),
-        clock=_FixedClock(),
+        clock=FixedClock(date(2026, 11, 14)),
     )
 
 

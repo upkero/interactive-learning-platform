@@ -19,13 +19,9 @@ from src.app.repositories.generation_ledger_repository import GenerationLedgerRe
 from src.app.repositories.user_repository import UserRepository
 from src.app.services.quota.quota_ledger import QuotaLedger
 from src.main import create_app
+from tests.support.fakes.core.clock import FixedClock
 
 pytestmark = pytest.mark.integration
-
-
-class FixedClock:
-    def today(self) -> date:
-        return date(2024, 2, 29)
 
 
 @pytest.fixture
@@ -37,7 +33,7 @@ def client() -> Iterator[TestClient]:
             users_factory=UserRepository,
             ledger_factory=GenerationLedgerRepository,
             parts_factory=DocumentPartRepository,
-            clock=FixedClock(),
+            clock=FixedClock(date(2024, 2, 29)),
         )
         yield test_client
 

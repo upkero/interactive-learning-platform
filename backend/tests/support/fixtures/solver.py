@@ -61,14 +61,14 @@ async def build_recovery(status: PartStatus, attempts: int) -> RecoveryFixture:
     )
     part = replace(part, status=status, attempts=attempts)
     parts.store_record(part)
-    parts.owners[part.id] = PartOwner(user_id=user.id, document_id=document.id)
     quota = QuotaLedger(
         users_factory=lambda _: users,
         ledger_factory=lambda _: entries,
         parts_factory=lambda _: parts,
         clock=SystemClock(),
     )
-    await quota.reserve(cast(AsyncSession, session), user_id=user.id, document_id=document.id, parts=1)
+    state = await quota.reserve(cast(AsyncSession, session), user_id=user.id, document_id=document.id, parts=1)
+    parts.owners[part.id] = PartOwner(user_id=user.id, document_id=document.id, quota_period_start=state.period.start)
     dispatcher = FakeTaskDispatcher()
     recovery = PartRecovery(
         session_factory=cast(async_sessionmaker[AsyncSession], lambda: session),

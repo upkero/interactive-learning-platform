@@ -9,6 +9,7 @@ them.
 """
 
 from collections.abc import Callable
+from dataclasses import replace
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -112,7 +113,9 @@ class GenerationService:
                 document_id=document_id,
                 parts=len(plan.parts),
             )
-            created = await parts.add_many(document_id, drafts)
+            created = await parts.add_many(
+                document_id, [replace(draft, quota_period_start=quota.period.start) for draft in drafts]
+            )
             await documents.set_status(document_id, DocumentStatus.GENERATING)
             await self._users(session).save_last_answers(user_id, profile)
         for index, part in enumerate(created):

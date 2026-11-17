@@ -30,6 +30,7 @@ from src.app.contracts.documents.statuses import DocumentStatus, MaterialRole, P
 from src.app.contracts.users.user_record import UserRecord
 from src.app.contracts.widgets import UsageStatus, WidgetKind, WidgetUsageDraft
 from src.app.core.fixtures import PUBLISHED_PART_FIXTURE
+from src.app.core.settings.quota import get_quota_settings
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
 from src.app.repositories.image_repository import ImageRepository
@@ -143,15 +144,18 @@ async def _seed_primitives(session: AsyncSession) -> int:
 async def _seed_users(session: AsyncSession, password_hash: str) -> tuple[UserRecord, UserRecord]:
     """Create the two demo users; the caller owns the idempotency check."""
     user_repository = UserRepository(session)
+    monthly_limit = get_quota_settings().default_monthly_limit
     alice = await user_repository.create(
         email=ALICE_EMAIL,
         password_hash=password_hash,
         display_name="Alice",
+        monthly_limit=monthly_limit,
     )
     bob = await user_repository.create(
         email=BOB_EMAIL,
         password_hash=password_hash,
         display_name="Bob",
+        monthly_limit=monthly_limit,
     )
     return alice, bob
 

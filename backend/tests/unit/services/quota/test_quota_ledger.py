@@ -10,24 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.app.contracts.documents.part_owner import PartOwner
 from src.app.contracts.quota import LedgerOp
 from src.app.contracts.users import UserRecord
-from src.app.core.clock import Clock
 from src.app.exceptions.quota import QuotaExceededError, QuotaPartNotFoundError, QuotaReservationNotFoundError
-from src.app.services.quota.period import current_period, period_start_for
 from src.app.services.quota.quota_ledger import QuotaLedger
+from tests.support.fakes.core.clock import FixedClock
 from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.repositories.documents import FakeDocumentPartRepository
 from tests.support.fakes.repositories.quota import FakeGenerationLedgerRepository
 from tests.support.fakes.repositories.users import FakeUserRepository
 
 pytestmark = pytest.mark.unit
-
-
-class _FixedClock(Clock):
-    def __init__(self, today: date) -> None:
-        self._today = today
-
-    def today(self) -> date:
-        return self._today
 
 
 def _user(period_anchor: date | None = None, monthly_limit: int = 20) -> UserRecord:
@@ -50,33 +41,8 @@ def _ledger(users: FakeUserRepository, ledger: FakeGenerationLedgerRepository, t
         users_factory=lambda _: users,
         ledger_factory=lambda _: ledger,
         parts_factory=lambda _: FakeDocumentPartRepository(),
-        clock=_FixedClock(today),
+        clock=FixedClock(today),
     )
-
-
-def test_period_without_anchor_starts_on_the_first_and_ends_exclusively() -> None:
-    period = current_period(date(2026, 11, 14), anchor=None)
-    # `end` is the first day of the next period, not the last day of this one
-    assert (period.start, period.end) == (date(2026, 11, 1), date(2026, 12, 1))
-
-
-def test_period_with_anchor_and_clamping_for_short_months() -> None:
-    # billing day 31 rolls to Nov 30: today (Nov 14) is still inside
-    # the period that started on Oct 31
-    period = current_period(date(2026, 11, 14), anchor=date(2000, 1, 31))
-    assert (period.start, period.end) == (date(2026, 10, 31), date(2026, 11, 30))
-    # February: day 30 clamps to the 28th (2026 is not a leap year);
-    # on Feb 10 the current period started on Jan 30
-    assert period_start_for(date(2026, 2, 10), anchor_day=30) == date(2026, 1, 30)
-    assert period_start_for(date(2026, 2, 28), anchor_day=30) == date(2026, 2, 28)
-
-
-def test_period_start_uses_the_anchor_day_in_the_current_month() -> None:
-    # billing day 15: on Nov 14 the period started on Oct 15
-    period = current_period(date(2026, 11, 14), anchor=date(2000, 1, 15))
-    assert (period.start, period.end) == (date(2026, 10, 15), date(2026, 11, 15))
-    # on the billing day itself the new period opens
-    assert period_start_for(date(2026, 11, 15), anchor_day=15) == date(2026, 11, 15)
 
 
 async def test_available_is_limit_plus_deltas_and_reads_nothing() -> None:
@@ -143,7 +109,7 @@ async def test_charge_and_refund_are_idempotent_and_use_reservation_period() -> 
     entries = FakeGenerationLedgerRepository()
     parts = FakeDocumentPartRepository()
     document_id, part_id = uuid4(), uuid4()
-    parts.owners[part_id] = PartOwner(user_id=user.id, document_id=document_id)
+    parts.owners[part_id] = PartOwner(user_id=user.id, document_id=document_id, quota_period_start=date(2026, 10, 1))
     await entries.add(
         user_id=user.id, document_id=document_id, op=LedgerOp.RESERVE, delta=-1, period_start=date(2026, 10, 1)
     )
@@ -151,7 +117,7 @@ async def test_charge_and_refund_are_idempotent_and_use_reservation_period() -> 
         users_factory=lambda _: users,
         ledger_factory=lambda _: entries,
         parts_factory=lambda _: parts,
-        clock=_FixedClock(date(2026, 11, 14)),
+        clock=FixedClock(date(2026, 11, 14)),
     )
     session = cast(AsyncSession, FakeSession())
     for _ in range(2):
@@ -174,7 +140,7 @@ async def test_part_operations_reject_missing_part_and_reservation() -> None:
         users_factory=lambda _: users,
         ledger_factory=lambda _: entries,
         parts_factory=lambda _: parts,
-        clock=_FixedClock(date(2026, 11, 14)),
+        clock=FixedClock(date(2026, 11, 14)),
     )
     session = cast(AsyncSession, FakeSession())
     part_id = uuid4()

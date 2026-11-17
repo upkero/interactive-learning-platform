@@ -9,21 +9,24 @@ import pytest
 from sqlalchemy import func, select
 
 from src.app.contracts.documents.statuses import DocumentStatus, PartStatus, SourceType
+from src.app.core.settings.quota import QuotaSettings
 from src.app.models.document import Document
 from src.app.models.document_part import DocumentPart
 from src.app.models.user import User
 from src.app.models.widget import Widget
+from src.app.seed import dev_seed
 from src.app.seed.dev_seed import ALICE_EMAIL, BOB_EMAIL, seed_dev
 from tests.support.types import SessionFactory
 
 pytestmark = pytest.mark.integration
 
 
-async def test_seed_dev_is_idempotent(session_factory: SessionFactory) -> None:
+async def test_seed_dev_is_idempotent(session_factory: SessionFactory, monkeypatch: pytest.MonkeyPatch) -> None:
     """Second seed run is a no-op; the demo dataset stays intact."""
     async with session_factory() as session:
         assert (await session.scalar(select(func.count()).select_from(User))) == 0
 
+    monkeypatch.setattr(dev_seed, "get_quota_settings", lambda: QuotaSettings(default_monthly_limit=50))
     first = await seed_dev(session_factory, password="seed-test-password", fake_embeddings=True)
     second = await seed_dev(session_factory, password="seed-test-password", fake_embeddings=True)
 
@@ -33,6 +36,7 @@ async def test_seed_dev_is_idempotent(session_factory: SessionFactory) -> None:
     async with session_factory() as session:
         user_count = await session.scalar(select(func.count()).select_from(User))
         assert user_count == 2
+        assert (await session.scalars(select(User.monthly_limit))).all() == [50, 50]
         widget_count = await session.scalar(select(func.count()).select_from(Widget))
         assert widget_count is not None and widget_count > 0
 

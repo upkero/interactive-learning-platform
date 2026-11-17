@@ -11,7 +11,7 @@ from src.app.core.settings.celery import get_celery_settings
 from src.app.core.settings.llm import get_llm_settings
 from src.app.core.settings.processing import ProcessingSettings, get_processing_settings
 from src.app.core.settings.progress import get_progress_settings
-from src.app.core.settings.quota import get_quota_settings
+from src.app.core.settings.quota import QuotaSettings, get_quota_settings
 from src.app.core.settings.reports import ReportsSettings, get_reports_settings
 from src.app.core.settings.storage import get_storage_settings
 from src.app.core.settings.upload import get_upload_settings
@@ -75,6 +75,10 @@ class ApplicationContainer:
     def reports_settings(self) -> ReportsSettings:
         return get_reports_settings()
 
+    @cached_property
+    def quota_settings(self) -> QuotaSettings:
+        return get_quota_settings()
+
     # -- services -----------------------------------------------------------
 
     @cached_property
@@ -123,7 +127,7 @@ class ApplicationContainer:
             session_factory=self.session_factory,
             users=UserRepository,
             settings=self.auth_settings,
-            quota_settings=get_quota_settings(),
+            quota_settings=self.quota_settings,
         )
 
     @cached_property

@@ -25,7 +25,7 @@ class UserRepositoryProtocol(Protocol):
         password_hash: str,
         display_name: str | None = None,
         locale: str = "ru",
-        monthly_limit: int = 20,
+        monthly_limit: int,
     ) -> UserRecord: ...
 
     async def lock_for_update(self, user_id: UUID) -> UserRecord | None: ...

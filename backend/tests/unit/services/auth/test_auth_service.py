@@ -17,12 +17,17 @@ from tests.support.fakes.repositories.users import FakeUserRepository
 pytestmark = pytest.mark.unit
 
 
-def _service() -> tuple[AuthService, FakeUserRepository, FakeSession]:
+def _service(
+    quota_settings: QuotaSettings | None = None, users: FakeUserRepository | None = None
+) -> tuple[AuthService, FakeUserRepository, FakeSession]:
     session = FakeSession()
-    users = FakeUserRepository()
+    users = users or FakeUserRepository()
     factory = cast(async_sessionmaker[AsyncSession], lambda: session)
     service = AuthService(
-        session_factory=factory, users=lambda _: users, settings=get_auth_settings(), quota_settings=QuotaSettings()
+        session_factory=factory,
+        users=lambda _: users,
+        settings=get_auth_settings(),
+        quota_settings=quota_settings or QuotaSettings(),
     )
     return service, users, session
 
@@ -42,14 +47,7 @@ async def test_register_normalizes_email_and_hashes_password() -> None:
 
 
 async def test_registration_uses_configured_quota_limit() -> None:
-    users = FakeUserRepository()
-    factory = cast(async_sessionmaker[AsyncSession], FakeSession)
-    service = AuthService(
-        session_factory=factory,
-        users=lambda _: users,
-        settings=get_auth_settings(),
-        quota_settings=QuotaSettings(default_monthly_limit=7),
-    )
+    service, _, _ = _service(quota_settings=QuotaSettings(default_monthly_limit=7))
     user = await service.register(email="quota@example.com", password="long-enough-password")
     assert user.monthly_limit == 7
 
@@ -95,10 +93,6 @@ async def test_repository_conflict_maps_to_email_taken() -> None:
         ) -> UserRecord:
             raise UserAlreadyExistsError
 
-    users = ConflictingRepository()
-    factory = cast(async_sessionmaker[AsyncSession], FakeSession)
-    service = AuthService(
-        session_factory=factory, users=lambda _: users, settings=get_auth_settings(), quota_settings=QuotaSettings()
-    )
+    service, _, _ = _service(users=ConflictingRepository())
     with pytest.raises(EmailTakenError):
         await service.register(email="x@example.com", password="long-enough-password")

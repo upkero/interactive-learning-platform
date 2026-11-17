@@ -13,11 +13,28 @@ import struct
 import zipfile
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 
 from pypdf import PdfWriter
 from pypdf.errors import LimitReachedError
 
 FILES_DIR = Path(__file__).resolve().parent / "files"
+
+
+def topic_node(topic_id: str, title: str, start: int, end: int, tokens: int) -> dict[str, Any]:
+    """Create one parsed topic for integration tests."""
+    return {
+        "id": topic_id,
+        "title": title,
+        "level": 1,
+        "start": start,
+        "end": end,
+        "own_tokens": tokens,
+        "total_tokens": tokens,
+        "page": 1,
+        "image_ids": [],
+        "children": [],
+    }
 
 
 def load(name: str) -> bytes:

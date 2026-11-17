@@ -30,7 +30,7 @@ async def test_three_parallel_generations_only_two_start(session_factory: async_
     ids: list[UUID] = []
     async with session_factory() as session, session.begin():
         users = UserRepository(session)
-        user = await users.create(email="concurrent@example.com", password_hash="hash")
+        user = await users.create(email="concurrent@example.com", password_hash="hash", monthly_limit=20)
         for index in range(3):
             documents = DocumentRepository(session)
             doc = await documents.create(
