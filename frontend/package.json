@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "next lint && npx tsx scripts/check-messages.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --reporter=verbose --passWithNoTests"
   },
