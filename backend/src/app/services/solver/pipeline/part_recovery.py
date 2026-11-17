@@ -6,12 +6,13 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents.part_record import PartRecord
+from src.app.contracts.documents.recovery_outcome import RecoveryOutcome
 from src.app.contracts.documents.statuses import (
     ACTIVE_PART_STATUSES,
     TERMINAL_DOCUMENT_STATUSES,
     PartStatus,
 )
-from src.app.contracts.progress import ProgressEvent, ProgressEventType, RecoveryOutcome
+from src.app.contracts.progress import ProgressEvent, ProgressEventType
 from src.app.interfaces.repositories.documents import DocumentPartRepositoryProtocol, DocumentRepositoryProtocol
 from src.app.interfaces.services.progress_notifier import ProgressNotifier
 from src.app.interfaces.services.task_dispatcher import TaskDispatcher

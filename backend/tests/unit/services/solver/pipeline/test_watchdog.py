@@ -7,8 +7,9 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents.part_record import PartRecord
+from src.app.contracts.documents.recovery_outcome import RecoveryOutcome
 from src.app.contracts.documents.statuses import PartStatus
-from src.app.contracts.progress import ProgressEvent, ProgressEventType, RecoveryOutcome
+from src.app.contracts.progress import ProgressEvent, ProgressEventType
 from src.app.contracts.quota import LedgerOp
 from src.app.services.solver.pipeline.watchdog import Watchdog
 from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
