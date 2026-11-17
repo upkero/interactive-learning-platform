@@ -10,6 +10,8 @@ from typing import Final
 PARSE_DOCUMENT_TASK: Final[str] = "documents.parse_document"
 PROCESS_PART_TASK: Final[str] = "parts.process_part"
 FINISH_PENDING_WIDGETS_TASK: Final[str] = "parts.finish_pending_widgets"
+WATCHDOG_TICK_TASK: Final[str] = "maintenance.watchdog_tick"
+NORMALIZE_LIBRARY_TASK: Final[str] = "maintenance.normalize_library"
 
 MAINTENANCE_QUEUE: Final[str] = "maintenance"
 PARTS_HIGH_QUEUE: Final[str] = "parts.high"
@@ -18,8 +20,10 @@ PARTS_QUEUE: Final[str] = "parts"
 __all__ = [
     "FINISH_PENDING_WIDGETS_TASK",
     "MAINTENANCE_QUEUE",
+    "NORMALIZE_LIBRARY_TASK",
     "PARSE_DOCUMENT_TASK",
     "PARTS_HIGH_QUEUE",
     "PARTS_QUEUE",
     "PROCESS_PART_TASK",
+    "WATCHDOG_TICK_TASK",
 ]

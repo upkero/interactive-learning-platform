@@ -1,8 +1,11 @@
 """Protocols of the document aggregate repositories."""
 
 from collections.abc import Mapping, Sequence
+from datetime import timedelta
 from typing import Any, Protocol
 from uuid import UUID
+
+from pydantic import JsonValue
 
 from src.app.contracts.documents.document_record import DocumentRecord
 from src.app.contracts.documents.image_draft import ImageDraft
@@ -10,6 +13,7 @@ from src.app.contracts.documents.image_record import ImageRecord
 from src.app.contracts.documents.material_details import MaterialDetails
 from src.app.contracts.documents.material_record import MaterialRecord
 from src.app.contracts.documents.part_draft import PartDraft
+from src.app.contracts.documents.part_owner import PartOwner
 from src.app.contracts.documents.part_record import PartRecord
 from src.app.contracts.documents.shared_user_info import SharedUserInfo
 from src.app.contracts.documents.statuses import (
@@ -60,11 +64,27 @@ class DocumentRepositoryProtocol(Protocol):
 
     async def count_active(self, owner_id: UUID, *, exclude: UUID | None = None) -> int: ...
 
+    async def refresh_status(self, document_id: UUID) -> None: ...
+
+    async def lock_stale_uploaded(self, *, older_than: timedelta, limit: int) -> list[DocumentRecord]: ...
+
+    async def touch(self, document_id: UUID) -> None: ...
+
 
 class DocumentPartRepositoryProtocol(Protocol):
     """Public API of the document_parts table access."""
 
     async def get(self, part_id: UUID) -> PartRecord | None: ...
+
+    async def lock(self, part_id: UUID) -> PartRecord | None: ...
+
+    async def part_owner(self, part_id: UUID) -> PartOwner | None: ...
+
+    async def lock_stale(
+        self, *, statuses: frozenset[PartStatus], older_than: timedelta, limit: int
+    ) -> list[PartRecord]: ...
+
+    async def touch(self, part_id: UUID) -> None: ...
 
     async def list_by_document(self, document_id: UUID) -> list[PartRecord]: ...
 
@@ -78,6 +98,7 @@ class DocumentPartRepositoryProtocol(Protocol):
         *,
         error: str | None = None,
         bump_attempts: bool = False,
+        content: dict[str, JsonValue] | None = None,
     ) -> bool: ...
 
 

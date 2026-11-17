@@ -2,9 +2,11 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
+
+from pydantic import JsonValue
 
 from src.app.contracts.documents.document_record import DocumentRecord
 from src.app.contracts.documents.image_draft import ImageDraft
@@ -12,6 +14,7 @@ from src.app.contracts.documents.image_record import ImageRecord
 from src.app.contracts.documents.material_details import MaterialDetails
 from src.app.contracts.documents.material_record import MaterialRecord
 from src.app.contracts.documents.part_draft import PartDraft
+from src.app.contracts.documents.part_owner import PartOwner
 from src.app.contracts.documents.part_record import PartRecord
 from src.app.contracts.documents.shared_user_info import SharedUserInfo
 from src.app.contracts.documents.statuses import (
@@ -36,9 +39,15 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
 
     def __init__(self) -> None:
         self._documents: dict[UUID, DocumentRecord] = {}
+        self.refreshed: list[UUID] = []
+        self._parts: DocumentPartRepositoryProtocol | None = None
         # minimal transaction emulation: ids created since the last
         # checkpoint (commit) are discarded by rollback()
         self._pending: list[UUID] = []
+
+    def attach_parts(self, parts: DocumentPartRepositoryProtocol) -> None:
+        """Let ``refresh_status`` aggregate the same parts the service sees."""
+        self._parts = parts
 
     def checkpoint(self) -> None:
         self._pending.clear()
@@ -51,6 +60,35 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
 
     async def get(self, document_id: UUID) -> DocumentRecord | None:
         return self._documents.get(document_id)
+
+    def store_record(self, record: DocumentRecord) -> None:
+        self._documents[record.id] = record
+
+    async def refresh_status(self, document_id: UUID) -> None:
+        """Mirror the real aggregation: finish generating documents when all parts are terminal."""
+        self.refreshed.append(document_id)
+        document = self._documents.get(document_id)
+        if document is None or document.status is not DocumentStatus.GENERATING or self._parts is None:
+            return
+        parts = await self._parts.list_by_document(document_id)
+        if parts and all(p.status in {PartStatus.PUBLISHED, PartStatus.FAILED} for p in parts):
+            published = any(p.status is PartStatus.PUBLISHED for p in parts)
+            self._documents[document_id] = replace(
+                document,
+                status=DocumentStatus.DONE if published else DocumentStatus.FAILED,
+                updated_at=now(),
+            )
+
+    async def lock_stale_uploaded(self, *, older_than: timedelta, limit: int) -> list[DocumentRecord]:
+        before = now() - older_than
+        return sorted(
+            (d for d in self._documents.values() if d.status is DocumentStatus.UPLOADED and d.updated_at < before),
+            key=lambda d: (d.updated_at, d.id),
+        )[:limit]
+
+    async def touch(self, document_id: UUID) -> None:
+        if document_id in self._documents:
+            self._documents[document_id] = replace(self._documents[document_id], updated_at=now())
 
     async def get_owned(self, document_id: UUID, owner_id: UUID) -> DocumentRecord | None:
         row = self._documents.get(document_id)
@@ -133,9 +171,32 @@ class FakeDocumentPartRepository(DocumentPartRepositoryProtocol):
 
     def __init__(self) -> None:
         self._parts: dict[UUID, PartRecord] = {}
+        self.owners: dict[UUID, PartOwner] = {}
 
     async def get(self, part_id: UUID) -> PartRecord | None:
         return self._parts.get(part_id)
+
+    def store_record(self, record: PartRecord) -> None:
+        self._parts[record.id] = record
+
+    async def lock(self, part_id: UUID) -> PartRecord | None:
+        return await self.get(part_id)
+
+    async def part_owner(self, part_id: UUID) -> PartOwner | None:
+        return self.owners.get(part_id)
+
+    async def lock_stale(
+        self, *, statuses: frozenset[PartStatus], older_than: timedelta, limit: int
+    ) -> list[PartRecord]:
+        before = now() - older_than
+        return sorted(
+            (p for p in self._parts.values() if p.status in statuses and p.stage_changed_at < before),
+            key=lambda p: (p.stage_changed_at, p.id),
+        )[:limit]
+
+    async def touch(self, part_id: UUID) -> None:
+        if part_id in self._parts:
+            self._parts[part_id] = replace(self._parts[part_id], stage_changed_at=now())
 
     async def list_by_document(self, document_id: UUID) -> list[PartRecord]:
         return sorted(
@@ -174,6 +235,7 @@ class FakeDocumentPartRepository(DocumentPartRepositoryProtocol):
         *,
         error: str | None = None,
         bump_attempts: bool = False,
+        content: dict[str, JsonValue] | None = None,
     ) -> bool:
         row = self._parts.get(part_id)
         if row is None or row.status not in expected:
@@ -184,6 +246,7 @@ class FakeDocumentPartRepository(DocumentPartRepositoryProtocol):
             error=error,
             stage_changed_at=now(),
             attempts=row.attempts + (1 if bump_attempts else 0),
+            content=content if content is not None else row.content,
             published_at=datetime.now(UTC) if to is PartStatus.PUBLISHED else row.published_at,
         )
         self._parts[part_id] = updated

@@ -90,6 +90,7 @@ def _ledger(users: FakeUserRepository, ledger_repo: FakeGenerationLedgerReposito
     return QuotaLedger(
         users_factory=lambda _: users,
         ledger_factory=lambda _: ledger_repo,
+        parts_factory=lambda _: FakeDocumentPartRepository(),
         clock=_FixedClock(),
     )
 

@@ -4,6 +4,7 @@ import sys
 from datetime import UTC, datetime
 from typing import Any
 
+from src.app.core.log_context import get_log_context
 from src.app.core.request_id import get_request_id
 from src.app.core.settings.logging import LoggingSettings
 
@@ -29,8 +30,11 @@ class _JsonFormatter(logging.Formatter):
         return json.dumps(data, default=str)
 
 
-class _RequestIdFilter(logging.Filter):
+class _ContextFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
+        for key, value in get_log_context().items():
+            if not hasattr(record, key):
+                setattr(record, key, value)
         if not getattr(record, "request_id", None):
             record.request_id = get_request_id() or "-"
         return True
@@ -47,7 +51,7 @@ def setup_logging(settings: LoggingSettings) -> None:
     formatter: logging.Formatter = _JsonFormatter() if settings.format == "json" else _TextFormatter()
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(formatter)
-    handler.addFilter(_RequestIdFilter())
+    handler.addFilter(_ContextFilter())
 
     root = logging.getLogger()
     root.setLevel(settings.level)

@@ -2,7 +2,6 @@
 
 import json
 from dataclasses import replace
-from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
 
@@ -10,6 +9,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents import MaterialRole, PartDraft, PartStatus
+from src.app.core.fixtures import PUBLISHED_PART_FIXTURE
 from src.app.exceptions.quizzes import InvalidQuizAnswerError, QuizIntegrityError
 from src.app.services.documents.quiz_check_service import QuizCheckService, check_answer
 from tests.support.fakes.db.session import FakeSession
@@ -20,7 +20,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_seed_quiz_uses_separate_answer_key() -> None:
-    fixture = Path(__file__).resolve().parents[3] / "support/fixtures/seed/published_part.json"
+    fixture = PUBLISHED_PART_FIXTURE
     content = json.loads(fixture.read_text())["content"]
     quiz = content["quizzes"][0]
     key = content["answer_keys"][quiz["key"]]

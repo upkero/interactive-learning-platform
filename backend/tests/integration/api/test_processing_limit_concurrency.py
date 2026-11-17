@@ -65,6 +65,7 @@ async def test_three_parallel_generations_only_two_start(session_factory: async_
             ledger=QuotaLedger(
                 users_factory=UserRepository,
                 ledger_factory=GenerationLedgerRepository,
+                parts_factory=DocumentPartRepository,
                 clock=SystemClock(),
             ),
             dispatcher=dispatcher,

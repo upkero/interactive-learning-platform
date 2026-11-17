@@ -18,8 +18,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.quota import LedgerOp
 from src.app.core.clock import Clock
-from src.app.exceptions.quota import QuotaExceededError
+from src.app.exceptions.quota import (
+    LedgerEntryDuplicateError,
+    QuotaExceededError,
+    QuotaPartNotFoundError,
+    QuotaReservationNotFoundError,
+)
 from src.app.exceptions.users import UserNotFoundError
+from src.app.interfaces.repositories.documents import DocumentPartRepositoryProtocol
 from src.app.interfaces.repositories.quota import GenerationLedgerRepositoryProtocol
 from src.app.interfaces.repositories.users import UserRepositoryProtocol
 from src.app.services.quota.period import QuotaPeriod, current_period
@@ -40,10 +46,12 @@ class QuotaLedger:
         *,
         users_factory: Callable[[AsyncSession], UserRepositoryProtocol],
         ledger_factory: Callable[[AsyncSession], GenerationLedgerRepositoryProtocol],
+        parts_factory: Callable[[AsyncSession], DocumentPartRepositoryProtocol],
         clock: Clock,
     ) -> None:
         self._users_factory = users_factory
         self._ledger_factory = ledger_factory
+        self._parts_factory = parts_factory
         self._clock = clock
 
     async def _state(self, session: AsyncSession, user_id: UUID, monthly_limit: int, anchor: date | None) -> QuotaState:
@@ -79,6 +87,36 @@ class QuotaLedger:
             available=state.available - parts,
             period=state.period,
         )
+
+    async def refund(self, session: AsyncSession, *, part_id: UUID) -> None:
+        await self._write_for_part(session, part_id=part_id, op=LedgerOp.REFUND, delta=1)
+
+    async def charge(self, session: AsyncSession, *, part_id: UUID) -> None:
+        await self._write_for_part(session, part_id=part_id, op=LedgerOp.CHARGE, delta=0)
+
+    async def _write_for_part(self, session: AsyncSession, *, part_id: UUID, op: LedgerOp, delta: int) -> None:
+        ledger = self._ledger_factory(session)
+        owner = await self._parts_factory(session).part_owner(part_id)
+        if owner is None:
+            raise QuotaPartNotFoundError()
+        user_id, document_id = owner.user_id, owner.document_id
+        if await self._users_factory(session).lock_for_update(user_id) is None:
+            raise UserNotFoundError()
+        period_start = await ledger.reserve_period(document_id)
+        if period_start is None:
+            raise QuotaReservationNotFoundError()
+        try:
+            async with session.begin_nested():
+                await ledger.add(
+                    user_id=user_id,
+                    document_id=document_id,
+                    part_id=part_id,
+                    op=op,
+                    delta=delta,
+                    period_start=period_start,
+                )
+        except LedgerEntryDuplicateError:
+            return
 
 
 __all__ = ["QuotaLedger", "QuotaState"]
