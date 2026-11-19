@@ -8,8 +8,9 @@ from uuid import UUID
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from src.app.contracts.progress import ProgressEventType
+from src.app.contracts.progress import ProgressEvent, ProgressEventType
 from src.app.core.settings.progress import ProgressSettings
+from src.app.services.progress.messages import render_message
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,23 @@ class RedisProgressNotifier:
         self._redis = redis
         self._settings = settings
 
+    @staticmethod
+    def stream_key(document_id: UUID) -> str:
+        return f"progress:{document_id}"
+
+    async def publish(self, event: ProgressEvent) -> str | None:
+        key = self.stream_key(event.document_id)
+        try:
+            async with self._redis.pipeline(transaction=True) as pipe:
+                pipe.xadd(key, {"data": json.dumps(event.to_payload(), ensure_ascii=False)},
+                          maxlen=self._settings.stream_maxlen, approximate=True)
+                pipe.expire(key, self._settings.stream_ttl_seconds)
+                entry_id, _ = await pipe.execute()
+        except RedisError:
+            logger.warning("Progress event was not published.", extra={"event_type": event.type}, exc_info=True)
+            return None
+        return str(entry_id)
+
     async def emit(
         self,
         document_id: UUID,
@@ -29,22 +47,14 @@ class RedisProgressNotifier:
         part_id: UUID | None = None,
         stage: str | None = None,
         message: str = "",
-    ) -> None:
-        event: dict[str, str] = {"type": event_type.value, "message": message, "ts": datetime.now(UTC).isoformat()}
-        if part_id is not None:
-            event["part_id"] = str(part_id)
-        if stage is not None:
-            event["stage"] = stage
-        key = f"progress:{document_id}"
-        try:
-            async with self._redis.pipeline(transaction=True) as pipe:
-                pipe.xadd(
-                    key,
-                    {"data": json.dumps(event, ensure_ascii=False)},
-                    maxlen=self._settings.stream_maxlen,
-                    approximate=True,
-                )
-                pipe.expire(key, self._settings.stream_ttl_seconds)
-                await pipe.execute()
-        except RedisError:
-            logger.warning("progress.publish_failed", exc_info=True)
+        locale: str = "ru",
+        **params: object,
+    ) -> str | None:
+        return await self.publish(ProgressEvent(
+            document_id=document_id,
+            event_type=event_type,
+            part_id=part_id,
+            stage=stage,
+            message=message or render_message(locale, event_type, stage, params),
+            ts=datetime.now(UTC),
+        ))

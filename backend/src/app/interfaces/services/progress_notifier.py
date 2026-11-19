@@ -15,4 +15,6 @@ class ProgressNotifier(Protocol):
         part_id: UUID | None = None,
         stage: str | None = None,
         message: str = "",
-    ) -> None: ...
+        locale: str = "ru",
+        **params: object,
+    ) -> str | None: ...
