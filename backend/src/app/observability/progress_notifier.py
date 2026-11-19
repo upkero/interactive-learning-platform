@@ -30,8 +30,12 @@ class RedisProgressNotifier:
         key = self.stream_key(event.document_id)
         try:
             async with self._redis.pipeline(transaction=True) as pipe:
-                pipe.xadd(key, {"data": json.dumps(event.to_payload(), ensure_ascii=False)},
-                          maxlen=self._settings.stream_maxlen, approximate=True)
+                pipe.xadd(
+                    key,
+                    {"data": json.dumps(event.to_payload(), ensure_ascii=False)},
+                    maxlen=self._settings.stream_maxlen,
+                    approximate=True,
+                )
                 pipe.expire(key, self._settings.stream_ttl_seconds)
                 entry_id, _ = await pipe.execute()
         except RedisError:
@@ -50,11 +54,13 @@ class RedisProgressNotifier:
         locale: str = "ru",
         **params: object,
     ) -> str | None:
-        return await self.publish(ProgressEvent(
-            document_id=document_id,
-            event_type=event_type,
-            part_id=part_id,
-            stage=stage,
-            message=message or render_message(locale, event_type, stage, params),
-            ts=datetime.now(UTC),
-        ))
+        return await self.publish(
+            ProgressEvent(
+                document_id=document_id,
+                event_type=event_type,
+                part_id=part_id,
+                stage=stage,
+                message=message or render_message(locale, event_type, stage, params),
+                ts=datetime.now(UTC),
+            )
+        )

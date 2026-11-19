@@ -27,11 +27,14 @@ class StreamEntry:
 
     @classmethod
     def synthetic_done(cls, document_id: UUID, status: str) -> "StreamEntry":
-        data = json.dumps({
-            "type": ProgressEventType.DOCUMENT_DONE.value,
-            "stage": status,
-            "message": "Материал готов" if status == "done" else "Обработка завершилась с ошибкой",  # noqa: RUF001
-        }, ensure_ascii=False)
+        data = json.dumps(
+            {
+                "type": ProgressEventType.DOCUMENT_DONE.value,
+                "stage": status,
+                "message": "Материал готов" if status == "done" else "Обработка завершилась с ошибкой",  # noqa: RUF001
+            },
+            ensure_ascii=False,
+        )
         return cls(id="synthetic-0", type=ProgressEventType.DOCUMENT_DONE.value, data=data)
 
 

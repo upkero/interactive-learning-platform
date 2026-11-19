@@ -84,7 +84,7 @@ def _render_text(locale: str, title: str, count: int, link: str) -> str:
             f"Открыть: {link}\n\nОтключить уведомления: {link}/profile"  # noqa: RUF001
         )
     return (
-        f"Your material \"{title}\" is ready. Ready parts: {count}.\n"
+        f'Your material "{title}" is ready. Ready parts: {count}.\n'
         f"Open: {link}\n\nDisable notifications: {link}/profile"
     )
 
@@ -92,7 +92,7 @@ def _render_text(locale: str, title: str, count: int, link: str) -> str:
 def _render_html(locale: str, title: str, count: int, link: str) -> str:
     if locale == "ru":
         return (
-            f'<p>Материал «{title}» готов.</p><p>Готовых частей: {count}.</p>'
+            f"<p>Материал «{title}» готов.</p><p>Готовых частей: {count}.</p>"
             f'<p><a href="{link}">Открыть материал</a></p>'
             f'<p><a href="{link}/profile">Отключить уведомления</a></p>'
         )
