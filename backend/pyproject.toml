@@ -32,6 +32,7 @@ dependencies = [
 
     # Потоки событий и метрики
     "sse-starlette>=2.2.1",
+    "aiosmtplib>=3.0.2",
     "prometheus-client>=0.21.0",
 
     # Нейросети и парсинг
