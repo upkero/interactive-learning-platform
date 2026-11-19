@@ -14,6 +14,7 @@ from src.app.core.settings.processing import ProcessingSettings, get_processing_
 from src.app.core.settings.progress import get_progress_settings
 from src.app.core.settings.quota import QuotaSettings, get_quota_settings
 from src.app.core.settings.reports import ReportsSettings, get_reports_settings
+from src.app.core.settings.smtp import get_smtp_settings
 from src.app.core.settings.storage import get_storage_settings
 from src.app.core.settings.upload import get_upload_settings
 from src.app.db.session import build_engine, build_session_factory
@@ -48,6 +49,8 @@ from src.app.services.documents.part_query_service import PartQueryService
 from src.app.services.documents.quiz_check_service import QuizCheckService
 from src.app.services.documents.topic_per_part_planner import TopicPerPartPlanner
 from src.app.services.documents.upload_service import UploadService
+from src.app.services.notifications.email_sender import EmailSender
+from src.app.services.notifications.notification_service import NotificationService
 from src.app.services.quota.quota_ledger import QuotaLedger
 from src.app.services.quota.quota_service import QuotaService
 from src.app.services.reports.report_service import ReportService
@@ -303,6 +306,18 @@ class ApplicationContainer:
     @cached_property
     def progress_notifier(self) -> RedisProgressNotifier:
         return RedisProgressNotifier(self.progress_redis, get_progress_settings())
+
+    @cached_property
+    def notification_service(self) -> NotificationService:
+        return NotificationService(
+            session_factory=self.session_factory,
+            users=UserRepository,
+            documents=DocumentRepository,
+            parts=DocumentPartRepository,
+            redis=self.progress_redis,
+            sender=EmailSender(get_smtp_settings()),
+            app_settings=get_app_settings(),
+        )
 
     @cached_property
     def task_dispatcher(self) -> CeleryTaskDispatcher:
