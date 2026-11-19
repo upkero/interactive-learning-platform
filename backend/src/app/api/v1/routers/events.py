@@ -11,12 +11,21 @@ from sse_starlette import EventSourceResponse, ServerSentEvent
 from src.app.api.v1.dependencies.auth import CurrentUserDep
 from src.app.api.v1.dependencies.progress import ProgressReaderDep
 from src.app.api.v1.dependencies.services import DocumentQueryServiceDep
+from src.app.api.v1.responses import error_responses
 
 router = APIRouter(tags=["progress"])
 _STREAM_ID = re.compile(r"^\d+-\d+$")
 
 
-@router.get("/documents/{document_id}/events", response_class=EventSourceResponse, operation_id="document_events")
+@router.get(
+    "/documents/{document_id}/events",
+    response_class=EventSourceResponse,
+    operation_id="document_events",
+    responses={
+        200: {"content": {"text/event-stream": {}}},
+        **error_responses(401, 404, 422, 500),
+    },
+)
 async def document_events(
     document_id: UUID,
     request: Request,
