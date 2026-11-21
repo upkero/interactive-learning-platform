@@ -1,0 +1,255 @@
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding-bottom: var(--g-space-3);
+  border-bottom: var(--g-hairline) solid var(--g-color-border);
+  margin-bottom: var(--g-space-3);
+}
+
+.toolbarActions {
+  display: flex;
+  gap: var(--g-space-2);
+}
+
+.toolbarButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--g-control-min-height);
+  padding: var(--g-space-1) var(--g-space-3);
+  border: none;
+  border-radius: var(--g-radius-md);
+  background: var(--g-color-bg-alt);
+  color: var(--g-color-text-secondary);
+  font-family: var(--g-font-sans);
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-weight-medium);
+  cursor: pointer;
+  transition:
+    background-color var(--g-duration-fast) var(--g-easing),
+    color var(--g-duration-fast) var(--g-easing);
+}
+
+.toolbarButton:hover:not(:disabled) {
+  background: var(--g-color-border);
+  color: var(--g-color-text);
+}
+
+.toolbarButton:focus-visible {
+  outline: 2px solid var(--g-focus-color);
+  outline-offset: 2px;
+}
+
+.toolbarButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.errorState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--g-space-3);
+  padding: var(--g-space-7) var(--g-space-4);
+  text-align: center;
+  color: var(--g-color-text-secondary);
+}
+
+.errorMessage {
+  margin: 0;
+  color: var(--g-color-danger-text);
+}
+
+.retryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--g-control-min-height);
+  padding: var(--g-space-2) var(--g-space-4);
+  border: none;
+  border-radius: var(--g-radius-md);
+  background: var(--g-color-accent);
+  color: var(--g-color-accent-contrast);
+  font-family: var(--g-font-sans);
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color var(--g-duration-fast) var(--g-easing),
+    transform var(--g-duration-fast) var(--g-easing);
+}
+
+.retryButton:hover {
+  background: var(--g-color-accent-hover);
+  transform: translateY(-1px);
+}
+
+.retryButton:active {
+  transform: translateY(0);
+}
+
+.retryButton:focus-visible {
+  outline: 2px solid var(--g-focus-color);
+  outline-offset: 2px;
+}
+
+.emptyText {
+  margin: 0;
+  color: var(--g-color-text-secondary);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: var(--g-space-4);
+}
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-4);
+}
+
+.skeletonToolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--g-space-2);
+  padding-bottom: var(--g-space-3);
+  border-bottom: var(--g-hairline) solid var(--g-color-border);
+  margin-bottom: var(--g-space-3);
+}
+
+.skeletonButton {
+  width: 8rem;
+  height: var(--g-control-min-height);
+  border-radius: var(--g-radius-md);
+  background: linear-gradient(
+    90deg,
+    var(--g-color-border) 25%,
+    var(--g-color-bg-alt) 50%,
+    var(--g-color-border) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeletonTree {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-2);
+}
+
+.skeletonItem {
+  display: flex;
+  align-items: center;
+  gap: var(--g-space-3);
+  padding: var(--g-space-2) var(--g-space-3);
+  border-radius: var(--g-radius-md);
+}
+
+.skeletonCheckbox {
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: var(--g-radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--g-color-border) 25%,
+    var(--g-color-bg-alt) 50%,
+    var(--g-color-border) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  flex-shrink: 0;
+}
+
+.skeletonTitle {
+  height: 1rem;
+  border-radius: var(--g-radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--g-color-border) 25%,
+    var(--g-color-bg-alt) 50%,
+    var(--g-color-border) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeletonCost {
+  width: 3rem;
+  height: 1.5rem;
+  border-radius: var(--g-radius-full);
+  background: linear-gradient(
+    90deg,
+    var(--g-color-border) 25%,
+    var(--g-color-bg-alt) 50%,
+    var(--g-color-border) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  flex-shrink: 0;
+}
+
+.skeletonSummary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-4);
+}
+
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--g-space-3);
+}
+
+.skeletonLabel {
+  width: 8rem;
+  height: 1rem;
+  border-radius: var(--g-radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--g-color-border) 25%,
+    var(--g-color-bg-alt) 50%,
+    var(--g-color-border) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeletonValue {
+  width: 5rem;
+  height: 1.25rem;
+  border-radius: var(--g-radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--g-color-border) 25%,
+    var(--g-color-bg-alt) 50%,
+    var(--g-color-border) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonButton,
+  .skeletonCheckbox,
+  .skeletonTitle,
+  .skeletonCost,
+  .skeletonLabel,
+  .skeletonValue {
+    animation: none;
+    background: var(--g-color-border);
+  }
+
+  .toolbarButton,
+  .retryButton {
+    transition: none;
+  }
+}

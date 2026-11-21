@@ -1,0 +1,301 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-5);
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.tabs {
+  display: flex;
+  gap: var(--g-space-1);
+  border-bottom: var(--g-hairline) solid var(--g-color-border);
+  padding-bottom: var(--g-space-2);
+}
+
+.tab {
+  padding: var(--g-space-2) var(--g-space-4);
+  background: transparent;
+  border: none;
+  color: var(--g-color-text-secondary);
+  font-size: var(--g-text-md);
+  font-weight: var(--g-font-weight-medium);
+  cursor: pointer;
+  border-radius: var(--g-radius-md) var(--g-radius-md) 0 0;
+  transition:
+    color var(--g-duration-fast) var(--g-easing),
+    background-color var(--g-duration-fast) var(--g-easing);
+}
+
+.tab:hover {
+  color: var(--g-color-text);
+  background: var(--g-color-bg-alt);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--g-focus-color);
+  outline-offset: 2px;
+}
+
+.active {
+  color: var(--g-color-accent);
+  background: var(--g-color-surface);
+}
+
+.fileTab,
+.urlTab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-3);
+}
+
+.dropzone {
+  border: var(--g-hairline) dashed var(--g-color-border);
+  border-radius: var(--g-radius-lg);
+  padding: var(--g-space-6) var(--g-space-4);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color var(--g-duration-fast) var(--g-easing),
+    background-color var(--g-duration-fast) var(--g-easing);
+  background: var(--g-color-surface);
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.dropzone:hover:not(.submitting) {
+  border-color: var(--g-color-accent);
+  background: var(--g-color-bg-alt);
+}
+
+.dropzone.dragOver {
+  border-color: var(--g-color-accent);
+  background: var(--g-color-bg-alt);
+  border-style: solid;
+}
+
+.dropzone.hasFile {
+  flex-direction: row;
+  justify-content: space-between;
+  padding: var(--g-space-3) var(--g-space-4);
+  min-height: auto;
+  text-align: left;
+}
+
+.dropzone.submitting {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.fileInput {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.dropzoneText {
+  margin: 0 0 var(--g-space-1);
+  font-size: var(--g-text-lg);
+  font-weight: var(--g-font-weight-semibold);
+  color: var(--g-color-text);
+}
+
+.dropzoneHint {
+  margin: 0;
+  color: var(--g-color-text-secondary);
+  font-size: var(--g-text-sm);
+}
+
+.fileInfo {
+  display: flex;
+  align-items: center;
+  gap: var(--g-space-3);
+  flex: 1;
+  min-width: 0;
+}
+
+.fileName {
+  font-weight: var(--g-font-weight-medium);
+  color: var(--g-color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fileSize {
+  font-size: var(--g-text-sm);
+  color: var(--g-color-text-secondary);
+  white-space: nowrap;
+}
+
+.removeFile {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--g-radius-sm);
+  background: var(--g-color-border);
+  color: var(--g-color-text);
+  font-size: var(--g-text-lg);
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color var(--g-duration-fast) var(--g-easing);
+  flex-shrink: 0;
+}
+
+.removeFile:hover:not(:disabled) {
+  background: var(--g-color-danger);
+  color: var(--g-color-danger-bg);
+}
+
+.removeFile:focus-visible {
+  outline: 2px solid var(--g-focus-color);
+  outline-offset: 2px;
+}
+
+.removeFile:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.urlInputWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-2);
+}
+
+.urlInput {
+  width: 100%;
+  height: var(--g-control-min-height);
+  padding: var(--g-space-2) var(--g-space-4);
+  border: var(--g-hairline) solid var(--g-color-border);
+  border-radius: var(--g-radius-md);
+  background: var(--g-color-surface);
+  color: var(--g-color-text);
+  font-size: var(--g-text-md);
+  transition:
+    border-color var(--g-duration-fast) var(--g-easing),
+    box-shadow var(--g-duration-fast) var(--g-easing);
+}
+
+.urlInput:focus-visible {
+  outline: none;
+  border-color: var(--g-color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--g-color-accent) 20%, transparent);
+}
+
+.urlInput:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.urlInput::placeholder {
+  color: var(--g-color-text-muted);
+}
+
+.error {
+  margin: 0;
+  color: var(--g-color-danger-text);
+  font-size: var(--g-text-sm);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--g-space-3);
+  padding-top: var(--g-space-2);
+}
+
+.submitButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--g-control-min-height);
+  padding: var(--g-space-2) var(--g-space-5);
+  border: none;
+  border-radius: var(--g-radius-md);
+  background: var(--g-color-accent);
+  color: var(--g-color-accent-contrast);
+  font-size: var(--g-text-md);
+  font-weight: var(--g-font-weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color var(--g-duration-fast) var(--g-easing),
+    transform var(--g-duration-fast) var(--g-easing);
+}
+
+.submitButton:hover:not(:disabled) {
+  background: var(--g-color-accent-hover);
+  transform: translateY(-1px);
+}
+
+.submitButton:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.submitButton:focus-visible {
+  outline: 2px solid var(--g-focus-color);
+  outline-offset: 2px;
+}
+
+.submitButton.submitting,
+.submitButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.mutationError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--g-space-3);
+  padding: var(--g-space-3) var(--g-space-4);
+  background: var(--g-color-danger-bg);
+  border: var(--g-hairline) solid var(--g-color-danger);
+  border-radius: var(--g-radius-md);
+  color: var(--g-color-danger-text);
+  font-size: var(--g-text-sm);
+}
+
+.retryButton {
+  padding: var(--g-space-1) var(--g-space-3);
+  border: none;
+  border-radius: var(--g-radius-sm);
+  background: transparent;
+  color: var(--g-color-danger-text);
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color var(--g-duration-fast) var(--g-easing),
+    color var(--g-duration-fast) var(--g-easing);
+}
+
+.retryButton:hover {
+  background: var(--g-color-danger);
+  color: var(--g-color-danger-bg);
+}
+
+.retryButton:focus-visible {
+  outline: 2px solid var(--g-focus-color);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab,
+  .dropzone,
+  .removeFile,
+  .urlInput,
+  .submitButton,
+  .retryButton {
+    transition: none;
+  }
+}
