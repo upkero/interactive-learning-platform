@@ -1,0 +1,145 @@
+/* Shared by the application, primitives, widget host, and Storybook. */
+:root {
+  color-scheme: light;
+
+  /* Monochrome Swiss minimalism palette */
+  --g-color-bg: #ffffff;
+  --g-color-bg-alt: #f5f5f7;
+  --g-color-surface: #ffffff;
+  --g-color-surface-alt: #f7f7f8;
+  --g-color-border: #e4e4e7;
+  --g-color-border-strong: #d4d4d8;
+  --g-color-text: #111113;
+  --g-color-text-secondary: #6b6b73;
+  --g-color-text-muted: #9a9aa2;
+
+  /* Dark surfaces for icon rail and auth */
+  --g-color-bg-dark: #0a0a0b;
+  --g-color-surface-dark: #141416;
+  --g-color-border-dark: #26262a;
+  --g-color-text-dark: #ffffff;
+  --g-color-text-dark-secondary: #a1a1aa;
+  --g-color-text-dark-muted: #71717a;
+
+  /* Accent: strict black on light, white on dark */
+  --g-color-accent: #111113;
+  --g-color-accent-contrast: #ffffff;
+  --g-color-accent-hover: #1e1e20;
+  --g-color-accent-dark: #ffffff;
+  --g-color-accent-dark-contrast: #111113;
+  --g-color-accent-dark-hover: #e4e4e7;
+
+  /* Semantic colors - muted, point usage only */
+  --g-color-success: #166534;
+  --g-color-success-bg: #ecfdf5;
+  --g-color-success-text: #065f46;
+  --g-color-danger: #991b1b;
+  --g-color-danger-bg: #fef2f2;
+  --g-color-danger-text: #991b1b;
+  --g-color-warning: #92400e;
+  --g-color-warning-bg: #fffbeb;
+  --g-color-warning-text: #92400e;
+
+  /* Focus ring */
+  --g-focus-color: #111113;
+  --g-focus-color-dark: #ffffff;
+
+  /* Typography */
+  --g-font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --g-font-mono: ui-monospace, "SF Mono", Consolas, monospace;
+  --g-text-xs: 0.75rem;
+  --g-text-sm: 0.8125rem;
+  --g-text-md: 0.9375rem;
+  --g-text-lg: 1.125rem;
+  --g-text-xl: 1.5rem;
+  --g-text-2xl: 2rem;
+  --g-font-weight-normal: 400;
+  --g-font-weight-medium: 500;
+  --g-font-weight-semibold: 600;
+  --g-font-weight-bold: 700;
+
+  /* Spacing */
+  --g-space-1: 4px;
+  --g-space-2: 8px;
+  --g-space-3: 12px;
+  --g-space-4: 16px;
+  --g-space-5: 24px;
+  --g-space-6: 32px;
+  --g-space-7: 48px;
+  --g-space-8: 64px;
+
+  /* Radius */
+  --g-radius-none: 0;
+  --g-radius-sm: 4px;
+  --g-radius-md: 8px;
+  --g-radius-lg: 12px;
+  --g-radius-full: 9999px;
+
+  /* Controls */
+  --g-control-min-height: 2.5rem;
+  --g-control-padding-x: var(--g-space-4);
+  --g-control-padding-y: var(--g-space-2);
+
+  /* Icon rail width */
+  --g-icon-rail-width: 64px;
+
+  /* Transitions */
+  --g-duration-fast: 120ms;
+  --g-duration-base: 280ms;
+  --g-easing: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --g-easing-out: cubic-bezier(0, 0, 0.2, 1);
+
+  /* Hairline border */
+  --g-hairline: 1px;
+
+  /* Tabular nums for counters */
+  --g-tabular-nums: 'tabular-nums';
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --g-color-bg: #0a0a0b;
+  --g-color-bg-alt: #141416;
+  --g-color-surface: #141416;
+  --g-color-surface-alt: #1c1c1e;
+  --g-color-border: #26262a;
+  --g-color-border-strong: #3f3f46;
+  --g-color-text: #fafafa;
+  --g-color-text-secondary: #a1a1aa;
+  --g-color-text-muted: #71717a;
+
+  --g-color-bg-dark: #050506;
+  --g-color-surface-dark: #0a0a0b;
+  --g-color-border-dark: #1f1f23;
+  --g-color-text-dark: #fafafa;
+  --g-color-text-dark-secondary: #d4d4d8;
+  --g-color-text-dark-muted: #a1a1aa;
+
+  --g-color-accent: #ffffff;
+  --g-color-accent-contrast: #111113;
+  --g-color-accent-hover: #e4e4e7;
+  --g-color-accent-dark: #fafafa;
+  --g-color-accent-dark-contrast: #0a0a0b;
+  --g-color-accent-dark-hover: #d4d4d8;
+
+  --g-color-success: #22c55e;
+  --g-color-success-bg: #052e16;
+  --g-color-success-text: #4ade80;
+  --g-color-danger: #ef4444;
+  --g-color-danger-bg: #450a0a;
+  --g-color-danger-text: #fca5a5;
+  --g-color-warning: #f59e0b;
+  --g-color-warning-bg: #422006;
+  --g-color-warning-text: #fcd34d;
+
+  --g-focus-color: #ffffff;
+  --g-focus-color-dark: #ffffff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root, [data-theme] {
+    --g-duration-fast: 0ms;
+    --g-duration-base: 0ms;
+  }
+}

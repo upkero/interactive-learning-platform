@@ -1,0 +1,11 @@
+.content {
+  width: 100%;
+}
+
+.loading {
+  margin: 0;
+  color: var(--g-color-text-dark-secondary);
+  font-size: var(--g-text-sm);
+  text-align: center;
+  padding: var(--g-space-4);
+}
