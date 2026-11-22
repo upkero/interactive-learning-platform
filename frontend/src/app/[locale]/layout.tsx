@@ -1,5 +1,6 @@
 import '@/shared/styles/tokens.css';
 import '@/shared/styles/globals.css';
+import 'katex/dist/katex.min.css';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, setRequestLocale } from 'next-intl/server';
 import type { ReactNode } from 'react';

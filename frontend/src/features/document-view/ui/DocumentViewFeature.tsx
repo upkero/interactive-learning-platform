@@ -10,6 +10,7 @@ import { ApiError } from '@/shared/api/errors';
 import { ActionLink } from '@/shared/ui/action-link/ActionLink';
 import { PageShell } from '@/shared/ui/page-shell/PageShell';
 import { Surface } from '@/shared/ui/surface/Surface';
+import { MarkdownRenderer } from '@/shared/ui/markdown-renderer/MarkdownRenderer';
 import type { PartSummaryOut, PartOut } from '@/entities/document';
 import styles from './DocumentViewFeature.module.css';
 
@@ -371,9 +372,10 @@ function DocumentPartView({
         <>
           {partContent?.markdown && (
             <div className={styles.partContent}>
-              <div className={styles.markdownContent}>
-                {renderMarkdown(partContent.markdown)}
-              </div>
+              <MarkdownRenderer
+                content={partContent.markdown}
+                images={partContent.images}
+              />
             </div>
           )}
 
@@ -446,22 +448,6 @@ function DocumentViewSkeleton() {
           <div className={styles.skeletonContent} />
         </Surface>
       </main>
-    </div>
-  );
-}
-
-// Simple markdown renderer - in production, use react-markdown or similar
-function renderMarkdown(content: string) {
-  // For now, just render as pre-formatted text with basic formatting
-  // TODO: Replace with react-markdown + remark-gfm + rehype-katex when available
-  const lines = content.split('\n');
-  return (
-    <div className={styles.markdownBody}>
-      {lines.map((line, index) => (
-        <p key={index} className={styles.markdownLine}>
-          {line || <br />}
-        </p>
-      ))}
     </div>
   );
 }

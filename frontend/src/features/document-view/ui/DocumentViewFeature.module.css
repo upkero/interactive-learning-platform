@@ -384,25 +384,6 @@
   flex: 1;
 }
 
-.markdownContent {
-  font-size: var(--g-text-md);
-  line-height: 1.7;
-  color: var(--g-color-text);
-  max-width: 72ch;
-}
-
-.markdownBody {
-  display: flex;
-  flex-direction: column;
-  gap: var(--g-space-4);
-}
-
-.markdownLine {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
 .widgetPlaceholder {
   display: flex;
   flex-direction: column;
