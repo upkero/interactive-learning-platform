@@ -26,6 +26,7 @@ export {
   useImportDocument,
   useGenerateDocument,
   usePlanDocument,
+  useRetryPart,
 } from './model/useDocument';
 
 export {

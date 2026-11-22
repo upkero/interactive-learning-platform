@@ -307,3 +307,79 @@
     transition: none;
   }
 }
+
+/* Mobile adaptation: card-based layout */
+@media (max-width: 640px) {
+  .tableWrapper {
+    display: none;
+  }
+
+  .cardList {
+    display: flex;
+    flex-direction: column;
+    gap: var(--g-space-3);
+    padding: var(--g-space-2);
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--g-space-2);
+    padding: var(--g-space-4);
+    background: var(--g-color-surface);
+    border: var(--g-hairline) solid var(--g-color-border);
+    border-radius: var(--g-radius-lg);
+  }
+
+  .cardHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--g-space-2);
+  }
+
+  .cardTitle {
+    font-weight: var(--g-font-weight-medium);
+    font-size: var(--g-text-sm);
+    color: var(--g-color-text);
+    word-break: break-word;
+  }
+
+  .cardMeta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--g-space-2);
+    align-items: center;
+    font-size: var(--g-text-xs);
+    color: var(--g-color-text-secondary);
+  }
+
+  .cardStatus {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--g-space-1) var(--g-space-2);
+    border-radius: var(--g-radius-full);
+    font-size: var(--g-text-xs);
+    font-weight: var(--g-font-weight-semibold);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .cardActions {
+    display: flex;
+    gap: var(--g-space-2);
+    padding-top: var(--g-space-2);
+    border-top: var(--g-hairline) solid var(--g-color-border);
+  }
+
+  .actionButton {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .sharedBadge {
+    font-size: var(--g-text-xs);
+    padding: var(--g-space-1) var(--g-space-2);
+  }
+}

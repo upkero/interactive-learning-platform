@@ -3,6 +3,7 @@ import boundaries from 'eslint-plugin-boundaries';
 import nextPlugin from '@next/eslint-plugin-next';
 
 export default tseslint.config(
+  { ignores: ['**/__tests__/**', '**/*.test.ts', '**/*.test.tsx'] },
   ...tseslint.configs.strictTypeChecked,
   {
     languageOptions: { parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname } },

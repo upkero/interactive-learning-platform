@@ -92,23 +92,33 @@ export function DocumentList({ scope = 'mine' }: DocumentListProps) {
   }
 
   return (
-    <div className={styles.tableWrapper}>
-      <table className={styles.table} role="grid">
-        <thead>
-          <tr>
-            <th scope="col" className={styles.headerCell}>{t('title')}</th>
-            <th scope="col" className={styles.headerCell}>{t('status')}</th>
-            <th scope="col" className={styles.headerCell}>{t('createdAt')}</th>
-            <th scope="col" className={styles.headerCell}>{t('actions')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {documents.map((doc) => (
-            <DocumentRow key={doc.document_id} doc={doc} deleteMutation={deleteMutation} />
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <>
+      {/* Desktop: Table layout */}
+      <div className={styles.tableWrapper} hidden={false}>
+        <table className={styles.table} role="grid">
+          <thead>
+            <tr>
+              <th scope="col" className={styles.headerCell}>{t('title')}</th>
+              <th scope="col" className={styles.headerCell}>{t('status')}</th>
+              <th scope="col" className={styles.headerCell}>{t('createdAt')}</th>
+              <th scope="col" className={styles.headerCell}>{t('actions')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {documents.map((doc) => (
+              <DocumentRow key={doc.document_id} doc={doc} deleteMutation={deleteMutation} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile: Card layout */}
+      <div className={styles.cardList} aria-label={t('title')}>
+        {documents.map((doc) => (
+          <DocumentCard key={doc.document_id} doc={doc} deleteMutation={deleteMutation} />
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -219,5 +229,92 @@ function DocumentRow({ doc, deleteMutation }: DocumentRowProps) {
         </div>
       </td>
     </tr>
+  );
+}
+interface DocumentCardProps {
+  doc: MaterialOut;
+  deleteMutation: ReturnType<typeof useDeleteDocument>;
+}
+
+function DocumentCard({ doc, deleteMutation }: DocumentCardProps) {
+  const t = useTranslations('materials');
+  const tCommon = useTranslations('common');
+  const tErrors = useTranslations('errors');
+
+  const statusStyle = STATUS_STYLES[doc.status];
+
+  const handleDelete = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (!window.confirm(t('deleteConfirm', { title: doc.title }))) return;
+
+    void deleteMutation.mutateAsync().catch((error: unknown) => {
+      const message = error instanceof ApiError
+        ? tErrors(error.code)
+        : tErrors('unknown_error');
+      alert(message);
+    });
+  };
+
+  const handleRetry = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    alert(t('retryNotImplemented'));
+  };
+
+  return (
+    <article className={styles.card} role="listitem">
+      <header className={styles.cardHeader}>
+        <div>
+          <Link href={getMaterialRoute(doc)} className={styles.cardTitle}>
+            {doc.title}
+            {doc.role === 'shared' && (
+              <span className={styles.sharedBadge} aria-label={t('sharedLabel')}>
+                {t('sharedLabel')}
+              </span>
+            )}
+          </Link>
+        </div>
+      </header>
+
+      <div className={styles.cardMeta}>
+        <span className={`${styles.cardStatus} ${styles[statusStyle]}`}>
+          {t(`status.${doc.status}`)}
+        </span>
+        <time dateTime={doc.updated_at} className={styles.cardDate}>
+          {formatDate(doc.updated_at)}
+        </time>
+      </div>
+
+      <footer className={styles.cardActions}>
+        {doc.status === 'failed' && (
+          <>
+            <button
+              type="button"
+              className={styles.actionButton}
+              onClick={handleRetry}
+            >
+              {t('retryAction')}
+            </button>
+            <button
+              type="button"
+              className={`${styles.actionButton} ${styles.danger}`}
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? tCommon('loading') : tCommon('delete')}
+            </button>
+          </>
+        )}
+        {doc.status !== 'failed' && (
+          <button
+            type="button"
+            className={styles.actionButton}
+            onClick={handleDelete}
+            disabled={deleteMutation.isPending}
+          >
+            {deleteMutation.isPending ? tCommon('loading') : tCommon('delete')}
+          </button>
+        )}
+      </footer>
+    </article>
   );
 }

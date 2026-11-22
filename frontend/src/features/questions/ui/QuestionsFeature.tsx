@@ -4,12 +4,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useGenerateDocument } from '@/entities/document';
-import { useQuota } from '@/entities/user';
+import { useQuota, QUOTA_QUERY_KEY } from '@/entities/user';
 import { useDocumentStatusGuard } from '@/entities/document/guard/useDocumentStatusGuard';
 import { ApiError } from '@/shared/api/errors';
 import { ActionLink } from '@/shared/ui/action-link/ActionLink';
 import { PageShell } from '@/shared/ui/page-shell/PageShell';
 import { Surface } from '@/shared/ui/surface/Surface';
+import { useQueryClient } from '@tanstack/react-query';
 import type { GenerateRequest } from '@/entities/document';
 import styles from './QuestionsFeature.module.css';
 
@@ -52,6 +53,7 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const locale = searchParams.get('locale') || 'ru';
+  const queryClient = useQueryClient();
 
   const [formData, setFormData] = useState<FormData>({
     level: 'intermediate',
@@ -72,22 +74,35 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
     currentStep: 'questions',
   });
 
-  // Read selected topic IDs from sessionStorage on mount
+  // Read selected topic IDs from URL query params on mount
   useEffect(() => {
-    const stored = sessionStorage.getItem(`${STORAGE_KEY_PREFIX}${documentId}`);
-    if (stored) {
+    const topicsParam = searchParams.get('topics');
+    if (topicsParam) {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const parsed = JSON.parse(stored);
-        const ids = parsed as unknown;
-        if (Array.isArray(ids) && ids.every((id) => typeof id === 'string') && ids.length > 0) {
+        const ids = topicsParam.split(',').filter(Boolean);
+        if (ids.length > 0) {
           setSelectedTopicIds(ids);
         }
       } catch {
-        // Invalid JSON, ignore
+        // Invalid param, ignore
+      }
+    } else {
+      // Fallback to sessionStorage for backward compatibility
+      const stored = sessionStorage.getItem(`${STORAGE_KEY_PREFIX}${documentId}`);
+      if (stored) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          const parsed = JSON.parse(stored);
+          const ids: unknown = parsed;
+          if (Array.isArray(ids) && ids.every((id) => typeof id === 'string') && ids.length > 0) {
+            setSelectedTopicIds(ids);
+          }
+        } catch {
+          // Invalid JSON, ignore
+        }
       }
     }
-  }, [documentId]);
+  }, [documentId, searchParams]);
 
   const quotaAvailable = quotaQuery.data?.available ?? null;
   const totalCost = selectedTopicIds.length; // Each topic costs 1 generation based on schema
@@ -132,14 +147,24 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
       router.push(`/${locale}/documents/${documentId}/progress`);
     }).catch((error: unknown) => {
       if (error instanceof ApiError) {
-        setSubmitError(tErrors(error.code));
+        const errorCode = error.code;
+        setSubmitError(tErrors(errorCode));
+
+        // Handle quota_exceeded (402) - invalidate quota cache and show back button
+        if (errorCode === 'quota_exceeded') {
+          void queryClient.invalidateQueries({ queryKey: QUOTA_QUERY_KEY });
+        }
+        // Handle document_not_ready (409) - user should go back to topics or refresh
+        if (errorCode === 'document_not_ready') {
+          // Error message will be shown via submitError, UI will have back button
+        }
       } else {
         setSubmitError(tErrors('unknown_error'));
       }
     }).finally(() => {
       setIsSubmitting(false);
     });
-  }, [canSubmit, documentId, formData, generateMutation, locale, router, selectedTopicIds, tErrors]);
+  }, [canSubmit, documentId, formData, generateMutation, locale, queryClient, router, selectedTopicIds, tErrors]);
 
   // Loading state
   if (isLoading) {
@@ -317,6 +342,15 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
         <div className={styles.errorSurface} role="alert">
           <Surface>
             <p className={styles.submitError}>{submitError}</p>
+            {(submitError.includes('quota_exceeded') || submitError.includes('document_not_ready')) && (
+              <ActionLink
+                href={`/${locale}/documents/${documentId}/topics`}
+                variant="secondary"
+                className={styles.backToTopicsButton}
+              >
+                {t('backToTopics')}
+              </ActionLink>
+            )}
           </Surface>
         </div>
       )}

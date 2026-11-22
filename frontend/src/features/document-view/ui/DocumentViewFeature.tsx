@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { useDocument, useDocumentParts, usePart } from '@/entities/document';
+import { useDocument, useDocumentParts, usePart, useRetryPart } from '@/entities/document';
 import { useDocumentStatusGuard } from '@/entities/document/guard/useDocumentStatusGuard';
 import { ApiError } from '@/shared/api/errors';
 import { ActionLink } from '@/shared/ui/action-link/ActionLink';
@@ -35,6 +35,7 @@ export function DocumentViewFeature({ documentId, onShare }: DocumentViewFeature
   const documentQuery = useDocument(documentId);
   const partsQuery = useDocumentParts(documentId);
   const partQuery = usePart(selectedPartId);
+  const retryPartMutation = useRetryPart();
 
   const document = documentQuery.data;
   const parts = partsQuery.data ?? [];
@@ -265,6 +266,10 @@ export function DocumentViewFeature({ documentId, onShare }: DocumentViewFeature
                 locale={locale}
                 t={t}
                 tProgress={tProgress}
+                tErrors={tErrors}
+                tCommon={tCommon}
+                selectedPartId={selectedPartId}
+                retryPartMutation={retryPartMutation}
               />
             ) : (
               <p className={styles.emptyMessage}>{tEmpty('topicsNone')}</p>
@@ -282,9 +287,23 @@ interface DocumentPartViewProps {
   locale: string;
   t: ReturnType<typeof useTranslations>;
   tProgress: ReturnType<typeof useTranslations>;
+  tErrors: ReturnType<typeof useTranslations>;
+  tCommon: ReturnType<typeof useTranslations>;
+  selectedPartId: string | null;
+  retryPartMutation: ReturnType<typeof import('@/entities/document').useRetryPart>;
 }
 
-function DocumentPartView({ part, summary, locale, t, tProgress }: DocumentPartViewProps) {
+function DocumentPartView({
+  part,
+  summary,
+  locale,
+  t,
+  tProgress,
+  tErrors,
+  tCommon,
+  selectedPartId,
+  retryPartMutation,
+}: DocumentPartViewProps) {
   const partStatus = summary?.status || part?.status || '';
   const partTitle = summary?.title || part?.title || '';
   const partContent = part?.content;
@@ -325,11 +344,20 @@ function DocumentPartView({ part, summary, locale, t, tProgress }: DocumentPartV
       {isFailed && (
         <div className={styles.partError} role="alert">
           <p className={styles.partErrorText}>
-            {useTranslations('errors')('part_generation_failed' as keyof ReturnType<typeof useTranslations>)}
+            {tErrors('part_generation_failed')}
           </p>
           <p className={styles.partErrorHint}>{tProgress('partFailedHint')}</p>
-          <button type="button" className={styles.retryPartButton} disabled>
-            {tProgress('retryPartButton')}
+          <button
+            type="button"
+            className={styles.retryPartButton}
+            onClick={() => {
+              if (selectedPartId) {
+                void retryPartMutation.mutateAsync({ partId: selectedPartId });
+              }
+            }}
+            disabled={retryPartMutation.isPending}
+          >
+            {retryPartMutation.isPending ? tCommon('loading') : tProgress('retryPartButton')}
           </button>
         </div>
       )}

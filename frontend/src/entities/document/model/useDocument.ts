@@ -138,6 +138,28 @@ export function usePlanDocument() {
   });
 }
 
+export function useRetryPart() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ partId }: { partId: string }) => {
+      // The retry part endpoint may not be in the schema yet; use POST with type assertion
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      const { data, response } = await (apiClient as any).POST('/api/v1/parts/{part_id}/retry', {
+        params: { path: { part_id: partId } },
+      });
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      if (!response.ok) throw new Error('Failed to retry part');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      return data;
+    },
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: [...DOCUMENT_QUERY_KEY, variables.partId] });
+      void queryClient.invalidateQueries({ queryKey: ['me', 'quota'] });
+    },
+  });
+}
+
 export function useDocumentParts(documentId: string | null) {
   return useQuery({
     queryKey: [...DOCUMENT_QUERY_KEY, documentId, 'parts'],

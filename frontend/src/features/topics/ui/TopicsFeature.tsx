@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useDocumentTopics } from '@/entities/document';
@@ -18,6 +18,8 @@ import styles from './TopicsFeature.module.css';
 // Type aliases for compatibility with selection functions
 type TopicNode = TopicNodeOut;
 
+const DEBOUNCE_MS = 300;
+
 export function TopicsFeature({ documentId }: { documentId: string }) {
   const t = useTranslations('topics');
   const tCommon = useTranslations('common');
@@ -30,6 +32,7 @@ export function TopicsFeature({ documentId }: { documentId: string }) {
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   const topicsQuery = useDocumentTopics(documentId);
   const quotaQuery = useQuota();
@@ -52,6 +55,50 @@ export function TopicsFeature({ documentId }: { documentId: string }) {
 
   const quotaRemaining = quotaAvailable; // Alias for TopicSummary prop
   const canProceed = selectedCount > 0 && !isOverQuota && !isSubmitting;
+
+  // Initialize selectedIds from URL query params on mount
+  useEffect(() => {
+    const topicsParam = searchParams.get('topics');
+    if (topicsParam) {
+      try {
+        const ids = topicsParam.split(',').filter(Boolean);
+        if (ids.length > 0) {
+          setSelectedIds(new Set(ids));
+        }
+      } catch {
+        // Invalid param, ignore
+      }
+    }
+    setHasInitialized(true);
+  }, [searchParams]);
+
+  // Debounced URL update when selection changes
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!hasInitialized) return;
+
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    debounceRef.current = setTimeout(() => {
+      const ids = Array.from(selectedIds);
+      const newParams = new URLSearchParams(Array.from(searchParams.entries()));
+      if (ids.length > 0) {
+        newParams.set('topics', ids.join(','));
+      } else {
+        newParams.delete('topics');
+      }
+      const queryString = newParams.toString();
+      router.replace(`/${locale}/documents/${documentId}/topics${queryString ? `?${queryString}` : ''}`);
+    }, DEBOUNCE_MS);
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [selectedIds, hasInitialized, searchParams, router, locale, documentId]);
 
   const handleTopicToggle = useCallback((id: string, checked: boolean) => {
     setSelectedIds((prev) => {
@@ -84,10 +131,9 @@ export function TopicsFeature({ documentId }: { documentId: string }) {
 
     setIsSubmitting(true);
     try {
-      // Store selected topic IDs in session storage for the next page
-      sessionStorage.setItem(`topics_${documentId}`, JSON.stringify(Array.from(selectedIds)));
-      // Navigate to questions page
-      router.push(`/${locale}/documents/${documentId}/questions`);
+      // Navigate to questions page with topics in URL
+      const ids = Array.from(selectedIds).join(',');
+      router.push(`/${locale}/documents/${documentId}/questions?topics=${ids}`);
     } catch {
       // Navigation error - will be handled by router
     } finally {
@@ -174,7 +220,7 @@ export function TopicsFeature({ documentId }: { documentId: string }) {
       title={t('title')}
       actions={
         <ActionLink
-          href={`/${locale}/documents/${documentId}/questions`}
+          href={`/${locale}/documents/${documentId}/questions?topics=${Array.from(selectedIds).join(',')}`}
           variant="primary"
           onClick={handleNext}
           disabled={!canProceed || isSubmitting}

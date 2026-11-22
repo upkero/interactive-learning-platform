@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useEventStream, type SseEventMessage } from '@/shared/lib/sse/useEventStream';
 import { useDocumentStatusGuard } from '@/entities/document/guard/useDocumentStatusGuard';
+import { useRetryPart } from '@/entities/document';
 import { ActionLink } from '@/shared/ui/action-link/ActionLink';
 import { PageShell } from '@/shared/ui/page-shell/PageShell';
 import { Surface } from '@/shared/ui/surface/Surface';
@@ -69,6 +70,8 @@ export function ProgressFeature({ documentId }: { documentId: string }) {
   const partStartTimes = useRef<Map<string, number>>(new Map());
   const firstPartCompletedTime = useRef<number | null>(null);
   const partDurations = useRef<number[]>([]);
+
+  const retryPartMutation = useRetryPart();
 
   // Centralized status guard - progress step allows 'generating' status
   const { isLoading, error, hasRedirected: guardRedirected } = useDocumentStatusGuard({
@@ -273,7 +276,7 @@ export function ProgressFeature({ documentId }: { documentId: string }) {
             <p className={styles.emptyParts}>{t('waitingForParts')}</p>
           ) : (
             sortedParts.map((part) => (
-              <PartCard key={part.id} part={part} t={t} tErrors={tErrors} />
+              <PartCard key={part.id} part={part} t={t} tErrors={tErrors} tCommon={tCommon} retryMutation={retryPartMutation} />
             ))
           )}
         </div>
@@ -312,15 +315,23 @@ interface PartCardProps {
   part: PartInfo;
   t: ReturnType<typeof useTranslations>;
   tErrors: ReturnType<typeof useTranslations>;
+  tCommon: ReturnType<typeof useTranslations>;
+  retryMutation: ReturnType<typeof import('@/entities/document').useRetryPart>;
 }
 
-function PartCard({ part, t, tErrors }: PartCardProps) {
+function PartCard({ part, t, tErrors, tCommon, retryMutation }: PartCardProps) {
   const statusConfig = {
     queued: { label: t('partStatus.queued'), className: styles.statusQueued },
     generating: { label: t('partStatus.generating'), className: styles.statusGenerating },
     ready: { label: t('partStatus.ready'), className: styles.statusReady },
     failed: { label: t('partStatus.failed'), className: styles.statusFailed },
   }[part.status];
+
+  const handleRetry = () => {
+    if (part.status === 'failed') {
+      void retryMutation.mutateAsync({ partId: part.id });
+    }
+  };
 
   return (
     <article className={`${styles.partCard} ${styles[part.status]}`} role="listitem">
@@ -344,11 +355,10 @@ function PartCard({ part, t, tErrors }: PartCardProps) {
           <button
             type="button"
             className={styles.retryPartButton}
-            onClick={() => {
-              // TODO: Implement retry part API call
-            }}
+            onClick={handleRetry}
+            disabled={retryMutation.isPending}
           >
-            {t('retryPartButton')}
+            {retryMutation.isPending ? tCommon('loading') : t('retryPartButton')}
           </button>
         </div>
       )}
