@@ -11,6 +11,7 @@ import { ActionLink } from '@/shared/ui/action-link/ActionLink';
 import { PageShell } from '@/shared/ui/page-shell/PageShell';
 import { Surface } from '@/shared/ui/surface/Surface';
 import { MarkdownRenderer } from '@/shared/ui/markdown-renderer/MarkdownRenderer';
+import { WidgetRenderer } from '@/entities/widget/ui/WidgetRenderer';
 import type { PartSummaryOut, PartOut } from '@/entities/document';
 import styles from './DocumentViewFeature.module.css';
 
@@ -381,24 +382,14 @@ function DocumentPartView({
 
           {partContent?.widgets && Object.keys(partContent.widgets).length > 0 && (
             <div className={styles.widgetsSection}>
-              {Object.entries(partContent.widgets).map(([widgetId, widget]) => {
-                if ('status' in widget && widget.status === 'pending') {
-                  return (
-                    <div key={widgetId} className={styles.widgetPlaceholder} role="status">
-                      <div className={styles.widgetSpinner} />
-                      <p>{t('widgetPending')}</p>
-                    </div>
-                  );
-                }
-                if ('status' in widget && widget.status === 'fallback') {
-                  return (
-                    <div key={widgetId} className={styles.widgetFallback} role="note">
-                      <p>{t('widgetFallback')}</p>
-                    </div>
-                  );
-                }
-                return null;
-              })}
+              {Object.entries(partContent.widgets).map(([widgetId, widget]) => (
+                <WidgetRenderer
+                  key={widgetId}
+                  widget={widget}
+                  widgetId={widgetId}
+                  partId={selectedPartId}
+                />
+              ))}
             </div>
           )}
 

@@ -134,6 +134,8 @@
     "sourcePage": "P. {page}",
     "widgetPending": "Interactive widget is being generated...",
     "widgetFallback": "Could not render the interactive widget. Showing text fallback.",
+    "widgetLoadError": "Failed to load widget",
+    "widgetLoadErrorHint": "Try refreshing the page or try again later.",
     "reportWidgetButton": "Something wrong?",
     "startQuizButton": "Take part quiz",
     "loadError": "Failed to load material",
@@ -144,10 +146,13 @@
   },
   "report": {
     "title": "Report a widget issue",
+    "reasonLabel": "Reason",
     "reasonBroken": "Widget is broken or fails to render",
     "reasonInaccurate": "Factual inaccuracy in content",
     "reasonUnhelpful": "Widget does not help explain the topic",
+    "reasonOther": "Other reason",
     "commentLabel": "Comment (optional)",
+    "commentPlaceholder": "Describe the issue in more detail...",
     "submitButton": "Submit report",
     "submittedToast": "Thank you, report submitted"
   },
