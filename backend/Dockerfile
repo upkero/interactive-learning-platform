@@ -32,6 +32,7 @@ COPY --chown=appuser:appgroup resources/ resources/
 USER appuser
 
 EXPOSE 8000
+EXPOSE 9101
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"

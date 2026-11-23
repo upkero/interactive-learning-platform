@@ -131,6 +131,7 @@ services:
   # 7. Воркер фоновых задач Celery
   worker:
     <<: *backend
+    ports: ["9101:9101"]
     command:
       [
         "celery",
@@ -142,6 +143,10 @@ services:
         "--concurrency=2",
         "--loglevel=INFO",
       ]
+    environment:
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prom
+    volumes:
+      - worker-prometheus:/tmp/prom
     depends_on: *backend-deps
     networks:
       - default
@@ -168,6 +173,32 @@ services:
     depends_on: *backend-deps
     # В beat нет веб-сервера — HTTP-healthcheck из Dockerfile неуместен
     healthcheck: { disable: true }
+
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    ports: ["9090:9090"]
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  loki:
+    image: grafana/loki:3.3.2
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    ports: ["3100:3100"]
+    volumes:
+      - ./observability/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+
+  promtail:
+    image: grafana/promtail:3.3.2
+    command: ["-config.file=/etc/promtail/promtail-config.yml"]
+    volumes:
+      - ./observability/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    ports: ["3001:3000"]
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
 
   # 9. Изолированная песочница для безопасного рендера виджетов
   sandbox:
@@ -205,3 +236,4 @@ volumes:
   pgdata: {}
   redisdata: {}
   ollamadata: {}
+  worker-prometheus: {}

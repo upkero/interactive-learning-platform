@@ -1,0 +1,40 @@
+"""Prometheus metrics for Celery workers in multiprocess mode."""
+
+import os
+from time import perf_counter
+
+from celery.signals import task_postrun, task_prerun, worker_init, worker_process_shutdown
+from prometheus_client import CollectorRegistry, Counter, Histogram, multiprocess, start_http_server
+
+from src.app.core.settings.observability import get_observability_settings
+
+celery_tasks = Counter("celery_tasks", "Celery tasks by final state", ["task", "state"])
+celery_task_duration = Histogram(
+    "celery_task_duration_seconds", "Celery task duration", ["task"], buckets=(1, 5, 15, 30, 60, 120, 180, 300, 330)
+)
+_started: dict[str, float] = {}
+
+
+@worker_init.connect
+def start_metrics_server(**_: object) -> None:
+    registry = CollectorRegistry()
+    multiprocess.MultiProcessCollector(registry)
+    start_http_server(get_observability_settings().worker_metrics_port, registry=registry)
+
+
+@task_prerun.connect
+def on_task_prerun(task_id: str, **_: object) -> None:
+    _started[task_id] = perf_counter()
+
+
+@task_postrun.connect
+def on_task_postrun(task_id: str, task: object, state: str | None = None, **_: object) -> None:
+    name = getattr(task, "name", "unknown")
+    celery_tasks.labels(task=name, state=(state or "unknown").lower()).inc()
+    if (started := _started.pop(task_id, None)) is not None:
+        celery_task_duration.labels(task=name).observe(perf_counter() - started)
+
+
+@worker_process_shutdown.connect
+def on_process_shutdown(**_: object) -> None:
+    multiprocess.mark_process_dead(os.getpid())

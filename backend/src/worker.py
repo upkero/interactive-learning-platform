@@ -11,6 +11,7 @@ from src.app.core.settings.celery import get_celery_settings
 from src.app.core.settings.logging import get_logging_settings
 from src.app.core.settings.smtp import get_smtp_settings, validate_smtp_config
 from src.app.core.settings.solver import get_solver_settings
+from src.app.observability import worker_metrics  # noqa: F401
 from src.app.tasks.names import (
     MAINTENANCE_QUEUE,
     NORMALIZE_LIBRARY_TASK,
