@@ -43,6 +43,8 @@ dependencies = [
     "openai>=1.60.0",
     "pypdf>=5.1.0",
     "tiktoken>=0.8.0",
+    "Pillow>=11.0.0",
+    "docling>=2.0.0",
 ]
 
 [dependency-groups]

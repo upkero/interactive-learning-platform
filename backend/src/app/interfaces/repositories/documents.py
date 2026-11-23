@@ -72,6 +72,10 @@ class DocumentRepositoryProtocol(Protocol):
 
     async def touch(self, document_id: UUID) -> None: ...
 
+    async def update_source(
+        self, document_id: UUID, *, object_key: str, title: str | None = None, page_count: int | None = None
+    ) -> None: ...
+
 
 class DocumentPartRepositoryProtocol(Protocol):
     """Public API of the document_parts table access."""
@@ -122,6 +126,10 @@ class ImageRepositoryProtocol(Protocol):
     async def list_by_document(self, document_id: UUID) -> list[ImageRecord]: ...
 
     async def add_many(self, document_id: UUID, images: Sequence[ImageDraft]) -> list[ImageRecord]: ...
+
+    async def delete_by_document(self, document_id: UUID) -> list[ImageRecord]: ...
+
+    async def update_descriptions(self, document_id: UUID, descriptions: Mapping[str, str | None]) -> None: ...
 
 
 class UserMaterialRepositoryProtocol(Protocol):

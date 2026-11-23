@@ -18,6 +18,10 @@ from src.app.core.settings.smtp import get_smtp_settings
 from src.app.core.settings.storage import get_storage_settings
 from src.app.core.settings.upload import get_upload_settings
 from src.app.db.session import build_engine, build_session_factory
+from src.app.ingest.parsers.base import DocumentParser as IngestDocumentParser
+from src.app.ingest.parsers.base import ParserRegistry
+from src.app.ingest.parsers.markdown_parser import MarkdownParser
+from src.app.ingest.tokens import get_token_counter
 from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.interfaces.observability.metrics_collector import MetricsCollector
 from src.app.interfaces.services.part_pipeline import PartPipeline
@@ -39,15 +43,18 @@ from src.app.repositories.user_repository import UserRepository
 from src.app.repositories.widget_repository import WidgetRepository
 from src.app.repositories.widget_usage_repository import WidgetUsageRepository
 from src.app.services.auth.auth_service import AuthService
-from src.app.services.documents.document_parser import DocumentParser
+from src.app.services.documents.document_ingest_service import DocumentIngestService
+from src.app.services.documents.document_parser import DocumentParser as WorkerDocumentParser
 from src.app.services.documents.document_query_service import DocumentQueryService
 from src.app.services.documents.file_inspector import FileInspector
 from src.app.services.documents.generation_service import GenerationService
+from src.app.services.documents.image_describer import ImageDescriber
 from src.app.services.documents.import_service import ImportService
 from src.app.services.documents.material_query_service import MaterialQueryService
 from src.app.services.documents.part_query_service import PartQueryService
 from src.app.services.documents.quiz_check_service import QuizCheckService
 from src.app.services.documents.topic_per_part_planner import TopicPerPartPlanner
+from src.app.services.documents.topic_segmenter import TopicSegmenter
 from src.app.services.documents.upload_service import UploadService
 from src.app.services.notifications.email_sender import EmailSender
 from src.app.services.notifications.notification_service import NotificationService
@@ -63,6 +70,12 @@ from src.app.services.solver.pipeline.watchdog import Watchdog
 from src.app.services.users.profile_service import ProfileService
 from src.app.storage.s3_object_storage_client import S3ObjectStorageClient, build_ping_client, build_s3_client
 from src.app.tasks.dispatcher import CeleryTaskDispatcher
+
+
+def _build_docling_parser() -> IngestDocumentParser:
+    from src.app.ingest.parsers.docling_parser import DoclingParser
+
+    return DoclingParser()
 
 
 class ApplicationContainer:
@@ -89,8 +102,21 @@ class ApplicationContainer:
     # -- services -----------------------------------------------------------
 
     @cached_property
-    def document_parser(self) -> DocumentParser:
-        return DocumentParser()
+    def document_parser(self) -> WorkerDocumentParser:
+        return WorkerDocumentParser()
+
+    @cached_property
+    def document_ingest(self) -> DocumentIngestService:
+        return DocumentIngestService(
+            session_factory=self.session_factory,
+            documents=DocumentRepository,
+            images=ImageRepository,
+            storage=self.object_storage,
+            registry=ParserRegistry((_build_docling_parser(), MarkdownParser())),
+            notifier=self.progress_notifier,
+            image_describer=ImageDescriber(self.cheap_llm),
+            topic_segmenter=TopicSegmenter(self.cheap_llm, counter=get_token_counter()),
+        )
 
     @cached_property
     def part_recovery(self) -> PartRecovery:

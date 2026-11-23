@@ -95,6 +95,15 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
         if document_id in self._documents:
             self._documents[document_id] = replace(self._documents[document_id], updated_at=now())
 
+    async def update_source(
+        self, document_id: UUID, *, object_key: str, title: str | None = None, page_count: int | None = None
+    ) -> None:
+        row = self._documents.get(document_id)
+        if row is not None:
+            self._documents[document_id] = replace(
+                row, object_key=object_key, title=title or row.title, page_count=page_count or row.page_count
+            )
+
     async def get_owned(self, document_id: UUID, owner_id: UUID) -> DocumentRecord | None:
         row = self._documents.get(document_id)
         if row is not None and row.owner_id == owner_id:
@@ -303,6 +312,19 @@ class FakeImageRepository(ImageRepositoryProtocol):
             self._images[record.id] = record
             created.append(record)
         return created
+
+    async def delete_by_document(self, document_id: UUID) -> list[ImageRecord]:
+        records = await self.list_by_document(document_id)
+        for record in records:
+            self._images.pop(record.id, None)
+        return records
+
+    async def update_descriptions(self, document_id: UUID, descriptions: Mapping[str, str | None]) -> None:
+        for image_id, record in list(self._images.items()):
+            if record.document_id == document_id:
+                ref = record.object_key.rsplit("/", 1)[-1].removesuffix(".png")
+                if ref in descriptions:
+                    self._images[image_id] = replace(record, description=descriptions[ref])
 
 
 class FakeUserMaterialRepository(UserMaterialRepositoryProtocol):

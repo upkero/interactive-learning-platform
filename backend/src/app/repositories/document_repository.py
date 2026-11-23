@@ -83,6 +83,18 @@ class DocumentRepository(DocumentRepositoryProtocol):
     async def touch(self, document_id: UUID) -> None:
         await self._session.execute(update(Document).where(Document.id == document_id).values(updated_at=func.now()))
 
+    async def update_source(
+        self, document_id: UUID, *, object_key: str, title: str | None = None, page_count: int | None = None
+    ) -> None:
+        row = await self._session.get(Document, document_id)
+        if row is not None:
+            row.object_key = object_key
+            if title:
+                row.title = title
+            if page_count is not None:
+                row.page_count = page_count
+            await self._session.flush()
+
     async def get_owned(self, document_id: UUID, owner_id: UUID) -> DocumentRecord | None:
         row = (
             await self._session.scalars(
