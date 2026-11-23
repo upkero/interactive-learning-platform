@@ -63,14 +63,15 @@ async def _prepare_parsed_document(
         )
         await UserMaterialRepository(session).create(user_id=user_id, document_id=document.id, role=MaterialRole.OWNER)
         await documents.set_status(document.id, DocumentStatus.PARSED)
+        chapter_size = 16_000
         await documents.set_topic_tree(
             document.id,
-            [topic_node(str(i), f"Topic {i}", i * 100, (i + 1) * 100, 20) for i in range(3)],
+            [topic_node(str(i), f"Topic {i}", i * chapter_size, (i + 1) * chapter_size, 20) for i in range(3)],
         )
     await container.object_storage.put_object(
         bucket="documents",
         key=parsed_markdown_key(user_id, document.id),
-        data=b"a" * 300,
+        data=b"a " * (chapter_size * 3 // 2),
         content_type="text/markdown",
     )
     return document.id
