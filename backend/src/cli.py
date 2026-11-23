@@ -31,7 +31,11 @@ async def _run_seed_dev(fake_embeddings: bool) -> int:
         session_factory = build_session_factory(engine)
         password = get_seed_settings().seed_password
         outcome = await seed_dev(
-            session_factory, password=password, ledger=container.quota_ledger, fake_embeddings=fake_embeddings
+            session_factory,
+            password=password,
+            ledger=container.quota_ledger,
+            storage=container.object_storage,
+            fake_embeddings=fake_embeddings,
         )
         print(f"seed-dev: {outcome}")
     finally:

@@ -30,6 +30,7 @@ from src.app.interfaces.repositories.documents import (
     DocumentRepositoryProtocol,
     UserMaterialRepositoryProtocol,
 )
+from src.app.interfaces.repositories.users import UserRepositoryProtocol
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 
 # statuses from which the topic tree is readable; the parse result of
@@ -46,12 +47,25 @@ class DocumentQueryService:
         materials: Callable[[AsyncSession], UserMaterialRepositoryProtocol],
         parts: Callable[[AsyncSession], DocumentPartRepositoryProtocol],
         storage: ObjectStorageClient,
+        users: Callable[[AsyncSession], UserRepositoryProtocol] | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._documents = documents
         self._materials = materials
         self._parts = parts
         self._storage = storage
+        self._users = users
+
+    async def get_readable(self, *, user_id: UUID, document_id: UUID) -> tuple[DocumentRecord, str]:
+        """Cheap authorization and owner locale for the SSE stream."""
+        async with self._session_factory() as session:
+            if await self._materials(session).get_role(user_id, document_id) is None:
+                raise DocumentNotFoundError()
+            document = await self._documents(session).get(document_id)
+            if document is None:
+                raise DocumentNotFoundError()
+            owner = await self._users(session).get(document.owner_id) if self._users is not None else None
+            return document, owner.locale if owner is not None else "ru"
 
     async def get_document(self, *, user_id: UUID, document_id: UUID) -> DocumentDetails:
         async with self._session_factory() as session:
@@ -98,6 +112,8 @@ class DocumentQueryService:
         the human text.
         """
         if document.status is DocumentStatus.FAILED:
+            if document.error_code is None and document.topic_tree:
+                return
             reason = document.error_code.value if document.error_code is not None else None
             raise DocumentNotReadyError(
                 detail="Document processing failed.", extra={"status": "failed", "reason": reason}

@@ -232,7 +232,7 @@ async def test_lost_queue_threshold_and_failed_document(
             .values(stage_changed_at=datetime.now(UTC) - timedelta(minutes=11))
         )
     assert (await watchdog.tick()).failed == 1
-    assert [(e[1], e[3]) for e in notifier.events] == [("part_status", "failed"), ("document_done", None)]
+    assert [(e[1], e[3]) for e in notifier.events] == [("part_status", "failed"), ("document_done", "failed")]
     async with session_factory() as session:
         document = await DocumentRepository(session).get(document_id)
         assert document is not None and document.status is DocumentStatus.FAILED

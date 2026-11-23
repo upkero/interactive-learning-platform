@@ -1,0 +1,1 @@
+{% if outcome == 'ready' %}Your material is ready{% elif outcome == 'partial' %}Your material is partially ready{% else %}Could not prepare your material{% endif %}

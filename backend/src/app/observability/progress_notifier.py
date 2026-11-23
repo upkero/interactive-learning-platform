@@ -2,15 +2,14 @@
 
 import json
 import logging
-from datetime import UTC, datetime
 from uuid import UUID
 
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
 from src.app.contracts.progress import ProgressEvent, ProgressEventType
+from src.app.contracts.progress.stream import stream_key
 from src.app.core.settings.progress import ProgressSettings
-from src.app.services.progress.messages import render_message
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +21,8 @@ class RedisProgressNotifier:
         self._redis = redis
         self._settings = settings
 
-    @staticmethod
-    def stream_key(document_id: UUID) -> str:
-        return f"progress:{document_id}"
-
     async def publish(self, event: ProgressEvent) -> str | None:
-        key = self.stream_key(event.document_id)
+        key = stream_key(event.document_id)
         try:
             async with self._redis.pipeline(transaction=True) as pipe:
                 pipe.xadd(
@@ -39,7 +34,9 @@ class RedisProgressNotifier:
                 pipe.expire(key, self._settings.stream_ttl_seconds)
                 entry_id, _ = await pipe.execute()
         except RedisError:
-            logger.warning("Progress event was not published.", extra={"event_type": event.type}, exc_info=True)
+            logger.warning(
+                "Progress event was not published.", extra={"event_type": event.event_type.value}, exc_info=True
+            )
             return None
         return str(entry_id)
 
@@ -51,8 +48,6 @@ class RedisProgressNotifier:
         part_id: UUID | None = None,
         stage: str | None = None,
         message: str = "",
-        locale: str = "ru",
-        **params: object,
     ) -> str | None:
         return await self.publish(
             ProgressEvent(
@@ -60,7 +55,6 @@ class RedisProgressNotifier:
                 event_type=event_type,
                 part_id=part_id,
                 stage=stage,
-                message=message or render_message(locale, event_type, stage, params),
-                ts=datetime.now(UTC),
+                message=message,
             )
         )

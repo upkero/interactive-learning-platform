@@ -9,7 +9,7 @@ from src.app.services.progress.progress_reader import ProgressReader
 
 
 def get_progress_reader(container: ContainerDep) -> ProgressReader:
-    return ProgressReader(container.progress_redis)
+    return container.progress_reader
 
 
 ProgressReaderDep = Annotated[ProgressReader, Depends(get_progress_reader)]

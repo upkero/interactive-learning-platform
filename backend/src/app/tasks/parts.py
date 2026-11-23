@@ -17,7 +17,6 @@ def process_part(part_id: str) -> None:
     pid = UUID(part_id)
     try:
         run_async(lambda c: c.processing_pipeline.process(pid), part_id=part_id)
-        run_async(lambda c: c.notification_service.on_document_finished_for_part(pid), part_id=part_id)
     except SoftTimeLimitExceeded:
         run_async(lambda c: c.part_recovery.retry_or_fail(pid, reason="soft_time_limit"), part_id=part_id)
     except Exception:

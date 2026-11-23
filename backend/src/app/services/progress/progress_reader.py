@@ -1,56 +1,44 @@
-"""Redis Stream reader used by the document progress SSE endpoint."""
+"""Read Redis Streams without blocking a terminal document forever."""
 
-import json
-from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from collections.abc import AsyncGenerator
 from uuid import UUID
 
 from redis.asyncio import Redis
 
-from src.app.contracts.progress import ProgressEventType
-from src.app.observability.progress_notifier import RedisProgressNotifier
-
-
-@dataclass(frozen=True, slots=True)
-class StreamEntry:
-    id: str
-    type: str
-    data: str
-
-    @classmethod
-    def from_redis(cls, entry_id: str | bytes, fields: dict[str | bytes, str | bytes]) -> "StreamEntry":
-        raw = fields.get("data", fields.get(b"data", "{}"))
-        data = raw.decode() if isinstance(raw, bytes) else raw
-        payload = json.loads(data)
-        value = entry_id.decode() if isinstance(entry_id, bytes) else entry_id
-        return cls(id=value, type=str(payload.get("type", "error")), data=data)
-
-    @classmethod
-    def synthetic_done(cls, document_id: UUID, status: str) -> "StreamEntry":
-        data = json.dumps(
-            {
-                "type": ProgressEventType.DOCUMENT_DONE.value,
-                "stage": status,
-                "message": "Материал готов" if status == "done" else "Обработка завершилась с ошибкой",  # noqa: RUF001
-            },
-            ensure_ascii=False,
-        )
-        return cls(id="synthetic-0", type=ProgressEventType.DOCUMENT_DONE.value, data=data)
+from src.app.contracts.documents.statuses import TERMINAL_DOCUMENT_STATUSES, DocumentStatus
+from src.app.contracts.progress import ProgressEvent, ProgressEventType
+from src.app.contracts.progress.stream import stream_key
+from src.app.contracts.progress.stream_entry import StreamEntry
+from src.app.services.progress.messages import render_message
 
 
 class ProgressReader:
     def __init__(self, redis: Redis) -> None:
         self._redis = redis
 
-    async def follow(self, document_id: UUID, cursor: str, *, finished_status: str) -> AsyncIterator[StreamEntry]:
-        key = RedisProgressNotifier.stream_key(document_id)
-        if finished_status in ("done", "failed") and not await self._redis.exists(key):
-            yield StreamEntry.synthetic_done(document_id, finished_status)
-            return
+    async def follow(
+        self, document_id: UUID, cursor: str, *, finished_status: DocumentStatus, locale: str = "ru"
+    ) -> AsyncGenerator[StreamEntry, None]:
+        key = stream_key(document_id)
+        terminal = finished_status in TERMINAL_DOCUMENT_STATUSES
         while True:
-            response = await self._redis.xread({key: cursor}, block=15_000, count=100)
-            for _key, entries in response or ():
-                for entry_id, fields in entries:
-                    entry = StreamEntry.from_redis(entry_id, fields)
-                    cursor = entry.id
-                    yield entry
+            # A finished document can have a live stream with a missing final event.
+            # Drain its remaining history immediately and then close.
+            response = await self._redis.xread({key: cursor}, block=None if terminal else 15_000, count=100)
+            entries = [
+                StreamEntry.from_redis(entry_id, fields) for _, batch in response or () for entry_id, fields in batch
+            ]
+            for entry in entries:
+                cursor = entry.id
+                yield entry
+                if entry.type == ProgressEventType.DOCUMENT_DONE.value:
+                    return
+            if terminal and len(entries) < 100:
+                event = ProgressEvent(
+                    document_id,
+                    ProgressEventType.DOCUMENT_DONE,
+                    stage=finished_status.value,
+                    message=render_message(locale, ProgressEventType.DOCUMENT_DONE, finished_status.value, {}),
+                )
+                yield StreamEntry(id=cursor, type=event.event_type.value, data=event.to_json())
+                return

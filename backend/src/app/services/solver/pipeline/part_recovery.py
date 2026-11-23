@@ -13,9 +13,12 @@ from src.app.contracts.documents.statuses import (
     PartStatus,
 )
 from src.app.contracts.progress import ProgressEvent, ProgressEventType
+from src.app.interfaces.notifications.service import DocumentNotifications
 from src.app.interfaces.repositories.documents import DocumentPartRepositoryProtocol, DocumentRepositoryProtocol
+from src.app.interfaces.repositories.users import UserRepositoryProtocol
 from src.app.interfaces.services.progress_notifier import ProgressNotifier
 from src.app.interfaces.services.task_dispatcher import TaskDispatcher
+from src.app.services.progress.messages import render_message
 from src.app.services.quota.quota_ledger import QuotaLedger
 
 
@@ -31,6 +34,8 @@ class PartRecovery:
         ledger: QuotaLedger,
         dispatcher: TaskDispatcher,
         notifier: ProgressNotifier,
+        users: Callable[[AsyncSession], UserRepositoryProtocol] | None = None,
+        notifications: DocumentNotifications | None = None,
         max_attempts: int = 2,
     ) -> None:
         self._session_factory = session_factory
@@ -39,6 +44,8 @@ class PartRecovery:
         self._ledger = ledger
         self._dispatcher = dispatcher
         self._notifier = notifier
+        self._users = users
+        self._notifications = notifications
         self._max_attempts = max_attempts
 
     async def retry_or_fail_in(self, session: AsyncSession, part: PartRecord, *, reason: str) -> RecoveryOutcome:
@@ -52,7 +59,8 @@ class PartRecovery:
         parts = self._parts(session)
         if part.attempts < self._max_attempts:
             transitioned = await parts.transition(part.id, ACTIVE_PART_STATUSES, PartStatus.QUEUED, error=reason)
-            events = (self._part_status_event(part, PartStatus.QUEUED),) if transitioned else ()
+            locale = await self._locale_in(session, part.document_id) if transitioned else "ru"
+            events = (self._part_status_event(part, PartStatus.QUEUED, locale),) if transitioned else ()
             return RecoveryOutcome(requeued=transitioned, events=events)
         return await self._fail_in(session, part, reason=reason)
 
@@ -84,6 +92,8 @@ class PartRecovery:
                 stage=event.stage,
                 message=event.message,
             )
+            if event.event_type is ProgressEventType.DOCUMENT_DONE and self._notifications is not None:
+                await self._notifications.on_document_finished(event.document_id)
 
     async def _fail_in(self, session: AsyncSession, part: PartRecord, *, reason: str) -> RecoveryOutcome:
         """Fail and refund once, returning the events for the caller to publish."""
@@ -93,16 +103,34 @@ class PartRecovery:
         documents = self._documents(session)
         await documents.refresh_status(part.document_id)
         document = await documents.get(part.document_id)
-        events = [self._part_status_event(part, PartStatus.FAILED)]
+        locale = await self._locale_in(session, part.document_id, document=document)
+        events = [self._part_status_event(part, PartStatus.FAILED, locale)]
         if document is not None and document.status in TERMINAL_DOCUMENT_STATUSES:
-            events.append(ProgressEvent(part.document_id, ProgressEventType.DOCUMENT_DONE))
+            events.append(
+                ProgressEvent(
+                    part.document_id,
+                    ProgressEventType.DOCUMENT_DONE,
+                    stage=document.status.value,
+                    message=render_message(locale, ProgressEventType.DOCUMENT_DONE, document.status.value, {}),
+                )
+            )
         return RecoveryOutcome(failed=True, events=tuple(events))
 
+    async def _locale_in(self, session: AsyncSession, document_id: UUID, *, document: object = None) -> str:
+        if self._users is None:
+            return "ru"
+        from src.app.contracts.documents.document_record import DocumentRecord
+
+        record = document if isinstance(document, DocumentRecord) else await self._documents(session).get(document_id)
+        owner = await self._users(session).get(record.owner_id) if record is not None else None
+        return owner.locale if owner is not None else "ru"
+
     @staticmethod
-    def _part_status_event(part: PartRecord, stage: PartStatus) -> ProgressEvent:
+    def _part_status_event(part: PartRecord, stage: PartStatus, locale: str = "ru") -> ProgressEvent:
         return ProgressEvent(
             part.document_id,
             ProgressEventType.PART_STATUS,
             part_id=part.id,
             stage=stage.value,
+            message=render_message(locale, ProgressEventType.PART_STATUS, stage.value, {"part": str(part.index + 1)}),
         )

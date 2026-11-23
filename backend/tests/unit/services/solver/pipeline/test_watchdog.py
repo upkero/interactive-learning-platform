@@ -82,7 +82,7 @@ async def test_watchdog_fails_and_refunds_exhausted_attempt() -> None:
     assert ("watchdog_actions_total", {"action": "failed"}, 1) in metrics.labeled_counters
     assert [(e[1], e[3]) for e in case.notifier.events] == [
         (ProgressEventType.PART_STATUS, PartStatus.FAILED.value),
-        (ProgressEventType.DOCUMENT_DONE, None),
+        (ProgressEventType.DOCUMENT_DONE, "failed"),
     ]
 
 

@@ -70,7 +70,9 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
         document = self._documents.get(document_id)
         if document is None or document.status is not DocumentStatus.GENERATING or self._parts is None:
             return
-        parts = await self._parts.list_by_document(document_id)
+        parts = [
+            p for p in await self._parts.list_by_document(document_id) if p.index >= document.generation_start_index
+        ]
         if parts and all(p.status in {PartStatus.PUBLISHED, PartStatus.FAILED} for p in parts):
             published = any(p.status is PartStatus.PUBLISHED for p in parts)
             self._documents[document_id] = replace(
@@ -146,6 +148,10 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
             self._documents[document_id] = updated
             return updated
         return None
+
+    async def set_generation_start(self, document_id: UUID, index: int) -> None:
+        if document_id in self._documents:
+            self._documents[document_id] = replace(self._documents[document_id], generation_start_index=index)
 
     async def set_topic_tree(
         self,

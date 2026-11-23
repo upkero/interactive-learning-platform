@@ -22,7 +22,9 @@ class EmailSender:
             message,
             hostname=self._settings.host,
             port=self._settings.port,
-            username=self._settings.username,
-            password=self._settings.password,
+            username=self._settings.username or None,
+            password=self._settings.password or None,
             use_tls=self._settings.use_tls,
+            start_tls=self._settings.start_tls,
+            timeout=self._settings.timeout,
         )

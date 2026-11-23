@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
@@ -10,6 +11,7 @@ from src.app.contracts.quota import LedgerOp
 from src.app.services.solver.pipeline import stub_pipeline as stub_pipeline_module
 from src.app.services.solver.pipeline.stub_pipeline import StubPipeline
 from tests.support.fakes.db.session import FakeSession
+from tests.support.fakes.repositories.users import FakeUserRepository
 from tests.support.fakes.services.progress_notifier import FakeProgressNotifier
 from tests.support.fixtures.solver import build_recovery
 
@@ -58,3 +60,25 @@ async def test_invalid_fixture_fails_before_publishing(tmp_path: Path, monkeypat
     part = await case.parts.get(case.part.id)
     assert part is not None and part.status is PartStatus.MAIN_PASS and part.content is None
     assert case.notifier.events == []
+
+
+async def test_pipeline_messages_use_owner_locale_and_part_number() -> None:
+    case = await build_recovery(PartStatus.QUEUED, 0)
+    users = FakeUserRepository()
+    user = await users.create(email="en@example.com", password_hash="hash", locale="en")
+    users._users[case.document.owner_id] = replace(user, id=case.document.owner_id)
+    notifier = FakeProgressNotifier()
+    pipeline = StubPipeline(
+        session_factory=cast(async_sessionmaker[AsyncSession], lambda: FakeSession()),
+        parts=lambda _: case.parts,
+        documents=lambda _: case.documents,
+        ledger=case.quota,
+        notifier=notifier,
+        users=lambda _: users,
+        delay=0,
+    )
+    await pipeline.process(case.part.id)
+    messages = [event[4] for event in notifier.events]
+    assert all(message and "{" not in message for message in messages)
+    assert "Analyzing part 1" in messages
+    assert "Your material is ready" in messages

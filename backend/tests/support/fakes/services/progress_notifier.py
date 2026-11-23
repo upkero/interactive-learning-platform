@@ -22,8 +22,6 @@ class FakeProgressNotifier:
         part_id: UUID | None = None,
         stage: str | None = None,
         message: str = "",
-        locale: str = "ru",
-        **params: object,
     ) -> str | None:
         self.committed_at_emit.append(self._committed() if self._committed is not None else None)
         self.events.append((document_id, event_type, part_id, stage, message))

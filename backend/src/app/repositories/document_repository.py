@@ -43,6 +43,7 @@ class DocumentRepository(DocumentRepositoryProtocol):
             error_detail=row.error_detail,
             created_at=row.created_at,
             updated_at=row.updated_at,
+            generation_start_index=row.generation_start_index,
         )
 
     async def get(self, document_id: UUID) -> DocumentRecord | None:
@@ -58,7 +59,7 @@ class DocumentRepository(DocumentRepositoryProtocol):
         aggregate = select(
             func.bool_and(DocumentPart.status.in_([PartStatus.PUBLISHED.value, PartStatus.FAILED.value])),
             func.bool_or(DocumentPart.status == PartStatus.PUBLISHED.value),
-        ).where(DocumentPart.document_id == document_id)
+        ).where(DocumentPart.document_id == document_id, DocumentPart.index >= document.generation_start_index)
         all_terminal, any_published = (await self._session.execute(aggregate)).one()
         if all_terminal:
             document.status = DocumentStatus.DONE.value if any_published else DocumentStatus.FAILED.value
@@ -135,6 +136,12 @@ class DocumentRepository(DocumentRepositoryProtocol):
         row.error_detail = error_detail
         await self._session.flush()
         return self._to_record(row)
+
+    async def set_generation_start(self, document_id: UUID, index: int) -> None:
+        row = await self._session.get(Document, document_id)
+        if row is not None:
+            row.generation_start_index = index
+            await self._session.flush()
 
     async def set_topic_tree(
         self,
