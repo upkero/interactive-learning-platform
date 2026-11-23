@@ -204,7 +204,9 @@ def _split_large(
             low, high = sentence_start, sentence_end
             while low + 1 < high:
                 middle = (low + high) // 2
-                if counter.count(markdown[sentence_start:middle]) <= limits.target:
+                encoded = counter.encode(markdown[sentence_start:middle])
+                decoded = counter.decode(encoded)
+                if counter.count(decoded) <= limits.maximum:
                     low = middle
                 else:
                     high = middle

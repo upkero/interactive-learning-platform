@@ -56,3 +56,28 @@ def test_image_directive_stays_with_previous_paragraph() -> None:
 def test_empty_selection_has_no_parts() -> None:
     root = node("1", "Root", 0, 4, 1)
     assert split_document((root,), set(), "text", COUNTER, SplitLimits(10, 20)) == []
+
+
+def test_large_sentence_is_split_without_exceeding_maximum() -> None:
+    markdown = "word " * 30
+    root = node("1", "Large", 0, len(markdown), 30)
+    units = collect_units((root,), {"1"}, markdown, COUNTER, SplitLimits(5, 8))
+    assert all(unit.tokens <= 8 for unit in units)
+    assert "".join(markdown[unit.start : unit.end] for unit in units) == markdown
+
+
+def test_code_block_is_not_split_at_blank_lines() -> None:
+    markdown = "```python\nline one\n\nline two\n```\n\ntext"
+    spans = split_by_paragraphs(markdown, 0, len(markdown), COUNTER, SplitLimits(5, 200))
+    assert len(spans) == 2
+    assert "line one\n\nline two" in markdown[spans[0][0] : spans[0][1]]
+
+
+def test_split_document_is_deterministic() -> None:
+    markdown = "# First\n\none two\n\n# Second\n\nthree four"
+    first = node("1", "First", 0, 18, 2)
+    second = node("2", "Second", 18, len(markdown), 2)
+    roots = (first, second)
+    left = split_document(roots, {"1", "2"}, markdown, COUNTER, SplitLimits(10, 20))
+    right = split_document(roots, {"1", "2"}, markdown, COUNTER, SplitLimits(10, 20))
+    assert left == right

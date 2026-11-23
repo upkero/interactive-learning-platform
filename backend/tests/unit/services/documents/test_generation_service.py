@@ -194,11 +194,11 @@ async def test_plan_returns_preview_cost_and_available() -> None:
         topic_ids=["topic-adaptive", "topic-quota"],
     )
 
-    # adaptive: 142+178 (each part counted once per subtree); quota: 96.
-    # The short quota part (< 5000) is glued to the previous one (1.10.1)
-    assert [(p.index, p.tokens) for p in plan.parts] == [(0, 320), (1, 96)]
-    assert plan.parts[0].title == "Adaptive learning"
-    assert len(plan.parts) == 2
+    # Small topics from different chapters share a part while it is below the
+    # minimum fill threshold; generation therefore costs one unit.
+    assert len(plan.parts) == 1
+    assert plan.parts[0].tokens == 344
+    assert plan.parts[0].title == "Adaptive learning — Quota and generation pipeline"
     assert available == 20  # default monthly limit, nothing reserved
 
     # the plan is a pure read: the journal is untouched
@@ -327,7 +327,9 @@ async def test_generate_fresh_parsed_document_without_existing_parts() -> None:
     )
     assert started.cost == len(preview.parts) == 1
     part = await parts.get(started.part_ids[0])
-    assert part is not None and part.source_markdown == "a" * 1200
+    assert part is not None
+    assert (part.title, part.token_count) == (preview.parts[0].title, preview.parts[0].tokens)
+    assert part.source_markdown == preview.parts[0].markdown == "a" * 1200
 
 
 @pytest.mark.parametrize("anchor", [None, date(2000, 1, 31)])
@@ -344,7 +346,7 @@ async def test_start_assigns_reservation_period_to_every_part(anchor: date | Non
             answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
         )
     )
-    assert started.cost == len(started.part_ids) == 2
+    assert started.cost == len(started.part_ids) == 1
     assert all(parts.drafts[part_id].quota_period_start == state.period.start for part_id in started.part_ids)
     assert ledger_repo.entries[0].period_start == state.period.start
 
