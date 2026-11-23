@@ -19,6 +19,12 @@ class TokenCounter:
         """Uncalibrated tiktoken count, for calibration reports."""
         return len(self._encoding.encode(text, disallowed_special=()))
 
+    def encode(self, text: str) -> list[int]:
+        return self._encoding.encode(text, disallowed_special=())
+
+    def decode(self, tokens: list[int]) -> str:
+        return self._encoding.decode(tokens)
+
 
 @lru_cache(maxsize=1)
 def get_token_counter() -> TokenCounter:

@@ -1,29 +1,17 @@
-"""Temporary 1.10 planner: one part per selected subtree."""
+"""Production planner for deterministic document splitting."""
 
 from src.app.contracts.documents import TopicNode
 from src.app.contracts.documents.part_plan import PartPlan
+from src.app.core.settings.ingest import IngestSettings
+from src.app.ingest.splitting import SplitLimits, split_document
+from src.app.ingest.tokens import TokenCounter
 
 
 class TopicPerPartPlanner:
+    def __init__(self, *, counter: TokenCounter | None = None, settings: IngestSettings | None = None) -> None:
+        self._counter = counter or TokenCounter()
+        config = settings or IngestSettings()
+        self._limits = SplitLimits(config.split_target_tokens, config.split_max_tokens)
+
     def plan(self, tree: tuple[TopicNode, ...], selected: set[str], markdown: str) -> list[PartPlan]:
-        result: list[PartPlan] = []
-
-        def visit(node: TopicNode) -> None:
-            if node.id in selected:
-                result.append(
-                    PartPlan(
-                        len(result),
-                        node.title,
-                        (node.id,),
-                        ((node.start, node.end),),
-                        node.total_tokens,
-                        markdown[node.start : node.end],
-                    )
-                )
-                return
-            for child in node.children:
-                visit(child)
-
-        for root in tree:
-            visit(root)
-        return result
+        return split_document(tree, selected, markdown, self._counter, self._limits)

@@ -9,7 +9,7 @@ from src.app.core.clock import SystemClock
 from src.app.core.settings.app import get_app_settings
 from src.app.core.settings.auth import AuthSettings, get_auth_settings
 from src.app.core.settings.celery import get_celery_settings
-from src.app.core.settings.ingest import get_ingest_settings
+from src.app.core.settings.ingest import IngestSettings, get_ingest_settings
 from src.app.core.settings.llm import CheapLLMSettings, LLMSettings, get_cheap_llm_settings, get_llm_settings
 from src.app.core.settings.processing import ProcessingSettings, get_processing_settings
 from src.app.core.settings.progress import get_progress_settings
@@ -95,6 +95,10 @@ class ApplicationContainer:
     @cached_property
     def processing_settings(self) -> ProcessingSettings:
         return get_processing_settings()
+
+    @cached_property
+    def ingest_settings(self) -> IngestSettings:
+        return get_ingest_settings()
 
     @cached_property
     def reports_settings(self) -> ReportsSettings:
@@ -266,7 +270,7 @@ class ApplicationContainer:
             materials=UserMaterialRepository,
             parts=DocumentPartRepository,
             users=UserRepository,
-            planner=TopicPerPartPlanner(),
+            planner=TopicPerPartPlanner(counter=get_token_counter(), settings=self.ingest_settings),
             storage=self.object_storage,
             ledger=self.quota_ledger,
             dispatcher=self.task_dispatcher,
