@@ -273,3 +273,37 @@ async def test_close_closes_the_sdk_http_client() -> None:
     await client.close()
 
     assert http_client.is_closed
+
+
+async def test_structured_request_accepts_the_page_draft_schema() -> None:
+    from src.app.services.solver.main_pass.directives import PageDraft
+    from tests.support.fixtures.main_pass import build_page_draft
+
+    captured: list[httpx2.Request] = []
+    response = _message_response(text=json.dumps(build_page_draft()))
+    client, _ = _sdk(_replaying(httpx2.Response(200, json=response), captured))
+
+    result = await client.complete_structured(_request(), PageDraft)
+
+    assert isinstance(result.value, PageDraft)
+    body = json.loads(captured[0].content)
+    schema = body["output_config"]["format"]["schema"]
+    assert schema["properties"]["markdown"]["type"] == "string"
+    assert "directives" in schema["properties"]
+    assert '"ref"' in json.dumps(schema)
+    assert '"image_alias"' in json.dumps(schema)
+
+
+async def test_structured_page_draft_constraint_violation_is_a_schema_error() -> None:
+    from src.app.services.solver.main_pass.directives import PageDraft
+
+    captured: list[httpx2.Request] = []
+    broken = {
+        "markdown": '::widget{ref="i1"}\n',
+        "directives": [{"ref": "i1", "kind": "widget", "intent": "Wrong prefix."}],
+        "key_terms": ["term"],
+    }
+    client, _ = _sdk(_replaying(httpx2.Response(200, json=_message_response(text=json.dumps(broken))), captured))
+
+    with pytest.raises(LLMSchemaError):
+        await client.complete_structured(_request(), PageDraft)

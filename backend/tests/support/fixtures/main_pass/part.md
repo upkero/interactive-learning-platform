@@ -1,0 +1,21 @@
+## From neurons to layers
+
+A neuron computes a weighted sum of its inputs: each input is multiplied
+by its weight, the products are added, and a bias is added to the total.
+The result then goes through a non-linear activation function.
+
+A layer stacks many neurons that read the same input vector. Each neuron
+has its own weights, so one layer produces one output value per neuron.
+The activation is what makes a stack of layers more expressive than a
+single linear transformation.
+
+In a fully connected layer every neuron reads every output of the previous
+layer. The number of weights therefore grows as the product of the two
+layer sizes, which is why wider layers cost more to train.
+
+## Activation functions
+
+The activation decides how strong the neuron's output is. A rectified
+linear unit (ReLU) passes positive values unchanged and turns negative
+values into zero. Other activations, such as the sigmoid, squeeze the
+output into a bounded range.

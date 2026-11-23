@@ -1,0 +1,13 @@
+<reader_profile>
+level: novice
+goal: understand
+depth: standard
+</reader_profile>
+<document>
+<document_title>Neural networks</document_title>
+<outline>
+- From neurons to layers
+  - Activation functions
+- Training a network
+</outline>
+</document>

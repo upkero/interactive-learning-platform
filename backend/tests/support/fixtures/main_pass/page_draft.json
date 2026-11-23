@@ -1,0 +1,31 @@
+{
+  "markdown": "## From neurons to layers\n\nA neuron computes a weighted sum of its inputs: each input is multiplied\nby its weight, the products are added, and a bias is added to the total.\nThe result then goes through a non-linear activation function.\n\n::widget{ref=\"w1\" primitive_hint=\"three-frame\" mode_hint=\"steps\"}\n\nA layer stacks many neurons that read the same input vector. Each neuron\nhas its own weights, so one layer produces one output value per neuron.\n\n::image{ref=\"i1\" image_alias=\"img-1\"}\n\n## Activation functions\n\nThe activation function decides how strong the neuron's output is. A\nrectified linear unit (ReLU) passes positive values unchanged and turns\nnegative values into zero.\n\n::quiz{ref=\"q1\"}\n",
+  "directives": [
+    {
+      "ref": "w1",
+      "kind": "widget",
+      "intent": "Show how the weighted sum of three inputs becomes one neuron output.",
+      "primitive_hint": "three-frame",
+      "mode_hint": "steps"
+    },
+    {
+      "ref": "i1",
+      "kind": "image",
+      "intent": "The diagram of a single neuron with three inputs from the source part.",
+      "image_alias": "img-1"
+    },
+    {
+      "ref": "q1",
+      "kind": "quiz",
+      "intent": "Check that the reader can tell a weight from an activation function."
+    }
+  ],
+  "key_terms": [
+    "neuron",
+    "weight",
+    "bias",
+    "activation function",
+    "layer",
+    "ReLU"
+  ]
+}
