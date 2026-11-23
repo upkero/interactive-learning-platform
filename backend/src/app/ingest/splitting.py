@@ -3,6 +3,7 @@
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
+from itertools import pairwise
 
 from src.app.contracts.documents import TopicNode
 from src.app.contracts.documents.part_plan import PartPlan
@@ -118,8 +119,9 @@ def _walk(
         for child in node.children:
             _walk(child, chapter_id, selected, markdown, counter, limits, out, chosen=False)
         return
-    if node.total_tokens <= limits.maximum:
-        out.append(_unit(node, chapter_id, node.start, node.end, markdown, counter))
+    unit = _unit(node, chapter_id, node.start, node.end, markdown, counter)
+    if unit.tokens <= limits.maximum:
+        out.append(unit)
         return
     own_end = node.children[0].start if node.children else node.end
     for start, end in split_by_paragraphs(markdown, node.start, own_end, counter, limits):
@@ -170,34 +172,47 @@ def _paragraph_spans(markdown: str, start: int, end: int) -> list[tuple[int, int
         if stripped.startswith(("```", "~~~")):
             in_fence = not in_fence
         if not in_fence and not stripped and line_start > paragraph_start:
-            spans.append((paragraph_start, line_start))
+            spans.append((paragraph_start, line_end))
             paragraph_start = line_end
         cursor = line_end
     if paragraph_start < min(cursor, end):
         spans.append((paragraph_start, min(cursor, end)))
     if not spans and start < end:
         spans.append((start, end))
-    # Keep image directives with the preceding paragraph.
-    return spans
+    # Keep image directives with the preceding paragraph, even when the source
+    # contains a blank line before the directive.
+    merged: list[tuple[int, int]] = []
+    for span_start, span_end in spans:
+        if markdown[span_start:span_end].lstrip().startswith("::image") and merged:
+            previous_start, _ = merged[-1]
+            merged[-1] = (previous_start, span_end)
+        else:
+            merged.append((span_start, span_end))
+    return merged
 
 
 def _split_large(
     markdown: str, start: int, end: int, counter: TokenCounter, limits: SplitLimits
 ) -> list[tuple[int, int]]:
-    sentences = list(re.finditer(r".*?(?:[.!?…](?:\s+|$)|$)", markdown[start:end], re.DOTALL))
+    boundaries = [start, *(start + match.end() for match in re.finditer(r"(?<=[.!?…])\s+", markdown[start:end])), end]
     spans: list[tuple[int, int]] = []
-    for match in sentences:
-        if not match.group():
+    for sentence_start, sentence_end in pairwise(boundaries):
+        if sentence_start == sentence_end:
             continue
-        sentence_start, sentence_end = start + match.start(), start + match.end()
-        if counter.count(markdown[sentence_start:sentence_end]) > limits.maximum:
-            encoded = counter.encode(markdown[sentence_start:sentence_end])
-            for offset in range(0, len(encoded), limits.maximum):
-                piece = counter.decode(encoded[offset : offset + limits.maximum])
-                spans.append((sentence_start, sentence_start + len(piece)))
-                sentence_start += len(piece)
-        else:
-            spans.append((sentence_start, sentence_end))
+        while counter.count(markdown[sentence_start:sentence_end]) > limits.maximum:
+            # Search character boundaries so UTF-8 code points remain intact.
+            low, high = sentence_start, sentence_end
+            while low + 1 < high:
+                middle = (low + high) // 2
+                if counter.count(markdown[sentence_start:middle]) <= limits.target:
+                    low = middle
+                else:
+                    high = middle
+            if low == sentence_start:
+                raise ValueError("Split limit cannot accommodate one Unicode character.")
+            spans.append((sentence_start, low))
+            sentence_start = low
+        spans.append((sentence_start, sentence_end))
     return spans or [(start, end)]
 
 
