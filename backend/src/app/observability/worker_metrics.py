@@ -15,19 +15,19 @@ celery_task_duration = Histogram(
 _started: dict[str, float] = {}
 
 
-@worker_init.connect
+@worker_init.connect  # type: ignore[untyped-decorator]
 def start_metrics_server(**_: object) -> None:
     registry = CollectorRegistry()
-    multiprocess.MultiProcessCollector(registry)
+    multiprocess.MultiProcessCollector(registry)  # type: ignore[no-untyped-call]
     start_http_server(get_observability_settings().worker_metrics_port, registry=registry)
 
 
-@task_prerun.connect
+@task_prerun.connect  # type: ignore[untyped-decorator]
 def on_task_prerun(task_id: str, **_: object) -> None:
     _started[task_id] = perf_counter()
 
 
-@task_postrun.connect
+@task_postrun.connect  # type: ignore[untyped-decorator]
 def on_task_postrun(task_id: str, task: object, state: str | None = None, **_: object) -> None:
     name = getattr(task, "name", "unknown")
     celery_tasks.labels(task=name, state=(state or "unknown").lower()).inc()
@@ -35,6 +35,6 @@ def on_task_postrun(task_id: str, task: object, state: str | None = None, **_: o
         celery_task_duration.labels(task=name).observe(perf_counter() - started)
 
 
-@worker_process_shutdown.connect
+@worker_process_shutdown.connect  # type: ignore[untyped-decorator]
 def on_process_shutdown(**_: object) -> None:
-    multiprocess.mark_process_dead(os.getpid())
+    multiprocess.mark_process_dead(os.getpid())  # type: ignore[no-untyped-call]

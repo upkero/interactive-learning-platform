@@ -14,9 +14,11 @@ from src.app.contracts.progress import ProgressEventType
 from src.app.core.fixtures import PUBLISHED_PART_FIXTURE
 from src.app.core.log_context import bind_log_context
 from src.app.interfaces.notifications.service import DocumentNotifications
+from src.app.interfaces.observability.metrics_collector import MetricsCollector
 from src.app.interfaces.repositories.documents import DocumentPartRepositoryProtocol, DocumentRepositoryProtocol
 from src.app.interfaces.repositories.users import UserRepositoryProtocol
 from src.app.interfaces.services.progress_notifier import ProgressNotifier
+from src.app.observability.usage_tracker import UsageTracker, bind_usage_tracker
 from src.app.services.progress.messages import render_message
 from src.app.services.quota.quota_ledger import QuotaLedger
 
@@ -38,6 +40,7 @@ class StubPipeline:
         notifier: ProgressNotifier,
         users: Callable[[AsyncSession], UserRepositoryProtocol],
         notifications: DocumentNotifications,
+        metrics: MetricsCollector | None = None,
         delay: float = 2.0,
     ) -> None:
         self._session_factory = session_factory
@@ -47,6 +50,7 @@ class StubPipeline:
         self._notifier = notifier
         self._users = users
         self._notifications = notifications
+        self._metrics = metrics
         self._content: dict[str, JsonValue] | None = None
         self._delay = delay
 
@@ -67,8 +71,10 @@ class StubPipeline:
             start_index = document.generation_start_index if document is not None else 0
             part_name = str(part.index - start_index + 1)
         content = await self._load_content()
-        with bind_log_context(document_id=str(document_id)):
-            await self._run_stages(document_id, part_id, content, locale, part_name)
+        tracker = UsageTracker(part_id=str(part_id), document_id=str(document_id), metrics=self._metrics)
+        with bind_log_context(document_id=str(document_id), part_id=str(part_id)), bind_usage_tracker(tracker):
+            await self._run_stages(document_id, part_id, content, locale, part_name, tracker)
+            tracker.emit_summary()
 
     async def _load_content(self) -> dict[str, JsonValue]:
         """Read and validate the fixture once for this pipeline instance."""
@@ -96,7 +102,13 @@ class StubPipeline:
         return content
 
     async def _run_stages(
-        self, document_id: UUID, part_id: UUID, content: dict[str, JsonValue], locale: str, part_name: str
+        self,
+        document_id: UUID,
+        part_id: UUID,
+        content: dict[str, JsonValue],
+        locale: str,
+        part_name: str,
+        tracker: UsageTracker,
     ) -> None:
         async def emit(
             event_type: ProgressEventType,
@@ -126,7 +138,8 @@ class StubPipeline:
         await emit(ProgressEventType.PART_STATUS, PartStatus.MAIN_PASS.value)
         current = PartStatus.MAIN_PASS
         for next_status in (PartStatus.RESOLVING, PartStatus.ASSEMBLING, PartStatus.PUBLISHED):
-            await asyncio.sleep(self._delay)
+            with tracker.stage(next_status.value):
+                await asyncio.sleep(self._delay)
             document_done = False
             document_status = None
             async with self._session_factory() as session, session.begin():

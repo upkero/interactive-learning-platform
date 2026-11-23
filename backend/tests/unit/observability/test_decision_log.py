@@ -24,9 +24,7 @@ def test_decision_log_writes_events_and_metrics(caplog: pytest.LogCaptureFixture
         decisions.judge_verdict(widget_ref="w-1", attempt=1, accepted=True, issues=[])
         decisions.quiz_check(quiz_type="single_choice", result="kept", reason="valid")
         decisions.widget_excluded(widget_id="w-1", reporters=3, threshold=3)
-        decisions.library_merge(
-            canonical_id="w-1", merged_ids=["w-2"], rejected_ids=[], reason="same", dry_run=False
-        )
+        decisions.library_merge(canonical_id="w-1", merged_ids=["w-2"], rejected_ids=[], reason="same", dry_run=False)
 
     assert [record.event for record in caplog.records] == [  # type: ignore[attr-defined]
         "resolver.decision",

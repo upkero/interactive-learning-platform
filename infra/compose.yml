@@ -133,16 +133,7 @@ services:
     <<: *backend
     ports: ["9101:9101"]
     command:
-      [
-        "celery",
-        "-A",
-        "src.worker",
-        "worker",
-        "-Q",
-        "maintenance,parts.high,parts",
-        "--concurrency=2",
-        "--loglevel=INFO",
-      ]
+      ["sh", "-c", "rm -rf /tmp/prom/* && exec celery -A src.worker worker -Q maintenance,parts.high,parts --concurrency=2 --loglevel=INFO"]
     environment:
       PROMETHEUS_MULTIPROC_DIR: /tmp/prom
     volumes:
