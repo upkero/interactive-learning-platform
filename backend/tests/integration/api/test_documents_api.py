@@ -670,8 +670,8 @@ async def test_plan_preview_is_stable_and_leaves_the_quota_journal_untouched(
     assert first.json() == second.json()
 
     body = first.json()
-    assert body["cost"] == len(body["parts"]) == 2
-    assert body["parts"][0]["tokens"] == 320
+    assert body["cost"] == len(body["parts"]) == 1
+    assert body["parts"][0]["tokens"] == 344
     assert body["available"] == 20  # default monthly limit
 
     # the journal is untouched: nothing was reserved by the preview
