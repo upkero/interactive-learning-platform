@@ -8,6 +8,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.app.contracts.solver.widget_candidate import WidgetWithDescription
 from src.app.contracts.widgets import WidgetKind, WidgetRecord, WidgetStatus
 from src.app.exceptions.widgets import WidgetConstraintError, WidgetsIntegrityError
 from src.app.interfaces.repositories.widgets import WidgetRepositoryProtocol
@@ -77,6 +78,37 @@ class WidgetRepository(WidgetRepositoryProtocol):
         )
         rows = (await self._session.scalars(stmt)).all()
         return [self._to_record(row) for row in rows]
+
+    async def get_many_with_main_description(
+        self,
+        widget_ids: Sequence[UUID],
+    ) -> dict[UUID, WidgetWithDescription]:
+        """Active widgets with their main description in one statement.
+
+        Paraphrases are ordered after the main description, so the first row
+        per widget is the main one; a widget without any description is
+        omitted (it cannot be searched or rendered meaningfully).
+        """
+        if not widget_ids:
+            return {}
+        stmt = (
+            select(Widget, WidgetDescription.text)
+            .join(WidgetDescription, WidgetDescription.widget_id == Widget.id)
+            .where(
+                Widget.id.in_(list(dict.fromkeys(widget_ids))),
+                Widget.status == WidgetStatus.ACTIVE.value,
+            )
+            .order_by(
+                Widget.id,
+                WidgetDescription.is_paraphrase.asc(),
+                WidgetDescription.created_at.asc(),
+            )
+        )
+        rows = (await self._session.execute(stmt)).all()
+        result: dict[UUID, WidgetWithDescription] = {}
+        for row, text in rows:
+            result.setdefault(row.id, WidgetWithDescription(widget=self._to_record(row), description=text))
+        return result
 
     async def create(
         self,

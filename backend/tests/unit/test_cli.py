@@ -104,3 +104,10 @@ def test_settings_errors_are_not_reported_as_catalog_errors(monkeypatch: pytest.
 
     with pytest.raises(ValidationError, match="db_pool_size"):
         cli.main(["seed-primitives", "--catalog", str(VALID_CATALOG)])
+
+
+def test_reembed_descriptions_command_is_registered() -> None:
+    """The re-embedding command is parsed without touching the database."""
+    args = cli.build_parser().parse_args(["reembed-descriptions"])
+
+    assert args.command == "reembed-descriptions"

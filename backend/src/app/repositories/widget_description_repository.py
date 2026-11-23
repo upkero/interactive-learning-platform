@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,3 +53,19 @@ class WidgetDescriptionRepository(WidgetDescriptionRepositoryProtocol):
     async def list_by_widget(self, widget_id: UUID) -> list[WidgetDescriptionRecord]:
         rows = await self._session.scalars(select(WidgetDescription).where(WidgetDescription.widget_id == widget_id))
         return [self._to_record(row) for row in rows.all()]
+
+    async def list_batch(self, *, after_id: UUID | None, limit: int) -> list[WidgetDescriptionRecord]:
+        """Keyset page ordered by id; the CLI re-embeds and commits one page."""
+        if limit <= 0:
+            return []
+        stmt = select(WidgetDescription).order_by(WidgetDescription.id).limit(limit)
+        if after_id is not None:
+            stmt = stmt.where(WidgetDescription.id > after_id)
+        rows = await self._session.scalars(stmt)
+        return [self._to_record(row) for row in rows.all()]
+
+    async def set_embedding(self, description_id: UUID, embedding: list[float]) -> None:
+        await self._session.execute(
+            update(WidgetDescription).where(WidgetDescription.id == description_id).values(embedding=embedding)
+        )
+        await self._session.flush()
