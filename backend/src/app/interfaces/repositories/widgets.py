@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from typing import Any, Protocol
 from uuid import UUID
 
+from src.app.contracts.solver.widget_candidate import WidgetWithDescription
 from src.app.contracts.widgets import (
     PrimitiveRecord,
     ReportReason,
@@ -63,6 +64,11 @@ class WidgetRepositoryProtocol(Protocol):
 
     async def search_active(self, embedding: list[float], limit: int) -> list[WidgetRecord]: ...
 
+    async def get_many_with_main_description(
+        self,
+        widget_ids: Sequence[UUID],
+    ) -> dict[UUID, WidgetWithDescription]: ...
+
 
 class WidgetDescriptionRepositoryProtocol(Protocol):
     """Public API of the widget_descriptions table access (write-only)."""
@@ -77,6 +83,10 @@ class WidgetDescriptionRepositoryProtocol(Protocol):
     ) -> WidgetDescriptionRecord: ...
 
     async def list_by_widget(self, widget_id: UUID) -> list[WidgetDescriptionRecord]: ...
+
+    async def list_batch(self, *, after_id: UUID | None, limit: int) -> list[WidgetDescriptionRecord]: ...
+
+    async def set_embedding(self, description_id: UUID, embedding: list[float]) -> None: ...
 
 
 class WidgetUsageRepositoryProtocol(Protocol):
