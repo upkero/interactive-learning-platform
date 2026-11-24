@@ -1,4 +1,5 @@
 import asyncio
+import csv
 import json
 from pathlib import Path
 
@@ -123,3 +124,25 @@ def test_report_rejects_invalid_stage_values_and_boolean_numbers(tmp_path: Path)
     rows, skipped = read_summaries(source)
     assert len(rows) == 1 and skipped == len(bad)
     assert rows[0].usage["x"].input == 1
+
+
+@pytest.mark.parametrize("field", ["duration_s", "cost_usd", "stage_durations"])
+def test_report_skips_overflow_and_writes_next_valid_row(tmp_path: Path, field: str) -> None:
+    source, output = tmp_path / "input.jsonl", tmp_path / "report.csv"
+    valid: dict[str, object] = {
+        "event": "part.summary",
+        "document_id": "d",
+        "part_id": "valid",
+        "duration_s": 1,
+        "cost_usd": 0.1,
+        "usage": {},
+        "stage_durations": {},
+    }
+    bad = {**valid, "part_id": "bad", field: {"main": 10**400} if field == "stage_durations" else 10**400}
+    source.write_text("\n".join(json.dumps(row) for row in (bad, valid)), encoding="utf-8")
+    rows, skipped = read_summaries(source)
+    summary = write_report(rows, output, skipped)
+    assert summary["skipped"] == 1
+    with output.open(newline="", encoding="utf-8") as stream:
+        written = list(csv.DictReader(stream))
+    assert len(written) == 1 and written[0]["part_id"] == "valid"

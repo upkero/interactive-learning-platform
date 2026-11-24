@@ -30,9 +30,15 @@ class ReportRow:
 
 
 def _number(value: object) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError("expected a finite non-negative number")
-    return float(value)
+    try:
+        number = float(value)
+    except OverflowError as exc:
+        raise ValueError("expected a finite non-negative number") from exc
+    if not math.isfinite(number) or number < 0:
+        raise ValueError("expected a finite non-negative number")
+    return number
 
 
 def _tokens(value: object) -> TokenCounts:

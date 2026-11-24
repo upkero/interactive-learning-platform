@@ -21,16 +21,20 @@ def register_metrics(app: FastAPI) -> None:
         if request.url.path in {"/metrics", "/metrics/"}:
             return await call_next(request)
         started = perf_counter()
-        status = 500
+        status: int | None = None
         try:
             response = await call_next(request)
             status = response.status_code
+        except Exception:
+            status = 500
+            raise
         finally:
-            route = request.scope.get("route")
-            route_path = getattr(route, "path_format", None) or "unmatched"
-            labels = {"method": request.method, "route": route_path}
-            HTTP_REQUESTS.labels(**labels, status=str(status)).inc()
-            HTTP_DURATION.labels(**labels).observe(perf_counter() - started)
+            if status is not None:
+                route = request.scope.get("route")
+                route_path = getattr(route, "path_format", None) or "unmatched"
+                labels = {"method": request.method, "route": route_path}
+                HTTP_REQUESTS.labels(**labels, status=str(status)).inc()
+                HTTP_DURATION.labels(**labels).observe(perf_counter() - started)
         return response
 
     @app.get("/metrics", include_in_schema=False)

@@ -1,8 +1,11 @@
+import asyncio
 from uuid import uuid4
 
+import httpx
 import pytest
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
+from prometheus_client import REGISTRY
 
 from src.app.api.v1.exception_handlers import register_exception_handlers
 from src.app.api.v1.middleware.metrics import register_metrics
@@ -52,3 +55,25 @@ def test_unhandled_error_records_500_and_duration() -> None:
     assert (
         'http_request_duration_seconds_count{method="GET",route="/failing-observability-test/{item_id}"} 1.0' in metrics
     )
+
+
+async def test_cancelled_request_is_not_recorded_as_500() -> None:
+    app = FastAPI()
+    register_metrics(app)
+    started = asyncio.Event()
+    path = "/cancelled-observability-test"
+
+    @app.get(path)
+    async def wait_for_cancellation() -> None:
+        started.set()
+        await asyncio.Event().wait()
+
+    labels = {"method": "GET", "route": path, "status": "500"}
+    before = REGISTRY.get_sample_value("http_requests_total", labels) or 0
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        task = asyncio.create_task(client.get(path))
+        await asyncio.wait_for(started.wait(), timeout=5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    assert (REGISTRY.get_sample_value("http_requests_total", labels) or 0) == before
