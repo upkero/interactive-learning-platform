@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 from collections.abc import Callable
+from time import perf_counter
 from uuid import UUID
 
 from pydantic import JsonValue, TypeAdapter, ValidationError
@@ -57,44 +58,49 @@ class StubPipeline:
         self._delay = delay
 
     async def process(self, part_id: UUID) -> None:
-        async with self._session_factory() as session, session.begin():
-            parts = self._parts(session)
-            if not await parts.transition(
-                part_id, frozenset({PartStatus.QUEUED}), PartStatus.MAIN_PASS, bump_attempts=True
-            ):
-                logger.info("part.skip", extra={"part_id": str(part_id)})
-                return
-            part = await parts.get(part_id)
-            if part is None:
-                raise RuntimeError("Part disappeared after transition")
-            document_id = part.document_id
-            document = await self._documents(session).get(document_id)
-            locale = await self._users(session).get_locale_by_document(document_id)
-            start_index = document.generation_start_index if document is not None else 0
-            part_name = str(part.index - start_index + 1)
-        content = await self._load_content()
-        tracker = UsageTracker(part_id=str(part_id), document_id=str(document_id), metrics=self._metrics)
-        with bind_log_context(document_id=str(document_id), part_id=str(part_id)), bind_usage_tracker(tracker):
-            published = False
+        started = perf_counter()
+        accepted = False
+        published = False
+        try:
+            async with self._session_factory() as session, session.begin():
+                parts = self._parts(session)
+                if not await parts.transition(
+                    part_id, frozenset({PartStatus.QUEUED}), PartStatus.MAIN_PASS, bump_attempts=True
+                ):
+                    logger.info("part.skip", extra={"part_id": str(part_id)})
+                    return
+                accepted = True
+                part = await parts.get(part_id)
+                if part is None:
+                    raise RuntimeError("Part disappeared after transition")
+                document_id = part.document_id
+                document = await self._documents(session).get(document_id)
+                locale = await self._users(session).get_locale_by_document(document_id)
+                start_index = document.generation_start_index if document is not None else 0
+                part_name = str(part.index - start_index + 1)
+            content = await self._load_content()
+            tracker = UsageTracker(
+                part_id=str(part_id), document_id=str(document_id), metrics=self._metrics, started=started
+            )
 
             def record_published() -> None:
                 nonlocal published
                 published = True
-                self._observe_part(tracker, "published")
+                self._observe_part(perf_counter() - started, "published")
                 DecisionLog(metrics=self._metrics or NoopMetricsCollector()).part_summary(tracker.summary())
 
-            try:
+            with bind_log_context(document_id=str(document_id), part_id=str(part_id)), bind_usage_tracker(tracker):
                 await self._run_stages(document_id, part_id, content, locale, part_name, tracker, record_published)
-            except BaseException:
-                if not published:
-                    self._observe_part(tracker, "failed")
-                raise
+        except BaseException:
+            if accepted and not published:
+                self._observe_part(perf_counter() - started, "failed")
+            raise
 
-    def _observe_part(self, tracker: UsageTracker, outcome: str) -> None:
+    def _observe_part(self, duration: float, outcome: str) -> None:
         if self._metrics is not None:
             self._metrics.observe_histogram(
                 "part.processing_duration_seconds",
-                tracker.summary().duration_s,
+                duration,
                 labels={"outcome": outcome},
                 buckets=(10, 30, 60, 120, 180, 240, 300, 330),
             )

@@ -15,11 +15,13 @@ from celery import Celery
 pytestmark = pytest.mark.integration
 
 
-def test_prefork_worker_aggregates_two_processes(tmp_path: Path) -> None:
+def test_prefork_worker_aggregates_two_processes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     redis_url = os.environ.get("TEST_CELERY_REDIS_URL")
     if not redis_url:
         pytest.skip("TEST_CELERY_REDIS_URL must point to an isolated Redis instance")
     assert os.getuid() != 0, "run the worker smoke test as an unprivileged user"
+    monkeypatch.setenv("CELERY_BROKER_URL", redis_url)
+    monkeypatch.setenv("CELERY_RESULT_BACKEND", redis_url)
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
@@ -49,6 +51,8 @@ def test_prefork_worker_aggregates_two_processes(tmp_path: Path) -> None:
     )
     app = Celery("observability_test_client", broker=redis_url, backend=redis_url)
     try:
+        assert app.conf.broker_url == redis_url
+        assert app.conf.result_backend == redis_url
         url = f"http://127.0.0.1:{port}/metrics"
         for _ in range(150):
             if worker.poll() is not None:
@@ -61,7 +65,9 @@ def test_prefork_worker_aggregates_two_processes(tmp_path: Path) -> None:
         else:
             pytest.fail("worker metrics server did not start")
         results = [app.send_task("observability.smoke") for _ in range(2)]
-        pids = {result.get(timeout=30) for result in results}
+        replies = [result.get(timeout=30) for result in results]
+        assert all(reply["broker"] == redis_url and reply["backend"] == redis_url for reply in replies)
+        pids = {reply["pid"] for reply in replies}
         assert len(pids) == 2
         for _ in range(100):
             with urllib.request.urlopen(url, timeout=1) as response:

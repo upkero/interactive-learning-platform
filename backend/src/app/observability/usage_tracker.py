@@ -24,11 +24,13 @@ class _Usage:
 
 
 class UsageTracker:
-    def __init__(self, *, part_id: str, document_id: str, metrics: MetricsCollector | None = None) -> None:
+    def __init__(
+        self, *, part_id: str, document_id: str, metrics: MetricsCollector | None = None, started: float | None = None
+    ) -> None:
         self._part_id = part_id
         self._document_id = document_id
         self._metrics = metrics
-        self._started = perf_counter()
+        self._started = perf_counter() if started is None else started
         self._usage: dict[tuple[str, str], _Usage] = defaultdict(_Usage)
         self._stages: dict[str, float] = {}
 

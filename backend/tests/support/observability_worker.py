@@ -13,6 +13,6 @@ app = Celery(
 
 
 @app.task(name="observability.smoke")  # type: ignore[untyped-decorator]
-def probe() -> int:
+def probe() -> dict[str, str | int]:
     time.sleep(1)
-    return os.getpid()
+    return {"pid": os.getpid(), "broker": app.conf.broker_url, "backend": app.conf.result_backend}
