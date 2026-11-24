@@ -1,0 +1,9 @@
+intent_id,candidate,fit,note
+alg-01-hyp-02,array-ops,extend,Нужен предикат и его результат.
+alg-03-hyp-02,array-ops,full,
+alg-04-hyp-01,graph-messages,extend,Нужны веса и изменения расстояний.
+alg-04-hyp-02,array-ops,extend,Нужны переходы по индексам предков.
+alg-05-hyp-01,graph-messages,extend,Нужны веса и релаксации.
+db-03-hyp-01,lane-timeline,full,
+db-03-hyp-02,graph-messages,extend,Нужна направленная зависимость ожиданий.
+db-04-hyp-02,lane-timeline,extend,Нужно связать изменения строк с событиями транзакций.

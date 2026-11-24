@@ -1,0 +1,262 @@
+# Корпус и кандидаты для предварительного выбора примитивов.
+version: 1
+candidates:
+  graph-messages:
+    effort: L
+    summary: nodes and messages between them over time
+  array-ops:
+    effort: M
+    summary: an array and stepwise operations on it
+  tree-ops:
+    effort: L
+    summary: a tree and insert, delete, or rotation operations
+  state-machine:
+    effort: M
+    summary: states and transitions triggered by events
+  lane-timeline:
+    effort: M
+    summary: lanes over time for processes and transactions
+  param-plot:
+    effort: S
+    summary: a y(x) curve and its dependence on a parameter
+chapters:
+- id: net-01
+  discipline: networks
+  lang: ru
+  title: Сетевая_модель_OSI
+  path: chapters/net-01.md
+  source: https://ru.wikipedia.org/w/index.php?title=%D0%A1%D0%B5%D1%82%D0%B5%D0%B2%D0%B0%D1%8F_%D0%BC%D0%BE%D0%B4%D0%B5%D0%BB%D1%8C_OSI&oldid=155501372
+  license: CC BY-SA 4.0
+  author: Wikipedia contributors (see revision history)
+  preparation: Converted article HTML to Markdown; removed references, navigation and footnotes.
+  revision: '155501372'
+  license_url: https://creativecommons.org/licenses/by-sa/4.0/
+  sha256: 8f20fe924d4816f0ae76a0dcb4eaeb916a90c5dd0141e2d09b6d35de2437a6d5
+- id: net-02
+  discipline: networks
+  lang: ru
+  title: TCP
+  path: chapters/net-02.md
+  source: https://ru.wikipedia.org/w/index.php?title=TCP&oldid=152048690
+  license: CC BY-SA 4.0
+  author: Wikipedia contributors (see revision history)
+  preparation: Converted article HTML to Markdown; removed references, navigation and footnotes.
+  revision: '152048690'
+  license_url: https://creativecommons.org/licenses/by-sa/4.0/
+  sha256: c063336ca5b0198582295a549a461964a7d57e4dcfd6441f41c02e5ece52141c
+- id: net-03
+  discipline: networks
+  lang: en
+  title: End-to-End Protocols
+  path: chapters/net-03.md
+  source: https://github.com/SystemsApproach/book/blob/ed40b37e5e5845ddc22671c231b57764753fb213/e2e.rst
+  license: CC BY 4.0
+  author: Larry Peterson and Bruce Davie; Elsevier, 2012
+  preparation: Converted all 6 source chapter sections from RST to Markdown; 27 figures link to the pinned source.
+  revision: ed40b37e5e5845ddc22671c231b57764753fb213
+  license_url: https://creativecommons.org/licenses/by/4.0/
+  sha256: 18ebb11862e60529d2a38a06e311047b25214f27d7e21c1a25912ee17fa4b7ed
+- id: net-04
+  discipline: networks
+  lang: en
+  title: Direct Links
+  path: chapters/net-04.md
+  source: https://github.com/SystemsApproach/book/blob/ed40b37e5e5845ddc22671c231b57764753fb213/direct.rst
+  license: CC BY 4.0
+  author: Larry Peterson and Bruce Davie; Elsevier, 2012
+  preparation: Converted all 10 source chapter sections from RST to Markdown; 35 figures link to the pinned source.
+  revision: ed40b37e5e5845ddc22671c231b57764753fb213
+  license_url: https://creativecommons.org/licenses/by/4.0/
+  sha256: 5fcd152a0951dae9016ffe291db42ee4858c8fc5a07184cb3a507f4dc62bab4f
+- id: net-05
+  discipline: networks
+  lang: en
+  title: Internetworking
+  path: chapters/net-05.md
+  source: https://github.com/SystemsApproach/book/blob/ed40b37e5e5845ddc22671c231b57764753fb213/internetworking.rst
+  license: CC BY 4.0
+  author: Larry Peterson and Bruce Davie; Elsevier, 2012
+  preparation: Converted all 7 source chapter sections from RST to Markdown; 41 figures link to the pinned source.
+  revision: ed40b37e5e5845ddc22671c231b57764753fb213
+  license_url: https://creativecommons.org/licenses/by/4.0/
+  sha256: bcb2657ee172ba6f4053353c1a5707918f78d7c0690ae2a70a7ebfb0883c554b
+- id: os-01
+  discipline: os
+  lang: ru
+  title: Операционная_система
+  path: chapters/os-01.md
+  source: https://ru.wikipedia.org/w/index.php?title=%D0%9E%D0%BF%D0%B5%D1%80%D0%B0%D1%86%D0%B8%D0%BE%D0%BD%D0%BD%D0%B0%D1%8F_%D1%81%D0%B8%D1%81%D1%82%D0%B5%D0%BC%D0%B0&oldid=154107304
+  license: CC BY-SA 4.0
+  author: Wikipedia contributors (see revision history)
+  preparation: Converted article HTML to Markdown; removed references, navigation and footnotes.
+  revision: '154107304'
+  license_url: https://creativecommons.org/licenses/by-sa/4.0/
+  sha256: 4937173d861cb8b37bf13acf3633be220678a84dabdd53a818bc630d155ebdaf
+- id: os-02
+  discipline: os
+  lang: en
+  title: Processes, Threads, and Concurrency
+  path: chapters/os-02.md
+  source: https://github.com/daidong/mos-book/blob/df6b0ca38c24b0585982a4b864713cb8592610c8/src/part2-process-scheduling/ch04-processes-threads/index.md
+  license: CC BY-SA 4.0
+  author: Dong Dai
+  preparation: Preserved the complete source chapter; made figure links point to the pinned source.
+  revision: df6b0ca38c24b0585982a4b864713cb8592610c8
+  license_url: https://creativecommons.org/licenses/by-sa/4.0/
+  sha256: 096a938ebc036adc2968890cc055feb509f0a62fd052069ccd6f935b7b18fe08
+- id: os-03
+  discipline: os
+  lang: en
+  title: Linux Scheduler Internals and Observability
+  path: chapters/os-03.md
+  source: https://github.com/daidong/mos-book/blob/df6b0ca38c24b0585982a4b864713cb8592610c8/src/part2-process-scheduling/ch05-linux-scheduler/index.md
+  license: CC BY-SA 4.0
+  author: Dong Dai
+  preparation: Preserved the complete source chapter; made figure links point to the pinned source.
+  revision: df6b0ca38c24b0585982a4b864713cb8592610c8
+  license_url: https://creativecommons.org/licenses/by-sa/4.0/
+  sha256: 178e96cdebc32fe0e627f9a30ef7db6e972a0286f612db9cf8e5a7e5c51bdc61
+- id: os-04
+  discipline: os
+  lang: en
+  title: 'Container Foundations: Namespaces and Cgroups'
+  path: chapters/os-04.md
+  source: https://github.com/daidong/mos-book/blob/df6b0ca38c24b0585982a4b864713cb8592610c8/src/part3-isolation-containers/ch06-namespaces-cgroups/index.md
+  license: CC BY-SA 4.0
+  author: Dong Dai
+  preparation: Preserved the complete source chapter; made figure links point to the pinned source.
+  revision: df6b0ca38c24b0585982a4b864713cb8592610c8
+  license_url: https://creativecommons.org/licenses/by-sa/4.0/
+  sha256: 8733dae098540abb2521c1d5d1a6aa85b6667c9c709856bd38b5dfc2b5367334
+- id: os-05
+  discipline: os
+  lang: en
+  title: File Systems, Page Cache, and Durability
+  path: chapters/os-05.md
+  source: https://github.com/daidong/mos-book/blob/df6b0ca38c24b0585982a4b864713cb8592610c8/src/part5-storage/ch10-filesystems/index.md
+  license: CC BY-SA 4.0
+  author: Dong Dai
+  preparation: Preserved the complete source chapter; made figure links point to the pinned source.
+  revision: df6b0ca38c24b0585982a4b864713cb8592610c8
+  license_url: https://creativecommons.org/licenses/by-sa/4.0/
+  sha256: 66526765697a1adec6eedbb05d92eebd0f8237ec5dc2d3937bfa333304c934fb
+- id: alg-01
+  discipline: algorithms
+  lang: en
+  title: Binary search
+  path: chapters/alg-01.md
+  source: https://github.com/cp-algorithms/cp-algorithms/blob/9392ad98aabadd2bc2feab65b91881918dfe560e/src/num_methods/binary_search.md
+  license: CC BY-SA 4.0
+  author: cp-algorithms contributors
+  preparation: Removed site front matter; preserved article text, formulas and code.
+  revision: 9392ad98aabadd2bc2feab65b91881918dfe560e
+  license_url: https://creativecommons.org/licenses/by-sa/4.0/
+  sha256: 96349f087383c7d10db8a8cc00e821025a45854b39ef5f01c388f30ff7b54ab4
+- id: alg-02
+  discipline: algorithms
+  lang: en
+  title: Depth-first search
+  path: chapters/alg-02.md
+  source: https://github.com/cp-algorithms/cp-algorithms/blob/9392ad98aabadd2bc2feab65b91881918dfe560e/src/graph/depth-first-search.md
+  license: CC BY-SA 4.0
+  author: cp-algorithms contributors
+  preparation: Removed site front matter; preserved article text, formulas and code.
+  revision: 9392ad98aabadd2bc2feab65b91881918dfe560e
+  license_url: https://creativecommons.org/licenses/by-sa/4.0/
+  sha256: 54de0de7b979ab5763e1508f307eaaf2c820b7db03f9e83b41be45578b32a6d3
+- id: alg-03
+  discipline: algorithms
+  lang: en
+  title: Introduction to dynamic programming
+  path: chapters/alg-03.md
+  source: https://github.com/cp-algorithms/cp-algorithms/blob/9392ad98aabadd2bc2feab65b91881918dfe560e/src/dynamic_programming/intro-to-dp.md
+  license: CC BY-SA 4.0
+  author: cp-algorithms contributors
+  preparation: Removed site front matter; preserved article text, formulas and code.
+  revision: 9392ad98aabadd2bc2feab65b91881918dfe560e
+  license_url: https://creativecommons.org/licenses/by-sa/4.0/
+  sha256: 726c13fda4af90927401d921f3438a60b6e16a85765e233a00c9f9916aaf5e82
+- id: alg-04
+  discipline: algorithms
+  lang: en
+  title: Dijkstra algorithm
+  path: chapters/alg-04.md
+  source: https://github.com/cp-algorithms/cp-algorithms/blob/9392ad98aabadd2bc2feab65b91881918dfe560e/src/graph/dijkstra.md
+  license: CC BY-SA 4.0
+  author: cp-algorithms contributors
+  preparation: Removed site front matter; preserved article text, formulas and code.
+  revision: 9392ad98aabadd2bc2feab65b91881918dfe560e
+  license_url: https://creativecommons.org/licenses/by-sa/4.0/
+  sha256: 348c30f350461619c06f11da057adafd93fbb9d6da53e0a183135b7808076b49
+- id: alg-05
+  discipline: algorithms
+  lang: ru
+  title: Алгоритм_Дейкстры
+  path: chapters/alg-05.md
+  source: https://ru.wikipedia.org/w/index.php?title=%D0%90%D0%BB%D0%B3%D0%BE%D1%80%D0%B8%D1%82%D0%BC_%D0%94%D0%B5%D0%B9%D0%BA%D1%81%D1%82%D1%80%D1%8B&oldid=155562274
+  license: CC BY-SA 4.0
+  author: Wikipedia contributors (see revision history)
+  preparation: Converted article HTML to Markdown; removed references, navigation and footnotes.
+  revision: '155562274'
+  license_url: https://creativecommons.org/licenses/by-sa/4.0/
+  sha256: 33f2eb376ef9c9fc7c583878b20126cb7206c901e23f3f2c4606edb8280e8955
+- id: db-01
+  discipline: databases
+  lang: en
+  title: Queries
+  path: chapters/db-01.md
+  source: https://www.postgresql.org/docs/18/queries.html
+  license: PostgreSQL License
+  author: PostgreSQL Global Development Group
+  preparation: Converted all 8 linked chapter sections to Markdown; removed navigation and footnotes.
+  revision: PostgreSQL 18
+  license_url: https://www.postgresql.org/about/licence/
+  sha256: b561ed9b5dec2944386de1eee0a0e55758ecbf65c17b4b8506f6260ef3af26c2
+- id: db-02
+  discipline: databases
+  lang: en
+  title: Data Definition
+  path: chapters/db-02.md
+  source: https://www.postgresql.org/docs/18/ddl.html
+  license: PostgreSQL License
+  author: PostgreSQL Global Development Group
+  preparation: Converted all 15 linked chapter sections to Markdown; removed navigation and footnotes.
+  revision: PostgreSQL 18
+  license_url: https://www.postgresql.org/about/licence/
+  sha256: fc00553644bd5ab3b5f26050381a1449e67dfbcc979a3327077a4a8afac799ab
+- id: db-03
+  discipline: databases
+  lang: en
+  title: Concurrency Control
+  path: chapters/db-03.md
+  source: https://www.postgresql.org/docs/18/mvcc.html
+  license: PostgreSQL License
+  author: PostgreSQL Global Development Group
+  preparation: Converted all 7 linked chapter sections to Markdown; removed navigation and footnotes.
+  revision: PostgreSQL 18
+  license_url: https://www.postgresql.org/about/licence/
+  sha256: d3e108fbc3b935d9f630add318aa2f4c52c32b8db3a5b9efcfc0d498c024afbe
+- id: db-04
+  discipline: databases
+  lang: en
+  title: Data Manipulation
+  path: chapters/db-04.md
+  source: https://www.postgresql.org/docs/18/dml.html
+  license: PostgreSQL License
+  author: PostgreSQL Global Development Group
+  preparation: Converted all 4 linked chapter sections to Markdown; removed navigation and footnotes.
+  revision: PostgreSQL 18
+  license_url: https://www.postgresql.org/about/licence/
+  sha256: d5a83b4b816226b40ff01a91df8f67343c47d833ad33f6bb0a345dd05c9d8b4c
+- id: db-05
+  discipline: databases
+  lang: ru
+  title: SQL
+  path: chapters/db-05.md
+  source: https://ru.wikipedia.org/w/index.php?title=SQL&oldid=150421772
+  license: CC BY-SA 4.0
+  author: Wikipedia contributors (see revision history)
+  preparation: Converted article HTML to Markdown; removed references, navigation and footnotes.
+  revision: '150421772'
+  license_url: https://creativecommons.org/licenses/by-sa/4.0/
+  sha256: 4c58ae1233c852624dac8e56cfa145a0ce036249998e2f6b749b1274412357fa
