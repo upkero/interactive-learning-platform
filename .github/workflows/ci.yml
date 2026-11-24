@@ -199,6 +199,47 @@ jobs:
       - name: Build packages
         run: pnpm -r build
 
+  # Exercise the real browser without touching the shared Postgres/MinIO stack.
+  sandbox-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build isolated sandbox image
+        run: docker build -f sandbox/Dockerfile -t grasp-sandbox-ci .
+      - name: Build worker image for internal-network smoke test
+        run: docker build -f backend/Dockerfile -t grasp-backend-sandbox-ci backend
+      - name: Chromium rendering and failure recovery
+        run: >-
+          docker run --rm --network none --memory 1g --cpus 1.5 --pids-limit 512
+          --read-only --tmpfs /tmp:size=256m --security-opt no-new-privileges:true
+          --security-opt seccomp=infra/playwright-seccomp.json
+          --user pwuser -e NODE_ENV=test grasp-sandbox-ci
+          node --test sandbox/dist/browser.integration.js
+      - name: Private network, health from a peer and denied egress
+        run: |
+          docker network create --internal grasp-sandbox-ci
+          trap 'docker rm -f grasp-sandbox-ci >/dev/null 2>&1 || true; docker network rm grasp-sandbox-ci >/dev/null 2>&1 || true' EXIT
+          docker run -d --name grasp-sandbox-ci --network grasp-sandbox-ci \
+            --network-alias sandbox --memory 1g --cpus 1.5 --pids-limit 512 \
+            --read-only --tmpfs /tmp:size=256m --security-opt no-new-privileges:true \
+            --security-opt seccomp=infra/playwright-seccomp.json \
+            --user pwuser grasp-sandbox-ci
+          ready=0
+          for attempt in $(seq 1 20); do
+            if docker run --rm --network grasp-sandbox-ci \
+              -v "$PWD/backend/src:/app/src:ro" -v "$PWD/backend/tests/support/sandbox_smoke.py:/app/sandbox_smoke.py:ro" \
+              --entrypoint python grasp-backend-sandbox-ci /app/sandbox_smoke.py; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" -eq 1
+          if docker exec grasp-sandbox-ci curl -fsS --max-time 4 https://example.com; then
+            echo 'Sandbox unexpectedly reached the public internet'
+            exit 1
+          fi
+
   # ---------------------------------------------------------------------------
   # 3. Storybook checks (visual catalogue)
   # ---------------------------------------------------------------------------
