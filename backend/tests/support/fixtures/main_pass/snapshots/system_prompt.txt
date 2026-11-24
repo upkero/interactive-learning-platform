@@ -62,7 +62,7 @@ Answer with the JSON object required by the response schema: markdown, directive
 key_terms.
 
 <primitive_catalog>
-Interactive primitives the resolver can build. Do not name a primitive id in a directive: describe the intent and the resolver chooses.
+Interactive primitives the resolver can build. The optional primitive_hint of a widget directive may name one of these ids; it is a soft hint, and the resolver may choose another primitive.
 - key-terms (modes: single, multiple): Collapsible glossary that explains the key terms used in a part of the material.
 - three-frame (modes: watch, steps, predict): Three-frame demonstration with an initial state, a prediction and the result.
 </primitive_catalog>

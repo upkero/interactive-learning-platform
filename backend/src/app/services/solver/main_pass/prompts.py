@@ -128,8 +128,9 @@ def render_catalog(primitives: Sequence[PrimitiveRecord]) -> str:
     lines = [
         "<primitive_catalog>",
         (
-            "Interactive primitives the resolver can build. Do not name a primitive id in "
-            "a directive: describe the intent and the resolver chooses."
+            "Interactive primitives the resolver can build. The optional primitive_hint of "
+            "a widget directive may name one of these ids; it is a soft hint, and the "
+            "resolver may choose another primitive."
         ),
     ]
     for primitive in sorted(primitives, key=lambda item: item.id):

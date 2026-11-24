@@ -50,6 +50,20 @@ def test_directives_inside_fenced_code_are_not_slots() -> None:
     assert [(slot.ref, slot.kind) for slot in extract_markers(markdown)] == [("i1", "image")]
 
 
+def test_directives_inside_indented_or_tilde_fences_are_not_slots() -> None:
+    markdown = (
+        "   ```markdown\n"
+        '::widget{ref="w1"}\n'
+        "   ```\n"
+        "~~~\n"
+        '::quiz{ref="q1"}\n'
+        "~~~\n"
+        '::image{ref="i1" image_alias="img-1"}\n'
+    )
+
+    assert [(slot.ref, slot.kind) for slot in extract_markers(markdown)] == [("i1", "image")]
+
+
 def test_inline_directive_is_not_a_slot() -> None:
     markdown = 'Text ::widget{ref="w1"} continues the sentence.\n'
 
@@ -165,6 +179,41 @@ def test_text_between_widgets_disables_the_alternation_rule() -> None:
     )
 
     assert check_draft(draft.markdown, draft.directives, alternation=True) == []
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        ({}, {}),
+        ({"mode_hint": "steps"}, {"mode_hint": "steps"}),
+        ({"primitive_hint": "three-frame"}, {"primitive_hint": "three-frame"}),
+        (
+            {"primitive_hint": "three-frame", "mode_hint": "steps"},
+            {"primitive_hint": "key-terms", "mode_hint": "steps"},
+        ),
+    ],
+)
+def test_alternation_needs_two_non_empty_equal_hints(first: dict[str, str], second: dict[str, str]) -> None:
+    draft = PageDraft.model_validate(
+        {
+            "markdown": (
+                f"::widget{{ref=\"w1\"{_attrs(first)}}}\n"
+                f"::widget{{ref=\"w2\"{_attrs(second)}}}\n"
+            ),
+            "directives": [
+                {"ref": "w1", "kind": "widget", "intent": "One.", **first},
+                {"ref": "w2", "kind": "widget", "intent": "Two.", **second},
+            ],
+            "key_terms": ["term"],
+        }
+    )
+
+    assert check_draft(draft.markdown, draft.directives, alternation=True) == []
+    assert sanitize_draft(draft, max_widgets=4) == draft
+
+
+def _attrs(values: dict[str, str]) -> str:
+    return "".join(f' {name}="{value}"' for name, value in values.items())
 
 
 def test_sanitize_resets_the_mode_of_the_second_widget() -> None:

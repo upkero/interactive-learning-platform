@@ -86,6 +86,7 @@ def test_catalog_lists_id_modes_and_description_sorted_by_id() -> None:
     assert lines[-1] == "</primitive_catalog>"
     assert entries[0].startswith("- key-terms (modes: single, multiple): Collapsible glossary")
     assert entries[1].startswith("- three-frame (modes: watch, steps, predict): Three-frame")
+    assert "primitive_hint of a widget directive may name one of these ids" in block
 
 
 def test_empty_catalog_is_still_a_deterministic_block() -> None:
