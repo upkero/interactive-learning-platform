@@ -50,6 +50,8 @@ async def test_worker_logs_skip_as_json_with_part_id(
     part_id = uuid4()
     app = Celery(broker=broker_url)
     log_file = tmp_path / "worker.log"
+    metrics_dir = tmp_path / "prom"
+    metrics_dir.mkdir()
     with log_file.open("wb") as output:
         process = await asyncio.create_subprocess_exec(
             sys.executable,
@@ -66,7 +68,12 @@ async def test_worker_logs_skip_as_json_with_part_id(
             "--without-gossip",
             "--without-mingle",
             "--without-heartbeat",
-            env={**os.environ, "LOG_FORMAT": "json", "CELERY_BROKER_URL": broker_url},
+            env={
+                **os.environ,
+                "LOG_FORMAT": "json",
+                "CELERY_BROKER_URL": broker_url,
+                "PROMETHEUS_MULTIPROC_DIR": str(metrics_dir),
+            },
             stdout=output,
             stderr=subprocess.STDOUT,
         )
@@ -87,6 +94,7 @@ async def test_worker_logs_skip_as_json_with_part_id(
                 await asyncio.sleep(0.1)
             assert event is not None and event["part_id"] == str(part_id)
         finally:
-            process.terminate()
+            if process.returncode is None:
+                process.terminate()
             await asyncio.wait_for(process.wait(), timeout=15)
             app.close()
