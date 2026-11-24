@@ -27,8 +27,8 @@ ENV PYTHONUNBUFFERED=1 \
 
 RUN groupadd --gid 1001 appgroup && \
     useradd --uid 1001 --gid appgroup --no-create-home appuser && \
-    mkdir -p /app/.cache/huggingface && \
-    chown -R appuser:appgroup /app
+    mkdir -p /models && \
+    chown -R appuser:appgroup /app /models
 
 WORKDIR /app
 

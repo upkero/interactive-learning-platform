@@ -138,6 +138,7 @@ services:
       ["sh", "-c", "rm -rf /tmp/prom/* && exec celery -A src.worker worker -Q maintenance,parts.high,parts --concurrency=2 --loglevel=INFO"]
     environment:
       PROMETHEUS_MULTIPROC_DIR: /tmp/prom
+      HF_HOME: /models
       LOG_FORMAT: json
     tmpfs:
       - /tmp/prom:uid=1001,gid=1001,mode=0700
@@ -147,6 +148,9 @@ services:
     networks:
       - default
       - sandbox_net
+    volumes:
+      # Local embedding weights survive container restarts and image updates.
+      - huggingface:/models
     healthcheck:
       test: ["CMD-SHELL", "celery -A src.worker inspect ping || exit 1"]
       interval: 15s
@@ -255,3 +259,4 @@ volumes:
   redisdata: {}
   ollamadata: {}
   lokidata: {}
+  huggingface: {}
