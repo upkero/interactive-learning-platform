@@ -114,6 +114,11 @@ class EmbeddingService(EmbeddingServiceInterface):
         except RedisError:
             self._logger.warning("Embedding cache read failed, treating as miss.", exc_info=True)
             return [None] * len(texts)
+        if len(raw) != len(texts):
+            self._logger.warning(
+                "Embedding cache returned an unexpected number of values, treating all as misses."
+            )
+            return [None] * len(texts)
         return [self._decode(item) if item is not None else None for item in raw]
 
     async def _write_cache(self, vectors: dict[str, Sequence[float]]) -> None:
