@@ -22,6 +22,7 @@ test('real Chromium: screenshots, runtime failures, denied network, and recovery
       assert.equal(result.ok, true, JSON.stringify(result.console_errors));
       assert.deepEqual(result.console_errors, []);
       assert.equal(result.screenshots.length, 4);
+      assert.notEqual(result.screenshots[0], result.screenshots[3], 'dark screenshot must differ from light');
       for (const shot of result.screenshots) {
         const png = Buffer.from(shot, 'base64');
         assert.equal(png.subarray(1, 4).toString('ascii'), 'PNG');

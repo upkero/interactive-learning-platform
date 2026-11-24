@@ -4,6 +4,7 @@ import * as d3 from 'd3';
 import { createRoot } from 'react-dom/client';
 import * as ui from '@grasp/primitives/ui';
 import '@grasp/primitives/tokens.css';
+import './host.css';
 import type { InitMessage, WidgetToHost } from '@grasp/primitives/widget-protocol';
 
 declare global {
@@ -23,6 +24,14 @@ window.__GRASP_DEPS__ = {
 const outbox: WidgetToHost[] = [];
 let generation = 0;
 let parentOrigin: string | null = null;
+// CSP may reject external images before Playwright's context.route sees a
+// request. Report this attempt to the runner as well; production uses the
+// exact same restrictive policy instead of allowing image-based exfiltration.
+document.addEventListener('securitypolicyviolation', (event) => {
+  if (event.blockedURI.startsWith('http') && new URL(event.blockedURI).origin !== location.origin) {
+    console.error(`blocked request: ${event.blockedURI}`);
+  }
+});
 function send(message: WidgetToHost): void {
   outbox.push(message);
   if (parentOrigin) window.parent.postMessage(message, parentOrigin);

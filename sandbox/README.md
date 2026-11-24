@@ -9,7 +9,9 @@ The sandbox image builds `widget-host/host.html` from the same source that the
 widget-host image serves. The page exposes `__graspHarness` only for direct
 Playwright initialization; it also supports `grasp:init` messages from a parent
 iframe. A production parent **must** use an iframe sandbox with `allow-scripts`
-but **without** `allow-same-origin`. The full widget iframe embedding workflow
+but **without** `allow-same-origin`. The host's CSP blocks external images and
+reports attempted requests to the runner; the browser context separately
+aborts requests that reach the network layer. The full widget iframe embedding workflow
 belongs to story 3.5; this repository does not yet have a user-facing widget
 renderer or judge model.
 
