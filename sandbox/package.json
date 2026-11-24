@@ -6,7 +6,7 @@
   "scripts": {
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "pnpm build && node --test dist/*.test.js",
+    "test": "pnpm --filter widget-host build && pnpm build && node --test dist/*.test.js",
     "test:browser": "NODE_ENV=test node --test dist/*.integration.js",
     "build": "tsc"
   },
