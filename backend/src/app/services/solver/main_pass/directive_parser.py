@@ -41,7 +41,7 @@ _ATTR = re.compile(
     r"""(?P<name>[A-Za-z][A-Za-z0-9_-]*)\s*=\s*"""
     r"""(?:"(?P<double>[^"]*)"|'(?P<single>[^']*)'|(?P<bare>[^\s}"']+))"""
 )
-_FENCE = re.compile(r"^(?:```|~~~)")
+_FENCE = re.compile(r"^ {0,3}(?P<fence>`{3,}|~{3,})(?P<info>.*)$")
 
 
 class DirectiveError(ValueError):
@@ -86,16 +86,28 @@ class Marker:
 def extract_markers(markdown: str) -> tuple[Marker, ...]:
     """Return the leaf directives of ``markdown`` in document order."""
     markers: list[Marker] = []
-    in_fence = False
+    fence: tuple[str, int] | None = None
     offset = 0
     for number, raw in enumerate(markdown.splitlines(keepends=True), start=1):
         content = raw.rstrip("\r\n")
         start = offset
         offset += len(raw)
-        if _FENCE.match(content):
-            in_fence = not in_fence
+        fence_match = _FENCE.match(content)
+        if fence is not None:
+            # A closing fence uses the same character, is at least as long
+            # as the opening one and has no info string.
+            if (
+                fence_match is not None
+                and fence_match["fence"][0] == fence[0]
+                and len(fence_match["fence"]) >= fence[1]
+                and not fence_match["info"].strip()
+            ):
+                fence = None
             continue
-        if in_fence or not content.startswith("::"):
+        if fence_match is not None:
+            fence = (fence_match["fence"][0], len(fence_match["fence"]))
+            continue
+        if not content.startswith("::"):
             continue
         match = _DIRECTIVE.match(content)
         if match is None:
@@ -251,9 +263,16 @@ def sanitize_draft(
         if markdown[previous.end : current.start].strip():
             continue
         earlier, later = by_ref[previous.ref], by_ref[current.ref]
-        same_primitive = earlier.get("primitive_hint") == later.get("primitive_hint")
-        same_mode = earlier.get("mode_hint") == later.get("mode_hint")
-        if same_primitive and same_mode and later.get("mode_hint") is not None:
+        earlier_primitive = earlier.get("primitive_hint")
+        later_primitive = later.get("primitive_hint")
+        earlier_mode = earlier.get("mode_hint")
+        later_mode = later.get("mode_hint")
+        if (
+            earlier_primitive is not None
+            and earlier_primitive == later_primitive
+            and earlier_mode is not None
+            and earlier_mode == later_mode
+        ):
             later["mode_hint"] = None
             mode_resets.append(current)
 
@@ -298,9 +317,13 @@ def _check_alternation(
         if markdown[previous.end : current.start].strip():
             continue
         earlier, later = declared[previous.ref], declared[current.ref]
-        if earlier.primitive_hint != later.primitive_hint or earlier.mode_hint != later.mode_hint:
+        if earlier.primitive_hint is None or later.primitive_hint is None:
             continue
-        if later.mode_hint is None:
+        if earlier.primitive_hint != later.primitive_hint:
+            continue
+        if earlier.mode_hint is None or later.mode_hint is None:
+            continue
+        if earlier.mode_hint != later.mode_hint:
             continue
         violations.append(
             f"widgets {previous.ref!r} and {current.ref!r} follow each other with primitive "
