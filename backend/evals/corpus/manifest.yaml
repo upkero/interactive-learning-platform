@@ -43,7 +43,7 @@ chapters:
   preparation: Converted article HTML to Markdown; removed references, navigation and footnotes.
   revision: '152048690'
   license_url: https://creativecommons.org/licenses/by-sa/4.0/
-  sha256: 1f9ecaf931db0ba2bc94fd0e9149c299b6fa78590fd75c452275d73fbe73b064
+  sha256: c063336ca5b0198582295a549a461964a7d57e4dcfd6441f41c02e5ece52141c
 - id: net-03
   discipline: networks
   lang: en

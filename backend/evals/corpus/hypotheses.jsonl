@@ -1,7 +1,7 @@
 {"intent_id": "net-01-hyp-01", "chapter_id": "net-01", "provenance": "hypothetical", "source_line": "59", "intent": "Показать стек уровней OSI и переход данных между ними.", "source_span": "Уровни модели OSI"}
 {"intent_id": "net-01-hyp-02", "chapter_id": "net-01", "provenance": "hypothetical", "source_line": "178", "intent": "Сопоставить уровни OSI и TCP/IP связями между двумя наборами.", "source_span": "Семейство TCP/IP"}
-{"intent_id": "net-02-hyp-01", "chapter_id": "net-02", "provenance": "hypothetical", "source_line": "117", "intent": "Показать состояния TCP и переходы по событиям.", "source_span": "Состояния сеанса TCP"}
-{"intent_id": "net-02-hyp-02", "chapter_id": "net-02", "provenance": "hypothetical", "source_line": "131", "intent": "Показать обмен SYN, SYN-ACK и ACK между двумя узлами.", "source_span": "### Установка соединения"}
+{"intent_id": "net-02-hyp-01", "chapter_id": "net-02", "provenance": "hypothetical", "source_line": "116", "intent": "Показать состояния TCP и переходы по событиям.", "source_span": "Состояния сеанса TCP"}
+{"intent_id": "net-02-hyp-02", "chapter_id": "net-02", "provenance": "hypothetical", "source_line": "130", "intent": "Показать обмен SYN, SYN-ACK и ACK между двумя узлами.", "source_span": "### Установка соединения"}
 {"intent_id": "net-03-hyp-01", "chapter_id": "net-03", "provenance": "hypothetical", "source_line": "38", "intent": "Показать доставку UDP-датаграммы к процессу по порту.", "source_span": "5.1 Simple Demultiplexor (UDP)"}
 {"intent_id": "net-03-hyp-02", "chapter_id": "net-03", "provenance": "hypothetical", "source_line": "60", "intent": "Разобрать расположение и назначение полей UDP-заголовка.", "source_span": "checksum"}
 {"intent_id": "net-04-hyp-01", "chapter_id": "net-04", "provenance": "hypothetical", "source_line": "629", "intent": "Разобрать поля кадра Ethernet.", "source_span": "Frame Format"}
