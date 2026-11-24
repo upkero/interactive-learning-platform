@@ -142,6 +142,9 @@ services:
     networks:
       - default
       - sandbox_net
+    volumes:
+      # Local embedding weights survive container restarts and image updates.
+      - huggingface:/models
     healthcheck:
       test: ["CMD-SHELL", "celery -A src.worker inspect ping || exit 1"]
       interval: 15s
@@ -201,3 +204,4 @@ volumes:
   pgdata: {}
   redisdata: {}
   ollamadata: {}
+  huggingface: {}

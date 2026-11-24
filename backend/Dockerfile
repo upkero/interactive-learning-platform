@@ -14,12 +14,12 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH="/app" \
     PATH="/app/.venv/bin:$PATH" \
-    HF_HOME="/app/.cache/huggingface"
+    HF_HOME="/models"
 
 RUN groupadd --gid 1001 appgroup && \
     useradd --uid 1001 --gid appgroup --no-create-home appuser && \
-    mkdir -p /app/.cache/huggingface && \
-    chown -R appuser:appgroup /app
+    mkdir -p /models && \
+    chown -R appuser:appgroup /app /models
 
 WORKDIR /app
 
