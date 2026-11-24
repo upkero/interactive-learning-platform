@@ -8,16 +8,19 @@ import socket
 import sys
 import time
 from collections.abc import AsyncIterator, Iterator
-from typing import Protocol
+from typing import Protocol, cast
 from uuid import UUID, uuid4
 
 import httpx
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from redis.asyncio import Redis
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from src.app.api.v1.middleware.rate_limit import limiter
+from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.documents.part_draft import PartDraft
 from src.app.contracts.documents.statuses import DocumentStatus, MaterialRole, PartStatus, SourceType
 from src.app.contracts.progress import ProgressEventType
@@ -36,8 +39,12 @@ from src.app.services.notifications.email_sender import EmailSender
 from src.app.services.notifications.notification_service import NotificationService
 from src.app.services.progress.progress_reader import ProgressReader
 from src.app.services.quota.quota_ledger import QuotaLedger
+from src.app.storage.object_keys import parsed_markdown_key
 from src.app.tasks.parts import process_part
 from src.main import create_app
+from tests.support.fakes.services.task_dispatcher import FakeTaskDispatcher
+from tests.support.fakes.storage.object_storage_client import FakeObjectStorageClient
+from tests.support.fixtures.documents import topic_node
 
 pytestmark = pytest.mark.integration
 
@@ -59,6 +66,7 @@ async def progress_redis() -> AsyncIterator[Redis]:
 
 @pytest.fixture
 def client(session_factory: async_sessionmaker[AsyncSession]) -> Iterator[TestClient]:
+    limiter.reset()
     with TestClient(create_app()) as instance:
         yield instance
 
@@ -153,7 +161,7 @@ async def test_reader_reconnect_and_terminal_tail(progress_redis: Redis) -> None
         for index in range(3):
             await notifier.emit(document_id, ProgressEventType.PART_STATUS, message=str(index))
         reader = ProgressReader(progress_redis)
-        stream = reader.follow(document_id, "0-0", finished_status=DocumentStatus.GENERATING)
+        stream = reader.follow(document_id, "0-0", finished_status=DocumentStatus.GENERATING, run_outcome="ready")
         first = [await stream.__anext__() for _ in range(3)]
         for index in range(3, 5):
             await notifier.emit(document_id, ProgressEventType.PART_STATUS, message=str(index))
@@ -161,14 +169,16 @@ async def test_reader_reconnect_and_terminal_tail(progress_redis: Redis) -> None
         await stream.aclose()
         assert [json.loads(entry.data)["message"] for entry in after] == ["3", "4"]
         resumed = []
-        async for entry in reader.follow(document_id, first[-1].id, finished_status=DocumentStatus.DONE, locale="en"):
+        async for entry in reader.follow(
+            document_id, first[-1].id, finished_status=DocumentStatus.DONE, run_outcome="ready", locale="en"
+        ):
             resumed.append(entry)
         assert [json.loads(entry.data)["message"] for entry in resumed[:2]] == ["3", "4"]
         assert resumed[-1].type == "document_done" and "Your material" in resumed[-1].data
         closed = [
             entry
             async for entry in reader.follow(
-                document_id, resumed[-1].id, finished_status=DocumentStatus.DONE, locale="en"
+                document_id, resumed[-1].id, finished_status=DocumentStatus.DONE, run_outcome="ready", locale="en"
             )
         ]
         assert len(closed) == 1 and closed[0].type == "document_done"
@@ -363,6 +373,192 @@ async def test_http_second_run_without_cursor_only_returns_new_stream(
         assert messages == ["new run", "new done"]
     finally:
         await progress_redis.delete(key)
+
+
+async def test_http_second_generate_resets_stream_and_returns_only_new_events(
+    client: TestClient,
+    session_factory: async_sessionmaker[AsyncSession],
+    progress_redis: Redis,
+    dispatcher: FakeTaskDispatcher,
+) -> None:
+    """Two real ``POST /generate`` calls: the second one clears the first run's stream."""
+    registered = client.post(
+        "/api/v1/auth/register", json={"email": f"generate-{uuid4()}@example.com", "password": "long-password"}
+    )
+    assert registered.status_code == 201, registered.text
+    owner_id = UUID(registered.json()["id"])
+    container = cast(ApplicationContainer, cast(FastAPI, client.app).state.container)
+    storage = FakeObjectStorageClient()
+    container.__dict__["object_storage"] = storage
+    container.__dict__["task_dispatcher"] = dispatcher
+    async with session_factory() as session, session.begin():
+        documents = DocumentRepository(session)
+        document = await documents.create(
+            owner_id=owner_id,
+            title="Repeat generation",
+            source_type=SourceType.UPLOAD,
+            object_key="repeat-generation.md",
+            mime_type="text/markdown",
+            size_bytes=300,
+            checksum="f" * 64,
+        )
+        await UserMaterialRepository(session).create(user_id=owner_id, document_id=document.id, role=MaterialRole.OWNER)
+        await documents.set_status(document.id, DocumentStatus.PARSED)
+        await documents.set_topic_tree(document.id, [topic_node("topic-0", "Topic 0", 0, 100, 20)])
+    await storage.put_object(
+        bucket="documents",
+        key=parsed_markdown_key(owner_id, document.id),
+        data=b"a" * 300,
+        content_type="text/markdown",
+    )
+    body = {"topic_ids": ["topic-0"], "answers": {"level": "novice", "goal": "exam", "depth": "standard"}}
+    notifier = RedisProgressNotifier(progress_redis, ProgressSettings())
+    key = stream_key(document.id)
+    try:
+        first = client.post(f"/api/v1/documents/{document.id}/generate", json=body)
+        assert first.status_code == 202, first.text
+        first_part = UUID(first.json()["part_ids"][0])
+        async with session_factory() as session, session.begin():
+            await DocumentPartRepository(session).transition(
+                first_part, frozenset({PartStatus.QUEUED}), PartStatus.PUBLISHED
+            )
+            await DocumentRepository(session).refresh_status(document.id)
+        await notifier.emit(document.id, ProgressEventType.PART_STATUS, message="first run")
+        await notifier.emit(document.id, ProgressEventType.DOCUMENT_DONE, stage="done", message="first run done")
+        assert await progress_redis.exists(key) == 1
+
+        second = client.post(f"/api/v1/documents/{document.id}/generate", json=body)
+        assert second.status_code == 202, second.text
+        # The reset happened inside the HTTP request, before the response.
+        assert await progress_redis.exists(key) == 0
+
+        second_part = UUID(second.json()["part_ids"][0])
+        async with session_factory() as session, session.begin():
+            await DocumentPartRepository(session).transition(
+                second_part, frozenset({PartStatus.QUEUED}), PartStatus.PUBLISHED
+            )
+            await DocumentRepository(session).refresh_status(document.id)
+        await notifier.emit(document.id, ProgressEventType.PART_STATUS, message="second run")
+        await notifier.emit(document.id, ProgressEventType.DOCUMENT_DONE, stage="done", message="second run done")
+
+        started = time.monotonic()
+        response = client.get(f"/api/v1/documents/{document.id}/events", timeout=3)
+        elapsed = time.monotonic() - started
+        assert response.status_code == 200 and elapsed < 1
+        assert [json.loads(data)["message"] for _, data in _sse(response)] == ["second run", "second run done"]
+    finally:
+        await progress_redis.delete(key)
+
+
+async def test_synthetic_document_done_uses_current_run_outcome(
+    client: TestClient, session_factory: async_sessionmaker[AsyncSession], progress_redis: Redis
+) -> None:
+    """A lost stream must still report the failure of the latest run."""
+    registered = client.post(
+        "/api/v1/auth/register", json={"email": f"synthetic-{uuid4()}@example.com", "password": "long-password"}
+    )
+    assert registered.status_code == 201, registered.text
+    owner_id = UUID(registered.json()["id"])
+    async with session_factory() as session, session.begin():
+        documents = DocumentRepository(session)
+        materials = UserMaterialRepository(session)
+        parts = DocumentPartRepository(session)
+
+        failed_document = await documents.create(
+            owner_id=owner_id,
+            title="Failed rerun",
+            source_type=SourceType.UPLOAD,
+            object_key="failed-rerun.md",
+            mime_type="text/markdown",
+            size_bytes=1,
+            checksum="1" * 64,
+        )
+        await materials.create(user_id=owner_id, document_id=failed_document.id, role=MaterialRole.OWNER)
+        old_part, current_part = await parts.add_many(
+            failed_document.id,
+            [
+                PartDraft(
+                    index=0,
+                    title="old",
+                    topic_ids=[],
+                    source_markdown="x",
+                    token_count=1,
+                    quota_period_start=None,
+                ),
+                PartDraft(
+                    index=1,
+                    title="current",
+                    topic_ids=[],
+                    source_markdown="x",
+                    token_count=1,
+                    quota_period_start=None,
+                ),
+            ],
+        )
+        await parts.transition(old_part.id, frozenset({PartStatus.QUEUED}), PartStatus.PUBLISHED)
+        await parts.transition(current_part.id, frozenset({PartStatus.QUEUED}), PartStatus.FAILED)
+        await documents.set_generation_start(failed_document.id, 1)
+        await documents.set_status(failed_document.id, DocumentStatus.DONE)
+
+        ready_document = await documents.create(
+            owner_id=owner_id,
+            title="Ready rerun",
+            source_type=SourceType.UPLOAD,
+            object_key="ready-rerun.md",
+            mime_type="text/markdown",
+            size_bytes=1,
+            checksum="2" * 64,
+        )
+        await materials.create(user_id=owner_id, document_id=ready_document.id, role=MaterialRole.OWNER)
+        ready_old, ready_current = await parts.add_many(
+            ready_document.id,
+            [
+                PartDraft(
+                    index=0,
+                    title="old",
+                    topic_ids=[],
+                    source_markdown="x",
+                    token_count=1,
+                    quota_period_start=None,
+                ),
+                PartDraft(
+                    index=1,
+                    title="current",
+                    topic_ids=[],
+                    source_markdown="x",
+                    token_count=1,
+                    quota_period_start=None,
+                ),
+            ],
+        )
+        await parts.transition(ready_old.id, frozenset({PartStatus.QUEUED}), PartStatus.PUBLISHED)
+        await parts.transition(ready_current.id, frozenset({PartStatus.QUEUED}), PartStatus.PUBLISHED)
+        await documents.set_generation_start(ready_document.id, 1)
+        await documents.set_status(ready_document.id, DocumentStatus.DONE)
+
+    try:
+        await progress_redis.delete(stream_key(failed_document.id))
+        started = time.monotonic()
+        failed_response = client.get(f"/api/v1/documents/{failed_document.id}/events", timeout=3)
+        elapsed = time.monotonic() - started
+        assert failed_response.status_code == 200 and elapsed < 1
+        ((_, failed_data),) = _sse(failed_response)
+        failed_event = json.loads(failed_data)
+        assert failed_event["type"] == "document_done"
+        assert failed_event["stage"] == "done"
+        assert failed_event["message"] == "Не получилось подготовить материал"  # noqa: RUF001
+
+        await progress_redis.delete(stream_key(ready_document.id))
+        ready_response = client.get(f"/api/v1/documents/{ready_document.id}/events", timeout=3)
+        assert ready_response.status_code == 200
+        ((_, ready_data),) = _sse(ready_response)
+        ready_event = json.loads(ready_data)
+        assert ready_event["type"] == "document_done"
+        assert ready_event["stage"] == "done"
+        assert ready_event["message"] == "Материал готов"
+    finally:
+        await progress_redis.delete(stream_key(failed_document.id))
+        await progress_redis.delete(stream_key(ready_document.id))
 
 
 async def test_real_document_status_keeps_done_after_failed_rerun(

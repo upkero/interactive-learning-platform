@@ -21,10 +21,12 @@ from src.app.contracts.documents import (
     DocumentRecord,
     DocumentStatus,
     MaterialRole,
+    PartStatus,
     ReadableDocument,
     SourceType,
     TopicNode,
 )
+from src.app.contracts.documents.readable_document import RunOutcome
 from src.app.exceptions.documents import DocumentNotFoundError, DocumentNotReadyError
 from src.app.interfaces.repositories.documents import (
     DocumentPartRepositoryProtocol,
@@ -58,14 +60,33 @@ class DocumentQueryService:
         self._users = users
 
     async def get_readable(self, *, user_id: UUID, document_id: UUID) -> ReadableDocument:
-        """Cheap authorization and owner locale for the SSE stream."""
+        """Cheap authorization, owner locale and current run outcome for the SSE stream.
+
+        The outcome is computed from the parts of the latest run
+        (``index >= generation_start_index``), so the synthetic
+        ``document_done`` sent after a lost Redis Stream matches the
+        ``document_done`` that a worker would have published.
+        """
         async with self._session_factory() as session:
             if await self._materials(session).get_role(user_id, document_id) is None:
                 raise DocumentNotFoundError()
             document = await self._documents(session).get(document_id)
             if document is None:
                 raise DocumentNotFoundError()
-            return ReadableDocument(document, await self._users(session).get_locale_by_document(document.id))
+            parts = await self._parts(session).list_by_document(document_id)
+            run_outcome: RunOutcome = (
+                "ready"
+                if any(
+                    part.status is PartStatus.PUBLISHED and part.index >= document.generation_start_index
+                    for part in parts
+                )
+                else "failed"
+            )
+            return ReadableDocument(
+                document,
+                await self._users(session).get_locale_by_document(document.id),
+                run_outcome,
+            )
 
     async def get_document(self, *, user_id: UUID, document_id: UUID) -> DocumentDetails:
         async with self._session_factory() as session:

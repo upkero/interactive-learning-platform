@@ -42,6 +42,7 @@ class Documents:
                 updated_at=now,
             ),
             "en",
+            "ready",
         )
 
 

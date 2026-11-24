@@ -5,6 +5,7 @@ from uuid import UUID
 
 from redis.asyncio import Redis
 
+from src.app.contracts.documents.readable_document import RunOutcome
 from src.app.contracts.documents.statuses import TERMINAL_DOCUMENT_STATUSES, DocumentStatus
 from src.app.contracts.progress import ProgressEvent, ProgressEventType
 from src.app.contracts.progress.stream import stream_key
@@ -17,7 +18,13 @@ class ProgressReader:
         self._redis = redis
 
     async def follow(
-        self, document_id: UUID, cursor: str, *, finished_status: DocumentStatus, locale: str = "ru"
+        self,
+        document_id: UUID,
+        cursor: str,
+        *,
+        finished_status: DocumentStatus,
+        run_outcome: RunOutcome,
+        locale: str = "ru",
     ) -> AsyncGenerator[StreamEntry, None]:
         key = stream_key(document_id)
         terminal = finished_status in TERMINAL_DOCUMENT_STATUSES
@@ -38,7 +45,9 @@ class ProgressReader:
                     document_id,
                     ProgressEventType.DOCUMENT_DONE,
                     stage=finished_status.value,
-                    message=render_message(locale, ProgressEventType.DOCUMENT_DONE, finished_status.value, {}),
+                    message=render_message(
+                        locale, ProgressEventType.DOCUMENT_DONE, finished_status.value, {"outcome": run_outcome}
+                    ),
                 )
                 yield StreamEntry(id=cursor, type=event.event_type.value, data=event.to_json())
                 return

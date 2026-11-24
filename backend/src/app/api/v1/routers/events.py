@@ -44,7 +44,13 @@ async def document_events(
     )
 
     async def events() -> AsyncIterator[ServerSentEvent]:
-        async for entry in reader.follow(document_id, cursor, finished_status=document.status, locale=locale):
+        async for entry in reader.follow(
+            document_id,
+            cursor,
+            finished_status=document.status,
+            locale=locale,
+            run_outcome=readable.run_outcome,
+        ):
             if await request.is_disconnected():
                 return
             yield ServerSentEvent(id=entry.id, event=entry.type, data=entry.data, retry=3000)
