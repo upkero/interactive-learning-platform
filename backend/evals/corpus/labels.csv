@@ -1,21 +1,21 @@
 intent_id,candidate,fit,note
-net-01-hyp-01,other:layer-stack,no,"Нужна вложенная схема уровней, отдельного кандидата нет."
+net-01-hyp-01,other:layer-stack,extend,"Нужна вложенная схема уровней, отдельного кандидата нет."
 net-01-hyp-02,graph-messages,extend,Нужны группировка слоёв и связи между моделями.
 net-02-hyp-01,state-machine,full,
 net-02-hyp-02,graph-messages,full,
 net-03-hyp-01,graph-messages,extend,Нужны адреса и порты как подписи сообщений и получателей.
-net-03-hyp-02,other:packet-layout,no,Нужен компонент полей пакета с диапазонами бит.
-net-04-hyp-01,other:packet-layout,no,Нужен компонент полей кадра и размеров.
+net-03-hyp-02,other:packet-layout,extend,Нужен компонент полей пакета с диапазонами бит.
+net-04-hyp-01,other:packet-layout,extend,Нужен компонент полей кадра и размеров.
 net-04-hyp-02,state-machine,extend,Нужны таймер ожидания и параметры повторной отправки.
 net-05-hyp-01,graph-messages,full,
-net-05-hyp-02,other:table-operations,no,Нужна таблица с обновлением ячеек и строк.
+net-05-hyp-02,other:table-operations,extend,Нужна таблица с обновлением ячеек и строк.
 os-01-hyp-01,lane-timeline,full,
 os-01-hyp-02,tree-ops,full,
 os-02-hyp-01,state-machine,full,
 os-02-hyp-02,lane-timeline,full,
 os-03-hyp-01,param-plot,extend,Нужна дискретная доля CPU и несколько процессов в конфигурации.
 os-03-hyp-02,tree-ops,extend,Для точного CFS нужны метки vruntime и конкретные операции дерева.
-os-04-hyp-01,other:group-boundaries,no,Нужны вложенные границы изоляции и отношения включения.
+os-04-hyp-01,other:group-boundaries,extend,Нужны вложенные границы изоляции и отношения включения.
 os-04-hyp-02,tree-ops,full,
 os-05-hyp-01,tree-ops,full,
 os-05-hyp-02,lane-timeline,extend,"Нужны события и подтверждения между процессом, кэшем и устройством."
@@ -29,13 +29,13 @@ alg-04-hyp-01,graph-messages,extend,"Нужны веса рёбер, расст�
 alg-04-hyp-02,array-ops,extend,Нужны ссылки между индексами и выделение цепочки предков.
 alg-05-hyp-01,graph-messages,extend,Нужны числовые веса и шаги релаксации.
 alg-05-hyp-02,array-ops,extend,Нужен список вершин с изменяемыми оценками расстояний.
-db-01-hyp-01,other:table-operations,no,Нужны таблицы и операции над строками.
-db-01-hyp-02,other:table-operations,no,Нужны две таблицы и результат UNION.
-db-02-hyp-01,other:table-operations,no,Нужно описание структуры таблицы и ограничений.
+db-01-hyp-01,other:table-operations,extend,Нужны таблицы и операции над строками.
+db-01-hyp-02,other:table-operations,extend,Нужны две таблицы и результат UNION.
+db-02-hyp-01,other:table-operations,extend,Нужно описание структуры таблицы и ограничений.
 db-02-hyp-02,graph-messages,extend,Нужны направленные зависимости и выделение каскада.
 db-03-hyp-01,lane-timeline,full,
 db-03-hyp-02,graph-messages,extend,Нужны блокировки и направленные рёбра ожидания.
-db-04-hyp-01,other:table-operations,no,Нужна таблица с анимацией добавления строк.
+db-04-hyp-01,other:table-operations,extend,Нужна таблица с анимацией добавления строк.
 db-04-hyp-02,lane-timeline,extend,Нужна связь событий транзакции с изменёнными строками.
-db-05-hyp-01,other:table-operations,no,Нужно визуальное преобразование таблицы.
+db-05-hyp-01,other:table-operations,extend,Нужно визуальное преобразование таблицы.
 db-05-hyp-02,not_needed,no,Интерактивная визуализация не нужна для краткой исторической справки.
