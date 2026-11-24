@@ -18,6 +18,8 @@ from src.app.interfaces.observability.metrics_collector import MetricsCollector
 from src.app.interfaces.repositories.documents import DocumentPartRepositoryProtocol, DocumentRepositoryProtocol
 from src.app.interfaces.repositories.users import UserRepositoryProtocol
 from src.app.interfaces.services.progress_notifier import ProgressNotifier
+from src.app.observability.decision_log import DecisionLog
+from src.app.observability.noop_metrics_collector import NoopMetricsCollector
 from src.app.observability.usage_tracker import UsageTracker, bind_usage_tracker
 from src.app.services.progress.messages import render_message
 from src.app.services.quota.quota_ledger import QuotaLedger
@@ -73,8 +75,29 @@ class StubPipeline:
         content = await self._load_content()
         tracker = UsageTracker(part_id=str(part_id), document_id=str(document_id), metrics=self._metrics)
         with bind_log_context(document_id=str(document_id), part_id=str(part_id)), bind_usage_tracker(tracker):
-            await self._run_stages(document_id, part_id, content, locale, part_name, tracker)
-            tracker.emit_summary()
+            published = False
+
+            def record_published() -> None:
+                nonlocal published
+                published = True
+                self._observe_part(tracker, "published")
+                DecisionLog(metrics=self._metrics or NoopMetricsCollector()).part_summary(tracker.summary())
+
+            try:
+                await self._run_stages(document_id, part_id, content, locale, part_name, tracker, record_published)
+            except BaseException:
+                if not published:
+                    self._observe_part(tracker, "failed")
+                raise
+
+    def _observe_part(self, tracker: UsageTracker, outcome: str) -> None:
+        if self._metrics is not None:
+            self._metrics.observe_histogram(
+                "part.processing_duration_seconds",
+                tracker.summary().duration_s,
+                labels={"outcome": outcome},
+                buckets=(10, 30, 60, 120, 180, 240, 300, 330),
+            )
 
     async def _load_content(self) -> dict[str, JsonValue]:
         """Read and validate the fixture once for this pipeline instance."""
@@ -109,7 +132,8 @@ class StubPipeline:
         locale: str,
         part_name: str,
         tracker: UsageTracker,
-    ) -> None:
+        record_published: Callable[[], None],
+    ) -> bool:
         async def emit(
             event_type: ProgressEventType,
             stage: str | None = None,
@@ -138,7 +162,8 @@ class StubPipeline:
         await emit(ProgressEventType.PART_STATUS, PartStatus.MAIN_PASS.value)
         current = PartStatus.MAIN_PASS
         for next_status in (PartStatus.RESOLVING, PartStatus.ASSEMBLING, PartStatus.PUBLISHED):
-            with tracker.stage(next_status.value):
+            # Time spent in the current stage, before transitioning to the next status.
+            with tracker.stage(current.value):
                 await asyncio.sleep(self._delay)
             document_done = False
             document_status = None
@@ -151,7 +176,7 @@ class StubPipeline:
                 )
                 if not transitioned:
                     logger.info("part.skip", extra={"part_id": str(part_id)})
-                    return
+                    return False
                 if next_status is PartStatus.PUBLISHED:
                     await self._ledger.charge(session, part_id=part_id)
                     documents = self._documents(session)
@@ -169,6 +194,8 @@ class StubPipeline:
                     )
                 else:
                     outcome = None
+            if next_status is PartStatus.PUBLISHED:
+                record_published()
             await emit(ProgressEventType.PART_STATUS, next_status.value)
             if next_status is PartStatus.PUBLISHED:
                 await emit(ProgressEventType.PART_READY)
@@ -180,3 +207,4 @@ class StubPipeline:
                     )
                     await self._notifications.on_document_finished(document_id)
             current = next_status
+        return True

@@ -35,6 +35,25 @@ def test_decision_log_writes_events_and_metrics(caplog: pytest.LogCaptureFixture
     ]
     assert "resolver.decisions" in metrics.counters
     assert "judge.verdicts" in metrics.counters
-    assert "quiz.checks" in metrics.counters
+    assert "quiz.generated" in metrics.counters
     assert "widgets.excluded" in metrics.counters
     assert "library.merges" in metrics.counters
+    assert metrics.labeled_counters == [
+        ("resolver.decisions", {"decision": "reused"}, 1),
+        ("judge.verdicts", {"accepted": "true", "attempt": "1"}, 1),
+        ("quiz.generated", {"type": "single_choice", "outcome": "kept"}, 1),
+        ("widgets.excluded", {}, 1),
+        ("library.merges", {"outcome": "merged"}, 1),
+    ]
+    assert caplog.records[0].__dict__["candidates"] == [{"id": "w-1", "distance": 0.1235}]
+
+
+def test_decision_fields_are_bounded(caplog: pytest.LogCaptureFixture) -> None:
+    decisions = DecisionLog(metrics=RecordingMetricsCollector())
+    with caplog.at_level(logging.INFO, logger="grasp.decisions"):
+        decisions.resolver_decision(
+            directive_ref="d", decision="fallback", widget_id=None, candidates=[], reason="x" * 600, duration_ms=1
+        )
+        decisions.judge_verdict(widget_ref="w", attempt=2, accepted=False, issues=[str(i) for i in range(20)])
+    assert len(caplog.records[0].__dict__["reason"]) == 500
+    assert len(caplog.records[1].__dict__["issues"]) == 10

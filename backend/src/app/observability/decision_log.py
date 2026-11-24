@@ -3,6 +3,7 @@
 import logging
 from typing import Literal
 
+from src.app.contracts.observability.part_summary import PartSummary
 from src.app.interfaces.observability.metrics_collector import MetricsCollector
 
 ResolverDecision = Literal["reused", "configured", "generated", "fallback"]
@@ -12,6 +13,9 @@ class DecisionLog:
     def __init__(self, *, metrics: MetricsCollector, logger: logging.Logger | None = None) -> None:
         self._metrics = metrics
         self._logger = logger or logging.getLogger("grasp.decisions")
+
+    def part_summary(self, summary: PartSummary) -> None:
+        self._logger.info("Part summary.", extra={"event": "part.summary", **summary.to_dict()})
 
     def widget_excluded(self, *, widget_id: str, reporters: int, threshold: int) -> None:
         self._metrics.increment_counter("widgets.excluded")
@@ -60,7 +64,7 @@ class DecisionLog:
         )
 
     def quiz_check(self, *, quiz_type: str, result: Literal["kept", "rewritten", "dropped"], reason: str) -> None:
-        self._metrics.increment_counter("quiz.checks", labels={"type": quiz_type, "result": result})
+        self._metrics.increment_counter("quiz.generated", labels={"type": quiz_type, "outcome": result})
         self._logger.info(
             "Quiz check.", extra={"event": "quiz.check", "type": quiz_type, "result": result, "reason": reason[:500]}
         )

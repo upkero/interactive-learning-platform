@@ -1,9 +1,10 @@
 """HTTP request metrics exposed through Prometheus."""
 
+from collections.abc import Awaitable, Callable
 from time import perf_counter
 
-from fastapi import FastAPI, Request
-from prometheus_client import Counter, Histogram, make_asgi_app
+from fastapi import FastAPI, Request, Response
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
 HTTP_REQUESTS = Counter("http_requests", "HTTP requests by method, route and status", ["method", "route", "status"])
 HTTP_DURATION = Histogram(
@@ -16,14 +17,18 @@ HTTP_DURATION = Histogram(
 
 def register_metrics(app: FastAPI) -> None:
     @app.middleware("http")
-    async def metrics_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
+    async def metrics_middleware(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+        if request.url.path in {"/metrics", "/metrics/"}:
+            return await call_next(request)
         started = perf_counter()
         response = await call_next(request)
         route = request.scope.get("route")
-        route_path = getattr(route, "path", request.url.path)
+        route_path = getattr(route, "path_format", None) or "unmatched"
         labels = {"method": request.method, "route": route_path}
         HTTP_REQUESTS.labels(**labels, status=str(response.status_code)).inc()
         HTTP_DURATION.labels(**labels).observe(perf_counter() - started)
         return response
 
-    app.mount("/metrics", make_asgi_app())
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics() -> Response:
+        return Response(generate_latest(), headers={"Content-Type": CONTENT_TYPE_LATEST})

@@ -4,7 +4,7 @@ import os
 from time import perf_counter
 
 from celery.signals import task_postrun, task_prerun, worker_init, worker_process_shutdown
-from prometheus_client import CollectorRegistry, Counter, Histogram, multiprocess, start_http_server
+from prometheus_client import REGISTRY, CollectorRegistry, Counter, Histogram, multiprocess, start_http_server
 
 from src.app.core.settings.observability import get_observability_settings
 
@@ -16,9 +16,17 @@ _started: dict[str, float] = {}
 
 
 @worker_init.connect  # type: ignore[untyped-decorator]
-def start_metrics_server(**_: object) -> None:
-    registry = CollectorRegistry()
-    multiprocess.MultiProcessCollector(registry)  # type: ignore[no-untyped-call]
+def start_metrics_server(sender: object = None, **_: object) -> None:
+    directory = os.environ.get("PROMETHEUS_MULTIPROC_DIR")
+    if directory:
+        if not os.path.isdir(directory) or not os.access(directory, os.W_OK):
+            raise SystemExit("PROMETHEUS_MULTIPROC_DIR must be a writable directory")
+        registry = CollectorRegistry()
+        multiprocess.MultiProcessCollector(registry)  # type: ignore[no-untyped-call]
+    else:
+        if getattr(sender, "concurrency", 1) > 1:
+            raise SystemExit("PROMETHEUS_MULTIPROC_DIR is required when worker concurrency is greater than 1")
+        registry = REGISTRY
     start_http_server(get_observability_settings().worker_metrics_port, registry=registry)
 
 
@@ -37,4 +45,5 @@ def on_task_postrun(task_id: str, task: object, state: str | None = None, **_: o
 
 @worker_process_shutdown.connect  # type: ignore[untyped-decorator]
 def on_process_shutdown(**_: object) -> None:
-    multiprocess.mark_process_dead(os.getpid())  # type: ignore[no-untyped-call]
+    if os.environ.get("PROMETHEUS_MULTIPROC_DIR"):
+        multiprocess.mark_process_dead(os.getpid())  # type: ignore[no-untyped-call]

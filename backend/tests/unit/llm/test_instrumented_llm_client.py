@@ -23,6 +23,7 @@ from src.app.llm.instrumented_llm_client import (
     _TOKENS_BUCKETS,
     InstrumentedLLMClient,
 )
+from src.app.observability.usage_tracker import UsageTracker, bind_usage_tracker, get_usage_tracker
 from tests.support.fakes.llm.llm_client import FakeLLMClient
 from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
 
@@ -101,6 +102,25 @@ async def test_structured_success_records_all_metrics(caplog: pytest.LogCaptureF
     assert record.__dict__["purpose"] == "main_pass"
     assert record.__dict__["input_tokens"] == 10
     assert record.__dict__["cache_read_input_tokens"] == 2
+
+
+async def test_both_methods_record_in_bound_tracker() -> None:
+    fake = FakeLLMClient(
+        structured=[_Draft()],
+        usage=TokenUsage(10, 5, 2, 1),
+        completions=[LLMResponse(content="hello", usage=TokenUsage(3, 4, 1, 2))],
+    )
+    client = _instrumented(fake, RecordingMetricsCollector())
+    tracker = UsageTracker(part_id="p", document_id="d")
+    with bind_usage_tracker(tracker):
+        await client.complete((LLMMessage(role="user", content="q"),))
+        await client.complete_structured(_request(), _Draft)
+        assert get_usage_tracker() is tracker
+    assert get_usage_tracker() is None
+    assert tracker.summary().usage == {
+        "unspecified": {"input": 3, "output": 4, "cache_read": 1, "cache_write": 2},
+        "main_pass": {"input": 10, "output": 5, "cache_read": 2, "cache_write": 1},
+    }
 
 
 async def test_structured_schema_error_maps_outcome(caplog: pytest.LogCaptureFixture) -> None:

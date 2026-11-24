@@ -210,12 +210,15 @@ async def test_http_reconnect_after_three_events_receives_exactly_two(
     document_id = uuid4()
     try:
         async with httpx.AsyncClient(base_url=base, timeout=8) as http:
-            for _ in range(40):
+            for _ in range(150):
                 try:
                     if (await http.get("/health/live")).status_code == 200:
                         break
                 except httpx.HTTPError:
-                    await asyncio.sleep(0.1)
+                    pass
+                if server.returncode is not None:
+                    pytest.fail(f"Isolated HTTP server exited with code {server.returncode}")
+                await asyncio.sleep(0.1)
             else:
                 pytest.fail("Isolated HTTP server did not start")
             response = await http.post(

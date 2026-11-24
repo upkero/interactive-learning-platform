@@ -99,7 +99,9 @@ async def test_concurrent_watchdog_ticks_refund_only_once(
 
 
 async def test_stub_pipeline_publishes_and_charges_once(
-    session_factory: async_sessionmaker[AsyncSession], part_ids: tuple[UUID, UUID, UUID]
+    session_factory: async_sessionmaker[AsyncSession],
+    part_ids: tuple[UUID, UUID, UUID],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     user_id, document_id, part_id = part_ids
     container = ApplicationContainer()
@@ -107,6 +109,8 @@ async def test_stub_pipeline_publishes_and_charges_once(
         await container.quota_ledger.reserve(session, user_id=user_id, document_id=document_id, parts=1)
         await DocumentRepository(session).set_status(document_id, DocumentStatus.GENERATING)
     notifier = FakeProgressNotifier()
+    metrics = RecordingMetricsCollector()
+    caplog.set_level("INFO", logger="grasp.decisions")
     pipeline = StubPipeline(
         session_factory=session_factory,
         parts=DocumentPartRepository,
@@ -115,6 +119,7 @@ async def test_stub_pipeline_publishes_and_charges_once(
         notifier=notifier,
         users=UserRepository,
         notifications=container.notification_service,
+        metrics=metrics,
         delay=0,
     )
     await asyncio.gather(pipeline.process(part_id), pipeline.process(part_id))
@@ -128,6 +133,10 @@ async def test_stub_pipeline_publishes_and_charges_once(
         ).all()
         assert len(entries) == 1 and entries[0].part_id == part_id
     assert [event[1] for event in notifier.events] == ["part_status"] * 4 + ["part_ready", "document_done"]
+    summaries = [record for record in caplog.records if record.__dict__.get("event") == "part.summary"]
+    assert len(summaries) == 1 and summaries[0].__dict__["part_id"] == str(part_id)
+    observed = metrics.histograms_named("part.processing_duration_seconds")
+    assert len(observed) == 1 and observed[0].labels == {"outcome": "published"}
     await container.close()
 
 

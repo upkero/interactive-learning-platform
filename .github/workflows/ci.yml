@@ -49,6 +49,7 @@ jobs:
       SMTP_HOST: localhost
       SMTP_PORT: 1025
       TEST_CELERY_BROKER_URL: redis://localhost:6379/15
+      TEST_CELERY_REDIS_URL: redis://localhost:6379/13
       RATE_LIMIT_STORAGE_URI: memory://
       AUTH_JWT_SECRET: ci-test-jwt-secret-must-be-at-least-32-characters-long
       SEED_PASSWORD: ci-seed-password
