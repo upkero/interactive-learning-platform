@@ -90,6 +90,14 @@ class DocumentPartRepositoryProtocol(Protocol):
 
     async def list_by_document(self, document_id: UUID) -> list[PartRecord]: ...
 
+    async def has_published_since(self, document_id: UUID, start_index: int) -> bool:
+        """Whether any part with ``index >= start_index`` is published.
+
+        A narrow ``SELECT EXISTS`` for the SSE handshake: it must not load
+        ``source_markdown`` or the generated ``content`` of every part.
+        """
+        ...
+
     async def add_many(self, document_id: UUID, parts: Sequence[PartDraft]) -> list[PartRecord]: ...
 
     async def transition(

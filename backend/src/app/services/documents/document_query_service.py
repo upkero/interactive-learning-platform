@@ -21,7 +21,6 @@ from src.app.contracts.documents import (
     DocumentRecord,
     DocumentStatus,
     MaterialRole,
-    PartStatus,
     ReadableDocument,
     SourceType,
     TopicNode,
@@ -73,15 +72,10 @@ class DocumentQueryService:
             document = await self._documents(session).get(document_id)
             if document is None:
                 raise DocumentNotFoundError()
-            parts = await self._parts(session).list_by_document(document_id)
-            run_outcome: RunOutcome = (
-                "ready"
-                if any(
-                    part.status is PartStatus.PUBLISHED and part.index >= document.generation_start_index
-                    for part in parts
-                )
-                else "failed"
-            )
+            # Narrow existence check: the SSE handshake must not load every
+            # part's source_markdown and generated content just to learn one bit.
+            published = await self._parts(session).has_published_since(document_id, document.generation_start_index)
+            run_outcome: RunOutcome = "ready" if published else "failed"
             return ReadableDocument(
                 document,
                 await self._users(session).get_locale_by_document(document.id),

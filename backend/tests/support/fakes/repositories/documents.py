@@ -214,6 +214,12 @@ class FakeDocumentPartRepository(DocumentPartRepositoryProtocol):
             key=lambda p: p.index,
         )
 
+    async def has_published_since(self, document_id: UUID, start_index: int) -> bool:
+        return any(
+            p.document_id == document_id and p.index >= start_index and p.status is PartStatus.PUBLISHED
+            for p in self._parts.values()
+        )
+
     async def add_many(self, document_id: UUID, parts: Sequence[PartDraft]) -> list[PartRecord]:
         created: list[PartRecord] = []
         for draft in parts:
