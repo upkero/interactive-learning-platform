@@ -26,3 +26,4 @@ class DocumentRecord:
     created_at: datetime
     updated_at: datetime
     error_detail: str | None = None
+    generation_start_index: int = 0

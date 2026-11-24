@@ -19,6 +19,7 @@ class ProgressSettings(BaseSettings):
         gt=0,
         description="TTL of a progress stream.",
     )
+    socket_timeout: float = Field(default=20.0, gt=15, description="Redis read timeout, longer than XREAD BLOCK 15s.")
 
     model_config = SettingsConfigDict(
         env_prefix="REDIS_PROGRESS_",

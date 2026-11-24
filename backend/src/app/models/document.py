@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, String, Text, func
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -50,6 +50,7 @@ class Document(Base):
     page_count: Mapped[int | None]
     checksum: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(16), server_default="uploaded")
+    generation_start_index: Mapped[int] = mapped_column(Integer, server_default="0")
     topic_tree: Mapped[list[dict[str, Any]] | dict[str, Any] | None] = mapped_column(JSONB)
     error_code: Mapped[str | None] = mapped_column(String(64))
     error_detail: Mapped[str | None] = mapped_column(Text)

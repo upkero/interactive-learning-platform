@@ -6,8 +6,10 @@ from celery.signals import setup_logging as celery_setup_logging
 from kombu import Exchange, Queue
 
 from src.app.core.logging import setup_logging
+from src.app.core.settings.app import get_app_settings
 from src.app.core.settings.celery import get_celery_settings
 from src.app.core.settings.logging import get_logging_settings
+from src.app.core.settings.smtp import get_smtp_settings, validate_smtp_config
 from src.app.core.settings.solver import get_solver_settings
 from src.app.tasks.names import (
     MAINTENANCE_QUEUE,
@@ -27,6 +29,7 @@ def configure_worker_logging(**kwargs: object) -> None:
 
 
 get_solver_settings()  # Validate before a worker can consume any messages.
+validate_smtp_config(get_app_settings().environment, get_smtp_settings())
 celery_app = Celery(
     "grasp",
     broker=get_celery_settings().broker_url,

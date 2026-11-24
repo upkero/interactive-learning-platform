@@ -39,6 +39,10 @@ services:
       interval: 5s
       retries: 10
 
+  mailpit:
+    image: axllent/mailpit:v1.34.0
+    ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
+
   # 3. MinIO — S3-совместимое объектное хранилище
   # AIStor-образ не стартует без лицензии: файл кладётся в infra/license/minio.license
   # (не коммитится, см. .gitignore; reference — docker-compose.yml faq-assistant).

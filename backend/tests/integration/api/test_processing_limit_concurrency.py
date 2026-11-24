@@ -20,6 +20,8 @@ from src.app.services.documents.generation_service import GenerationService
 from src.app.services.documents.topic_per_part_planner import TopicPerPartPlanner
 from src.app.services.quota.quota_ledger import QuotaLedger
 from src.app.storage.object_keys import parsed_markdown_key
+from tests.support.fakes.notifications.claims import FakeNotificationClaims
+from tests.support.fakes.services.progress_notifier import FakeProgressNotifier
 from tests.support.fakes.services.task_dispatcher import FakeTaskDispatcher
 from tests.support.fakes.storage.object_storage_client import FakeObjectStorageClient
 
@@ -70,6 +72,8 @@ async def test_three_parallel_generations_only_two_start(session_factory: async_
             ),
             dispatcher=dispatcher,
             settings=ProcessingSettings(max_active_documents=2),
+            notification_claims=FakeNotificationClaims(),
+            progress_notifier=FakeProgressNotifier(),
         )
         try:
             await service.start(

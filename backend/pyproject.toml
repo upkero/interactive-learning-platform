@@ -34,6 +34,10 @@ dependencies = [
     "sse-starlette>=2.2.1",
     "prometheus-client>=0.21.0",
 
+    # Email notifications and templates
+    "aiosmtplib>=3.0.2",
+    "jinja2>=3.1.0",
+
     # Нейросети и парсинг
     "anthropic>=0.40.0",
     "openai>=1.60.0",
@@ -49,6 +53,7 @@ dev = [
     "pytest-asyncio>=0.25.0",
     "pytest-cov>=6.0.0",
     "pytest-repeat>=0.9.3",
+    "pytest-timeout>=2.3.1",
     "httpx>=0.28.0",
     "jsonschema>=4.23.0",
     "types-jsonschema>=4.26.0.20261006",
@@ -108,6 +113,7 @@ explicit_package_bases = true
 pythonpath = [".", "src"]
 asyncio_mode = "auto"
 addopts = "--strict-markers -m 'not live'"
+timeout = 60
 markers = [
     "unit: fast isolated tests, no network, no database",
     "integration: tests against real Postgres/Redis/MinIO from compose",

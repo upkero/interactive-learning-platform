@@ -16,6 +16,7 @@ from src.app.models.document_part import DocumentPart
 from src.app.models.generation_ledger import GenerationLedger
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
+from src.app.repositories.user_repository import UserRepository
 from src.app.services.quota.period import current_period
 from src.app.services.solver.pipeline.part_recovery import PartRecovery
 from src.app.services.solver.pipeline.stub_pipeline import StubPipeline
@@ -67,6 +68,8 @@ async def test_concurrent_watchdog_ticks_refund_only_once(
         ledger=container.quota_ledger,
         dispatcher=dispatcher,
         notifier=notifier,
+        users=UserRepository,
+        notifications=container.notification_service,
     )
     watchdog = Watchdog(
         session_factory=session_factory,
@@ -110,6 +113,8 @@ async def test_stub_pipeline_publishes_and_charges_once(
         documents=DocumentRepository,
         ledger=container.quota_ledger,
         notifier=notifier,
+        users=UserRepository,
+        notifications=container.notification_service,
         delay=0,
     )
     await asyncio.gather(pipeline.process(part_id), pipeline.process(part_id))
@@ -159,6 +164,8 @@ async def test_poison_part_does_not_block_other_parts(
         ledger=container.quota_ledger,
         dispatcher=dispatcher,
         notifier=FakeProgressNotifier(),
+        users=UserRepository,
+        notifications=container.notification_service,
     )
     watchdog = Watchdog(
         session_factory=session_factory,
@@ -194,6 +201,8 @@ async def test_lost_queue_threshold_and_failed_document(
         ledger=container.quota_ledger,
         dispatcher=dispatcher,
         notifier=notifier,
+        users=UserRepository,
+        notifications=container.notification_service,
     )
     watchdog = Watchdog(
         session_factory=session_factory,
@@ -232,7 +241,7 @@ async def test_lost_queue_threshold_and_failed_document(
             .values(stage_changed_at=datetime.now(UTC) - timedelta(minutes=11))
         )
     assert (await watchdog.tick()).failed == 1
-    assert [(e[1], e[3]) for e in notifier.events] == [("part_status", "failed"), ("document_done", None)]
+    assert [(e[1], e[3]) for e in notifier.events] == [("part_status", "failed"), ("document_done", "failed")]
     async with session_factory() as session:
         document = await DocumentRepository(session).get(document_id)
         assert document is not None and document.status is DocumentStatus.FAILED

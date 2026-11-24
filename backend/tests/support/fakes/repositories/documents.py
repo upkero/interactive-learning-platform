@@ -70,9 +70,14 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
         document = self._documents.get(document_id)
         if document is None or document.status is not DocumentStatus.GENERATING or self._parts is None:
             return
-        parts = await self._parts.list_by_document(document_id)
-        if parts and all(p.status in {PartStatus.PUBLISHED, PartStatus.FAILED} for p in parts):
-            published = any(p.status is PartStatus.PUBLISHED for p in parts)
+        all_parts = await self._parts.list_by_document(document_id)
+        current_parts = [p for p in all_parts if p.index >= document.generation_start_index]
+        if current_parts and all(p.status in {PartStatus.PUBLISHED, PartStatus.FAILED} for p in current_parts):
+            # A previous successful run keeps the document usable even when
+            # every part of the current run failed. This matches the SQL
+            # repository, which checks terminality for the current run but
+            # publication across all runs.
+            published = any(p.status is PartStatus.PUBLISHED for p in all_parts)
             self._documents[document_id] = replace(
                 document,
                 status=DocumentStatus.DONE if published else DocumentStatus.FAILED,
@@ -147,6 +152,10 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
             return updated
         return None
 
+    async def set_generation_start(self, document_id: UUID, index: int) -> None:
+        if document_id in self._documents:
+            self._documents[document_id] = replace(self._documents[document_id], generation_start_index=index)
+
     async def set_topic_tree(
         self,
         document_id: UUID,
@@ -203,6 +212,12 @@ class FakeDocumentPartRepository(DocumentPartRepositoryProtocol):
         return sorted(
             (p for p in self._parts.values() if p.document_id == document_id),
             key=lambda p: p.index,
+        )
+
+    async def has_published_since(self, document_id: UUID, start_index: int) -> bool:
+        return any(
+            p.document_id == document_id and p.index >= start_index and p.status is PartStatus.PUBLISHED
+            for p in self._parts.values()
         )
 
     async def add_many(self, document_id: UUID, parts: Sequence[PartDraft]) -> list[PartRecord]:

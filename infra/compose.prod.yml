@@ -44,23 +44,33 @@ services:
     ports: !reset []
     restart: unless-stopped
 
+  mailpit:
+    profiles: ["dev-only"]
+    ports: !reset []
+
   minio:
     ports: !reset []
     restart: unless-stopped
 
   # Backend-сервисы (сборка обозначена тегом backend в CI), образ из GHCR
   api:
+    environment:
+      ENVIRONMENT: production
     image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/backend:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
     build: !reset {}
     ports: !reset []
     restart: unless-stopped
 
   worker:
+    environment:
+      ENVIRONMENT: production
     image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/backend:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
     build: !reset {}
     restart: unless-stopped
 
   beat:
+    environment:
+      ENVIRONMENT: production
     image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/backend:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
     build: !reset {}
     restart: unless-stopped

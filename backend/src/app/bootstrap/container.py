@@ -14,6 +14,7 @@ from src.app.core.settings.processing import ProcessingSettings, get_processing_
 from src.app.core.settings.progress import get_progress_settings
 from src.app.core.settings.quota import QuotaSettings, get_quota_settings
 from src.app.core.settings.reports import ReportsSettings, get_reports_settings
+from src.app.core.settings.smtp import get_smtp_settings
 from src.app.core.settings.storage import get_storage_settings
 from src.app.core.settings.upload import get_upload_settings
 from src.app.db.session import build_engine, build_session_factory
@@ -25,6 +26,7 @@ from src.app.llm.factory import create_llm_client
 from src.app.llm.instrumented_llm_client import InstrumentedLLMClient
 from src.app.observability.decision_log import DecisionLog
 from src.app.observability.noop_metrics_collector import NoopMetricsCollector
+from src.app.observability.notification_claims import RedisNotificationClaims
 from src.app.observability.progress_notifier import RedisProgressNotifier
 from src.app.observability.prometheus_metrics_collector import PrometheusMetricsCollector
 from src.app.repositories.document_part_repository import DocumentPartRepository
@@ -48,6 +50,9 @@ from src.app.services.documents.part_query_service import PartQueryService
 from src.app.services.documents.quiz_check_service import QuizCheckService
 from src.app.services.documents.topic_per_part_planner import TopicPerPartPlanner
 from src.app.services.documents.upload_service import UploadService
+from src.app.services.notifications.email_sender import EmailSender
+from src.app.services.notifications.notification_service import NotificationService
+from src.app.services.progress.progress_reader import ProgressReader
 from src.app.services.quota.quota_ledger import QuotaLedger
 from src.app.services.quota.quota_service import QuotaService
 from src.app.services.reports.report_service import ReportService
@@ -97,6 +102,8 @@ class ApplicationContainer:
             ledger=self.quota_ledger,
             dispatcher=self.task_dispatcher,
             notifier=self.progress_notifier,
+            users=UserRepository,
+            notifications=self.notification_service,
         )
 
     @cached_property
@@ -118,6 +125,8 @@ class ApplicationContainer:
             documents=DocumentRepository,
             ledger=self.quota_ledger,
             notifier=self.progress_notifier,
+            users=UserRepository,
+            notifications=self.notification_service,
         )
 
     @cached_property
@@ -194,6 +203,7 @@ class ApplicationContainer:
             materials=UserMaterialRepository,
             parts=DocumentPartRepository,
             storage=self.object_storage,
+            users=UserRepository,
         )
 
     @cached_property
@@ -209,6 +219,8 @@ class ApplicationContainer:
             ledger=self.quota_ledger,
             dispatcher=self.task_dispatcher,
             settings=self.processing_settings,
+            notification_claims=self.notification_claims,
+            progress_notifier=self.progress_notifier,
         )
 
     @cached_property
@@ -297,12 +309,35 @@ class ApplicationContainer:
 
     @cached_property
     def progress_redis(self) -> aioredis.Redis:
-        client: aioredis.Redis = aioredis.Redis.from_url(str(get_progress_settings().url))
+        client: aioredis.Redis = aioredis.Redis.from_url(
+            str(get_progress_settings().url), socket_timeout=get_progress_settings().socket_timeout
+        )
         return client
+
+    @cached_property
+    def progress_reader(self) -> ProgressReader:
+        return ProgressReader(self.progress_redis)
+
+    @cached_property
+    def notification_claims(self) -> RedisNotificationClaims:
+        return RedisNotificationClaims(self.progress_redis)
 
     @cached_property
     def progress_notifier(self) -> RedisProgressNotifier:
         return RedisProgressNotifier(self.progress_redis, get_progress_settings())
+
+    @cached_property
+    def notification_service(self) -> NotificationService:
+        return NotificationService(
+            session_factory=self.session_factory,
+            users=UserRepository,
+            documents=DocumentRepository,
+            parts=DocumentPartRepository,
+            claims=self.notification_claims,
+            sender=EmailSender(get_smtp_settings()),
+            app_settings=get_app_settings(),
+            smtp_settings=get_smtp_settings(),
+        )
 
     @cached_property
     def task_dispatcher(self) -> CeleryTaskDispatcher:

@@ -5,7 +5,7 @@ from datetime import timedelta
 from uuid import UUID
 
 from pydantic import JsonValue
-from sqlalchemy import func, select, update
+from sqlalchemy import exists, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -90,6 +90,17 @@ class DocumentPartRepository(DocumentPartRepositoryProtocol):
             select(DocumentPart).where(DocumentPart.document_id == document_id).order_by(DocumentPart.index)
         )
         return [self._to_record(row) for row in rows.all()]
+
+    async def has_published_since(self, document_id: UUID, start_index: int) -> bool:
+        """``SELECT EXISTS`` without loading the heavy part columns."""
+        stmt = select(
+            exists().where(
+                DocumentPart.document_id == document_id,
+                DocumentPart.index >= start_index,
+                DocumentPart.status == PartStatus.PUBLISHED.value,
+            )
+        )
+        return bool(await self._session.scalar(stmt))
 
     async def add_many(self, document_id: UUID, parts: Sequence[PartDraft]) -> list[PartRecord]:
         """Insert new parts from the splitting plan; only flush, never commit."""

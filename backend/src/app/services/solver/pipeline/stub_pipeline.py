@@ -13,8 +13,11 @@ from src.app.contracts.documents.statuses import TERMINAL_DOCUMENT_STATUSES, Par
 from src.app.contracts.progress import ProgressEventType
 from src.app.core.fixtures import PUBLISHED_PART_FIXTURE
 from src.app.core.log_context import bind_log_context
+from src.app.interfaces.notifications.service import DocumentNotifications
 from src.app.interfaces.repositories.documents import DocumentPartRepositoryProtocol, DocumentRepositoryProtocol
+from src.app.interfaces.repositories.users import UserRepositoryProtocol
 from src.app.interfaces.services.progress_notifier import ProgressNotifier
+from src.app.services.progress.messages import render_message
 from src.app.services.quota.quota_ledger import QuotaLedger
 
 logger = logging.getLogger(__name__)
@@ -33,6 +36,8 @@ class StubPipeline:
         documents: Callable[[AsyncSession], DocumentRepositoryProtocol],
         ledger: QuotaLedger,
         notifier: ProgressNotifier,
+        users: Callable[[AsyncSession], UserRepositoryProtocol],
+        notifications: DocumentNotifications,
         delay: float = 2.0,
     ) -> None:
         self._session_factory = session_factory
@@ -40,6 +45,8 @@ class StubPipeline:
         self._documents = documents
         self._ledger = ledger
         self._notifier = notifier
+        self._users = users
+        self._notifications = notifications
         self._content: dict[str, JsonValue] | None = None
         self._delay = delay
 
@@ -55,9 +62,13 @@ class StubPipeline:
             if part is None:
                 raise RuntimeError("Part disappeared after transition")
             document_id = part.document_id
+            document = await self._documents(session).get(document_id)
+            locale = await self._users(session).get_locale_by_document(document_id)
+            start_index = document.generation_start_index if document is not None else 0
+            part_name = str(part.index - start_index + 1)
         content = await self._load_content()
         with bind_log_context(document_id=str(document_id)):
-            await self._run_stages(document_id, part_id, content)
+            await self._run_stages(document_id, part_id, content, locale, part_name)
 
     async def _load_content(self) -> dict[str, JsonValue]:
         """Read and validate the fixture once for this pipeline instance."""
@@ -84,14 +95,40 @@ class StubPipeline:
         self._content = content
         return content
 
-    async def _run_stages(self, document_id: UUID, part_id: UUID, content: dict[str, JsonValue]) -> None:
-        await self._notifier.emit(
-            document_id, ProgressEventType.PART_STATUS, part_id=part_id, stage=PartStatus.MAIN_PASS.value
-        )
+    async def _run_stages(
+        self, document_id: UUID, part_id: UUID, content: dict[str, JsonValue], locale: str, part_name: str
+    ) -> None:
+        async def emit(
+            event_type: ProgressEventType,
+            stage: str | None = None,
+            *,
+            outcome: str | None = None,
+        ) -> None:
+            await self._notifier.emit(
+                document_id,
+                event_type,
+                part_id=part_id if event_type is not ProgressEventType.DOCUMENT_DONE else None,
+                stage=stage,
+                message=render_message(
+                    locale,
+                    event_type,
+                    stage,
+                    (
+                        {"part": part_name}
+                        if event_type is ProgressEventType.PART_STATUS
+                        else {"outcome": outcome}
+                        if outcome is not None
+                        else {}
+                    ),
+                ),
+            )
+
+        await emit(ProgressEventType.PART_STATUS, PartStatus.MAIN_PASS.value)
         current = PartStatus.MAIN_PASS
         for next_status in (PartStatus.RESOLVING, PartStatus.ASSEMBLING, PartStatus.PUBLISHED):
             await asyncio.sleep(self._delay)
             document_done = False
+            document_status = None
             async with self._session_factory() as session, session.begin():
                 transitioned = await self._parts(session).transition(
                     part_id,
@@ -108,11 +145,25 @@ class StubPipeline:
                     await documents.refresh_status(document_id)
                     document = await documents.get(document_id)
                     document_done = document is not None and document.status in TERMINAL_DOCUMENT_STATUSES
-            await self._notifier.emit(
-                document_id, ProgressEventType.PART_STATUS, part_id=part_id, stage=next_status.value
-            )
+                    document_status = document.status if document is not None else None
+                    current_parts = [
+                        item
+                        for item in await self._parts(session).list_by_document(document_id)
+                        if document is None or item.index >= document.generation_start_index
+                    ]
+                    outcome = (
+                        "failed" if not any(item.status is PartStatus.PUBLISHED for item in current_parts) else "ready"
+                    )
+                else:
+                    outcome = None
+            await emit(ProgressEventType.PART_STATUS, next_status.value)
             if next_status is PartStatus.PUBLISHED:
-                await self._notifier.emit(document_id, ProgressEventType.PART_READY, part_id=part_id)
+                await emit(ProgressEventType.PART_READY)
                 if document_done:
-                    await self._notifier.emit(document_id, ProgressEventType.DOCUMENT_DONE)
+                    await emit(
+                        ProgressEventType.DOCUMENT_DONE,
+                        document_status.value if document_status else None,
+                        outcome=outcome,
+                    )
+                    await self._notifications.on_document_finished(document_id)
             current = next_status
