@@ -131,10 +131,7 @@ class GenerationService:
             await self._notification_claims.reset(document_id)
         except RedisError:
             logger.warning("notification.reset_failed", extra={"document_id": str(document_id)}, exc_info=True)
-        try:
-            await self._progress_notifier.reset(document_id)
-        except RedisError:
-            logger.warning("progress.reset_failed", extra={"document_id": str(document_id)}, exc_info=True)
+        await self._progress_notifier.reset(document_id)
         for index, part in enumerate(created):
             await self._dispatcher.enqueue_part(part.id, high=index == 0)
         return GenerationStarted(document_id, tuple(p.id for p in created), len(created), quota.available)

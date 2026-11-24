@@ -9,3 +9,10 @@ def test_render_message_uses_locale_and_stage() -> None:
 
 def test_render_message_falls_back_to_english() -> None:
     assert render_message("de", ProgressEventType.DOCUMENT_DONE, None, {}) == "Your material is ready"
+
+
+def test_render_message_uses_current_run_outcome_for_document_done() -> None:
+    assert (
+        render_message("en", ProgressEventType.DOCUMENT_DONE, "done", {"outcome": "failed"})
+        == "Could not prepare your material"
+    )

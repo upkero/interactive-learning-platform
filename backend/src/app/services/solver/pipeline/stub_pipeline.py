@@ -98,7 +98,12 @@ class StubPipeline:
     async def _run_stages(
         self, document_id: UUID, part_id: UUID, content: dict[str, JsonValue], locale: str, part_name: str
     ) -> None:
-        async def emit(event_type: ProgressEventType, stage: str | None = None) -> None:
+        async def emit(
+            event_type: ProgressEventType,
+            stage: str | None = None,
+            *,
+            outcome: str | None = None,
+        ) -> None:
             await self._notifier.emit(
                 document_id,
                 event_type,
@@ -108,7 +113,13 @@ class StubPipeline:
                     locale,
                     event_type,
                     stage,
-                    {"part": part_name} if event_type is ProgressEventType.PART_STATUS else {},
+                    (
+                        {"part": part_name}
+                        if event_type is ProgressEventType.PART_STATUS
+                        else {"outcome": outcome}
+                        if outcome is not None
+                        else {}
+                    ),
                 ),
             )
 
@@ -135,10 +146,24 @@ class StubPipeline:
                     document = await documents.get(document_id)
                     document_done = document is not None and document.status in TERMINAL_DOCUMENT_STATUSES
                     document_status = document.status if document is not None else None
+                    current_parts = [
+                        item
+                        for item in await self._parts(session).list_by_document(document_id)
+                        if document is None or item.index >= document.generation_start_index
+                    ]
+                    outcome = (
+                        "failed" if not any(item.status is PartStatus.PUBLISHED for item in current_parts) else "ready"
+                    )
+                else:
+                    outcome = None
             await emit(ProgressEventType.PART_STATUS, next_status.value)
             if next_status is PartStatus.PUBLISHED:
                 await emit(ProgressEventType.PART_READY)
                 if document_done:
-                    await emit(ProgressEventType.DOCUMENT_DONE, document_status.value if document_status else None)
+                    await emit(
+                        ProgressEventType.DOCUMENT_DONE,
+                        document_status.value if document_status else None,
+                        outcome=outcome,
+                    )
                     await self._notifications.on_document_finished(document_id)
             current = next_status

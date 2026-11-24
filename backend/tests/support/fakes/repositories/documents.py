@@ -70,11 +70,14 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
         document = self._documents.get(document_id)
         if document is None or document.status is not DocumentStatus.GENERATING or self._parts is None:
             return
-        parts = [
-            p for p in await self._parts.list_by_document(document_id) if p.index >= document.generation_start_index
-        ]
-        if parts and all(p.status in {PartStatus.PUBLISHED, PartStatus.FAILED} for p in parts):
-            published = any(p.status is PartStatus.PUBLISHED for p in parts)
+        all_parts = await self._parts.list_by_document(document_id)
+        current_parts = [p for p in all_parts if p.index >= document.generation_start_index]
+        if current_parts and all(p.status in {PartStatus.PUBLISHED, PartStatus.FAILED} for p in current_parts):
+            # A previous successful run keeps the document usable even when
+            # every part of the current run failed. This matches the SQL
+            # repository, which checks terminality for the current run but
+            # publication across all runs.
+            published = any(p.status is PartStatus.PUBLISHED for p in all_parts)
             self._documents[document_id] = replace(
                 document,
                 status=DocumentStatus.DONE if published else DocumentStatus.FAILED,

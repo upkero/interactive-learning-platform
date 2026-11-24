@@ -16,10 +16,6 @@
 | `part_not_found` | 404 | Часть отсутствует или недоступна | — | `GET /parts/{part_id}` |
 | `quiz_not_found` | 404 | Задание отсутствует или недоступно | — | `POST /quiz-attempts` |
 | `document_not_ready` | 409 | Документ ещё не разобран или завершился ошибкой разбора | `status`; для failed также `reason` (`DocumentErrorCode`) | `GET /documents/{document_id}/topics`, `POST /documents/{document_id}/plan`, `POST /documents/{document_id}/generate` |
-
-Документ со статусом `failed`, у которого нет `error_code` и сохранено дерево тем,
-считается неудачным запуском генерации. Его можно повторно планировать и запускать;
-для такого состояния `document_not_ready` не возвращается.
 | `quota_exceeded` | 402 | Недостаточно оставшихся генераций | `available`, `requested` | `POST /documents/{document_id}/generate` |
 | `processing_limit_reached` | 429 | Достигнут лимит одновременно обрабатываемых документов | `limit` | `POST /documents`, `POST /documents/import`, `POST /documents/{document_id}/generate` |
 | `invalid_gdocs_url` | 422 | Ссылка не указывает на документ Google Docs | — | `POST /documents/import` |
@@ -36,6 +32,10 @@
 | `invalid_quiz_answer` | 422 | Ответ не соответствует типу задания или содержит повторы | — | `POST /quiz-attempts` |
 | `widget_not_found` | 404 | Виджет отсутствует или недоступен | — | `POST /widgets/{widget_id}/reports` |
 | `queue_unavailable` | 503 | Очередь недоступна после сохранения: upload/import помечают документ failed/enqueue_failed; части generate остаются queued | — | `POST /documents`, `POST /documents/import`, `POST /documents/{document_id}/generate` |
+
+Документ со статусом `failed`, у которого нет `error_code` и сохранено дерево тем,
+считается неудачным запуском генерации. Его можно повторно планировать и запускать;
+для такого состояния `document_not_ready` не возвращается.
 
 ## Коды ошибок документа
 

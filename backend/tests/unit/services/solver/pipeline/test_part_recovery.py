@@ -4,6 +4,7 @@ from typing import cast
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from src.app.contracts.documents.part_draft import PartDraft
 from src.app.contracts.documents.statuses import DocumentStatus, PartStatus
 from src.app.contracts.progress import ProgressEventType
 from src.app.contracts.quota import LedgerOp
@@ -96,6 +97,7 @@ async def test_recovery_messages_use_owner_locale() -> None:
     users = FakeUserRepository()
     user = await users.create(email="en@example.com", password_hash="hash", locale="en")
     users._users[case.document.owner_id] = replace(user, id=case.document.owner_id)
+    users.attach_document(case.document.id, case.document.owner_id)
     case.recovery._users = lambda _: users
     await case.recovery.fail(case.part.id, reason="pipeline_error")
     messages = [event[4] for event in case.notifier.events]
@@ -113,11 +115,44 @@ async def test_recovery_notifies_only_after_last_part_fails() -> None:
     assert case.session.committed == 2
 
 
+async def test_failed_rerun_uses_failure_message_when_old_material_exists() -> None:
+    case = await build_recovery(PartStatus.MAIN_PASS, 2)
+    (old_part,) = await case.parts.add_many(
+        case.document.id,
+        [
+            PartDraft(
+                index=0,
+                title="old",
+                topic_ids=[],
+                source_markdown="x",
+                token_count=1,
+                quota_period_start=None,
+            )
+        ],
+    )
+    await case.parts.transition(old_part.id, frozenset({PartStatus.QUEUED}), PartStatus.PUBLISHED)
+    current = replace(case.part, index=1)
+    case.parts.store_record(current)
+    await case.documents.set_generation_start(case.document.id, 1)
+    users = FakeUserRepository()
+    user = await users.create(email="en@example.com", password_hash="hash", locale="en")
+    users._users[case.document.owner_id] = replace(user, id=case.document.owner_id)
+    users.attach_document(case.document.id, case.document.owner_id)
+    case.recovery._users = lambda _: users
+    await case.recovery.fail(current.id, reason="watchdog")
+    await case.recovery.fail(current.id, reason="duplicate")
+    document_done = [event for event in case.notifier.events if event[1] is ProgressEventType.DOCUMENT_DONE]
+    assert len(document_done) == 1 and "Could not prepare" in document_done[0][4]
+    document = await case.documents.get(case.document.id)
+    assert document is not None and document.status is DocumentStatus.DONE
+
+
 async def test_recovery_sends_failure_email_with_refund_message() -> None:
     case = await build_recovery(PartStatus.MAIN_PASS, 2)
     users = FakeUserRepository()
     user = await users.create(email="recovery@example.com", password_hash="hash", locale="en")
     users._users[case.document.owner_id] = replace(user, id=case.document.owner_id)
+    users.attach_document(case.document.id, case.document.owner_id)
     sender = FakeEmailSender()
     case.recovery._users = lambda _: users
     case.recovery._notifications = NotificationService(

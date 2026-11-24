@@ -6,6 +6,7 @@ import logging
 import os
 import socket
 import sys
+import time
 from collections.abc import AsyncIterator, Iterator
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -18,12 +19,12 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents.part_draft import PartDraft
-from src.app.contracts.documents.statuses import DocumentStatus, MaterialRole, SourceType
+from src.app.contracts.documents.statuses import DocumentStatus, MaterialRole, PartStatus, SourceType
 from src.app.contracts.progress import ProgressEventType
 from src.app.contracts.progress.stream import stream_key
 from src.app.core.settings.app import get_app_settings
 from src.app.core.settings.progress import ProgressSettings, get_progress_settings
-from src.app.core.settings.smtp import SMTPSettings
+from src.app.core.settings.smtp import SMTPSettings, get_smtp_settings
 from src.app.models.user import User
 from src.app.observability.notification_claims import RedisNotificationClaims
 from src.app.observability.progress_notifier import RedisProgressNotifier
@@ -133,6 +134,16 @@ async def test_real_redis_stream_maxlen_ttl_and_failure_warning(
         assert "Progress event was not published" in caplog.text
     finally:
         await broken.aclose()
+
+
+async def test_real_progress_reset_deletes_stream(progress_redis: Redis) -> None:
+    document_id = uuid4()
+    notifier = RedisProgressNotifier(progress_redis, ProgressSettings())
+    key = stream_key(document_id)
+    await notifier.emit(document_id, ProgressEventType.PART_STATUS, message="old run")
+    assert await progress_redis.exists(key) == 1
+    await notifier.reset(document_id)
+    assert await progress_redis.exists(key) == 0
 
 
 async def test_reader_reconnect_and_terminal_tail(progress_redis: Redis) -> None:
@@ -304,17 +315,147 @@ async def test_sse_authorization_header_priority_and_terminal_close(
         assert synthetic.status_code == 200 and len(_sse(synthetic)) == 1
         assert json.loads(_sse(synthetic)[0][1])["ts"]
         await progress_redis.delete(stream_key(document_id))
+        started = time.monotonic()
         expired = client.get(f"/api/v1/documents/{document_id}/events", timeout=3)
-        assert expired.status_code == 200 and len(_sse(expired)) == 1
+        elapsed = time.monotonic() - started
+        assert expired.status_code == 200 and len(_sse(expired)) == 1 and elapsed < 1
     finally:
         await progress_redis.delete(stream_key(document_id))
+
+
+async def test_http_second_run_without_cursor_only_returns_new_stream(
+    client: TestClient, session_factory: async_sessionmaker[AsyncSession], progress_redis: Redis
+) -> None:
+    registered = client.post(
+        "/api/v1/auth/register", json={"email": f"rerun-{uuid4()}@example.com", "password": "long-password"}
+    )
+    assert registered.status_code == 201, registered.text
+    owner_id = UUID(registered.json()["id"])
+    document_id = uuid4()
+    async with session_factory() as session, session.begin():
+        await DocumentRepository(session).create(
+            id=document_id,
+            owner_id=owner_id,
+            title="Repeat",
+            source_type=SourceType.UPLOAD,
+            object_key="repeat.md",
+            mime_type="text/markdown",
+            size_bytes=1,
+            checksum="b" * 64,
+        )
+        await DocumentRepository(session).set_status(document_id, DocumentStatus.DONE)
+        await UserMaterialRepository(session).create(user_id=owner_id, document_id=document_id, role=MaterialRole.OWNER)
+    notifier = RedisProgressNotifier(progress_redis, ProgressSettings())
+    key = stream_key(document_id)
+    try:
+        await notifier.emit(document_id, ProgressEventType.PART_STATUS, message="old run")
+        await notifier.emit(document_id, ProgressEventType.DOCUMENT_DONE, message="old done")
+        await notifier.reset(document_id)
+        async with session_factory() as session, session.begin():
+            await DocumentRepository(session).set_status(document_id, DocumentStatus.GENERATING)
+        await notifier.emit(document_id, ProgressEventType.PART_STATUS, message="new run")
+        await notifier.emit(document_id, ProgressEventType.DOCUMENT_DONE, message="new done")
+        started = time.monotonic()
+        response = client.get(f"/api/v1/documents/{document_id}/events", timeout=3)
+        elapsed = time.monotonic() - started
+        assert response.status_code == 200 and elapsed < 1
+        messages = [json.loads(data)["message"] for _, data in _sse(response)]
+        assert messages == ["new run", "new done"]
+    finally:
+        await progress_redis.delete(key)
+
+
+async def test_real_document_status_keeps_done_after_failed_rerun(
+    session_factory: async_sessionmaker[AsyncSession], ledger: QuotaLedger
+) -> None:
+    async with session_factory() as session, session.begin():
+        owner = await UserRepository(session).create(
+            email=f"status-{uuid4()}@example.com", password_hash="hash", monthly_limit=20
+        )
+        document = await DocumentRepository(session).create(
+            owner_id=owner.id,
+            title="Status",
+            source_type=SourceType.UPLOAD,
+            object_key="status.md",
+            mime_type="text/markdown",
+            size_bytes=1,
+            checksum="c" * 64,
+        )
+        quota = await ledger.reserve(session, user_id=owner.id, document_id=document.id, parts=2)
+        parts = await DocumentPartRepository(session).add_many(
+            document.id,
+            [
+                PartDraft(
+                    index=0,
+                    title="old",
+                    topic_ids=[],
+                    source_markdown="x",
+                    token_count=1,
+                    quota_period_start=quota.period.start,
+                ),
+                PartDraft(
+                    index=1,
+                    title="new",
+                    topic_ids=[],
+                    source_markdown="x",
+                    token_count=1,
+                    quota_period_start=quota.period.start,
+                ),
+            ],
+        )
+        await DocumentPartRepository(session).transition(
+            parts[0].id, frozenset({parts[0].status}), PartStatus.PUBLISHED
+        )
+        await DocumentRepository(session).set_generation_start(document.id, 1)
+        await DocumentRepository(session).set_status(document.id, DocumentStatus.GENERATING)
+        await DocumentPartRepository(session).transition(parts[1].id, frozenset({parts[1].status}), PartStatus.FAILED)
+        await DocumentRepository(session).refresh_status(document.id)
+        saved = await DocumentRepository(session).get(document.id)
+    assert saved is not None and saved.status is DocumentStatus.DONE
+
+    async with session_factory() as session, session.begin():
+        owner = await UserRepository(session).create(
+            email=f"failed-{uuid4()}@example.com", password_hash="hash", monthly_limit=20
+        )
+        document = await DocumentRepository(session).create(
+            owner_id=owner.id,
+            title="Failed",
+            source_type=SourceType.UPLOAD,
+            object_key="failed.md",
+            mime_type="text/markdown",
+            size_bytes=1,
+            checksum="d" * 64,
+        )
+        quota = await ledger.reserve(session, user_id=owner.id, document_id=document.id, parts=1)
+        (part,) = await DocumentPartRepository(session).add_many(
+            document.id,
+            [
+                PartDraft(
+                    index=0,
+                    title="only",
+                    topic_ids=[],
+                    source_markdown="x",
+                    token_count=1,
+                    quota_period_start=quota.period.start,
+                )
+            ],
+        )
+        await DocumentRepository(session).set_status(document.id, DocumentStatus.GENERATING)
+        await DocumentPartRepository(session).transition(part.id, frozenset({part.status}), PartStatus.FAILED)
+        await DocumentRepository(session).refresh_status(document.id)
+        saved = await DocumentRepository(session).get(document.id)
+    assert saved is not None and saved.status is DocumentStatus.FAILED
 
 
 async def test_mailpit_delivery_once_and_disabled_user(
     session_factory: async_sessionmaker[AsyncSession], progress_redis: Redis
 ) -> None:
     document_id, email = await _document(session_factory)
-    settings = SMTPSettings(enabled=True, host=os.environ.get("SMTP_HOST", "localhost"), port=1025)
+    settings = SMTPSettings(
+        enabled=True,
+        host=os.environ.get("SMTP_HOST", "localhost"),
+        port=int(os.environ.get("SMTP_PORT", "1025")),
+    )
     mailpit_url = os.environ.get("TEST_MAILPIT_API_URL", "http://localhost:8025")
     service = NotificationService(
         session_factory=session_factory,
@@ -338,6 +479,62 @@ async def test_mailpit_delivery_once_and_disabled_user(
         assert await _mailpit_count(mailpit_url, disabled_email) == 0
     finally:
         await progress_redis.delete(f"notified:{document_id}")
+
+
+async def test_process_part_delivers_completion_email_to_mailpit(
+    session_factory: async_sessionmaker[AsyncSession],
+    ledger: QuotaLedger,
+    progress_redis: Redis,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("REDIS_PROGRESS_URL", os.environ["REDIS_PROGRESS_URL"])
+    monkeypatch.setenv("SMTP_ENABLED", "true")
+    monkeypatch.setenv("SMTP_HOST", os.environ.get("SMTP_HOST", "localhost"))
+    monkeypatch.setenv("SMTP_PORT", os.environ.get("SMTP_PORT", "1025"))
+    get_progress_settings.cache_clear()
+    get_smtp_settings.cache_clear()
+    email = f"worker-mail-{uuid4()}@example.com"
+    async with session_factory() as session, session.begin():
+        owner = await UserRepository(session).create(email=email, password_hash="hash", monthly_limit=20)
+        document = await DocumentRepository(session).create(
+            owner_id=owner.id,
+            title="Worker mail",
+            source_type=SourceType.UPLOAD,
+            object_key="worker-mail.md",
+            mime_type="text/markdown",
+            size_bytes=1,
+            checksum="e" * 64,
+        )
+        await DocumentRepository(session).set_status(document.id, DocumentStatus.GENERATING)
+        quota = await ledger.reserve(session, user_id=owner.id, document_id=document.id, parts=1)
+        await DocumentPartRepository(session).add_many(
+            document.id,
+            [
+                PartDraft(
+                    index=0,
+                    title="Part",
+                    topic_ids=[],
+                    source_markdown="x",
+                    token_count=1,
+                    quota_period_start=quota.period.start,
+                )
+            ],
+        )
+    try:
+        async with session_factory() as session:
+            part = (await DocumentPartRepository(session).list_by_document(document.id))[0]
+        await asyncio.to_thread(process_part.run, str(part.id))
+        mailpit_url = os.environ.get("TEST_MAILPIT_API_URL", "http://localhost:8025")
+        for _ in range(20):
+            if await _mailpit_count(mailpit_url, email) == 1:
+                break
+            await asyncio.sleep(0.1)
+        assert await _mailpit_count(mailpit_url, email) == 1
+    finally:
+        await progress_redis.delete(f"notified:{document.id}")
+        await progress_redis.delete(stream_key(document.id))
+        get_progress_settings.cache_clear()
+        get_smtp_settings.cache_clear()
 
 
 async def test_worker_succeeds_when_progress_redis_is_down(

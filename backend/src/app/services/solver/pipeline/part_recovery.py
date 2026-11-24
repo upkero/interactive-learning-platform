@@ -109,7 +109,13 @@ class PartRecovery:
         documents = self._documents(session)
         await documents.refresh_status(part.document_id)
         document = await documents.get(part.document_id)
-        locale = await self._locale_in(session, part.document_id, document=document)
+        locale = await self._locale_in(session, part.document_id)
+        current_parts = [
+            item
+            for item in await self._parts(session).list_by_document(part.document_id)
+            if document is None or item.index >= document.generation_start_index
+        ]
+        run_failed = not any(item.status is PartStatus.PUBLISHED for item in current_parts)
         events = [self._part_status_event(part, PartStatus.FAILED, locale, self._part_name(part, document))]
         if document is not None and document.status in TERMINAL_DOCUMENT_STATUSES:
             events.append(
@@ -117,14 +123,17 @@ class PartRecovery:
                     part.document_id,
                     ProgressEventType.DOCUMENT_DONE,
                     stage=document.status.value,
-                    message=render_message(locale, ProgressEventType.DOCUMENT_DONE, document.status.value, {}),
+                    message=render_message(
+                        locale,
+                        ProgressEventType.DOCUMENT_DONE,
+                        document.status.value,
+                        {"outcome": "failed" if run_failed else "ready"},
+                    ),
                 )
             )
         return RecoveryOutcome(failed=True, events=tuple(events))
 
-    async def _locale_in(
-        self, session: AsyncSession, document_id: UUID, *, document: DocumentRecord | None = None
-    ) -> str:
+    async def _locale_in(self, session: AsyncSession, document_id: UUID) -> str:
         return await self._users(session).get_locale_by_document(document_id)
 
     @staticmethod

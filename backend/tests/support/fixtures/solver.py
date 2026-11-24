@@ -54,6 +54,7 @@ async def build_recovery(status: PartStatus, attempts: int) -> RecoveryFixture:
         size_bytes=1,
         checksum="c" * 64,
     )
+    users.attach_document(document.id, user.id)
     updated = await documents.set_status(document.id, DocumentStatus.GENERATING)
     assert updated is not None
     document = updated

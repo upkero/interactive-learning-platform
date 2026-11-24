@@ -35,7 +35,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
 def render_message(locale: str, event_type: ProgressEventType, stage: str | None, params: dict[str, object]) -> str:
     language = locale if locale in _MESSAGES else "en"
     key = (
-        ("document_failed" if stage == "failed" else "document_done")
+        ("document_failed" if params.get("outcome") == "failed" or stage == "failed" else "document_done")
         if event_type is ProgressEventType.DOCUMENT_DONE
         else stage or event_type.value
     )

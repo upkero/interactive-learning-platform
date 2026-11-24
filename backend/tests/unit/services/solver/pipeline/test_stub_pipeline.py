@@ -25,6 +25,7 @@ async def test_stub_publishes_once_and_duplicate_delivery_is_noop() -> None:
     part = case.part
     session = FakeSession()
     notifier = FakeProgressNotifier()
+    notifications = FakeDocumentNotifications()
     pipeline = StubPipeline(
         session_factory=cast(async_sessionmaker[AsyncSession], lambda: session),
         parts=lambda _: case.parts,
@@ -32,7 +33,7 @@ async def test_stub_publishes_once_and_duplicate_delivery_is_noop() -> None:
         ledger=case.quota,
         notifier=notifier,
         users=lambda _: FakeUserRepository(),
-        notifications=FakeDocumentNotifications(),
+        notifications=notifications,
         delay=0,
     )
     await pipeline.process(part.id)
@@ -43,6 +44,34 @@ async def test_stub_publishes_once_and_duplicate_delivery_is_noop() -> None:
     assert result.content["schema_version"] == 1
     assert [entry.op for entry in case.ledger.entries] == [LedgerOp.RESERVE, LedgerOp.CHARGE]
     assert [event[1] for event in notifier.events] == ["part_status"] * 4 + ["part_ready", "document_done"]
+    assert notifications.completed == [part.document_id]
+
+
+async def test_stub_does_not_notify_before_all_parts_finish() -> None:
+    case = await build_recovery(PartStatus.QUEUED, 0)
+    extra = await case.parts.add_many(
+        case.document.id,
+        [
+            replace(
+                case.parts.drafts[case.part.id],
+                index=1,
+            )
+        ],
+    )
+    assert len(extra) == 1
+    notifications = FakeDocumentNotifications()
+    pipeline = StubPipeline(
+        session_factory=cast(async_sessionmaker[AsyncSession], lambda: FakeSession()),
+        parts=lambda _: case.parts,
+        documents=lambda _: case.documents,
+        ledger=case.quota,
+        notifier=FakeProgressNotifier(),
+        users=lambda _: FakeUserRepository(),
+        notifications=notifications,
+        delay=0,
+    )
+    await pipeline.process(case.part.id)
+    assert notifications.completed == []
 
 
 async def test_invalid_fixture_fails_before_publishing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -70,8 +99,12 @@ async def test_invalid_fixture_fails_before_publishing(tmp_path: Path, monkeypat
 async def test_pipeline_messages_use_owner_locale_and_part_number() -> None:
     case = await build_recovery(PartStatus.QUEUED, 0)
     users = FakeUserRepository()
+    # A decoy user makes a fake that returns "the first user" fail this test:
+    # the locale must come from the owner of this particular document.
+    await users.create(email="decoy@example.com", password_hash="hash", locale="ru")
     user = await users.create(email="en@example.com", password_hash="hash", locale="en")
     users._users[case.document.owner_id] = replace(user, id=case.document.owner_id)
+    users.attach_document(case.document.id, case.document.owner_id)
     notifier = FakeProgressNotifier()
     pipeline = StubPipeline(
         session_factory=cast(async_sessionmaker[AsyncSession], lambda: FakeSession()),
@@ -88,3 +121,27 @@ async def test_pipeline_messages_use_owner_locale_and_part_number() -> None:
     assert all(message and "{" not in message for message in messages)
     assert "Analyzing part 1" in messages
     assert "Your material is ready" in messages
+
+
+async def test_pipeline_uses_run_relative_part_number_after_previous_run() -> None:
+    case = await build_recovery(PartStatus.QUEUED, 0)
+    await case.documents.set_generation_start(case.document.id, 4)
+    part = replace(case.part, index=4)
+    case.parts.store_record(part)
+    users = FakeUserRepository()
+    owner = await users.create(email="owner@example.com", password_hash="hash", locale="en")
+    users._users[case.document.owner_id] = replace(owner, id=case.document.owner_id)
+    users.attach_document(case.document.id, case.document.owner_id)
+    notifier = FakeProgressNotifier()
+    pipeline = StubPipeline(
+        session_factory=cast(async_sessionmaker[AsyncSession], lambda: FakeSession()),
+        parts=lambda _: case.parts,
+        documents=lambda _: case.documents,
+        ledger=case.quota,
+        notifier=notifier,
+        users=lambda _: users,
+        notifications=FakeDocumentNotifications(),
+        delay=0,
+    )
+    await pipeline.process(part.id)
+    assert "Analyzing part 1" in [event[4] for event in notifier.events]
