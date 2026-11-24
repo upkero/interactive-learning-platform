@@ -13,14 +13,14 @@ def test_single_worker_uses_default_registry(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.delenv("PROMETHEUS_MULTIPROC_DIR", raising=False)
     server = Mock()
     monkeypatch.setattr(worker_metrics, "start_http_server", server)
-    worker_metrics.start_metrics_server(sender=SimpleNamespace(concurrency=1))
+    worker_metrics.start_metrics_server(sender=SimpleNamespace(concurrency=1, pool_cls="solo"))
     assert server.call_args.kwargs["registry"] is REGISTRY
 
 
 def test_prefork_without_directory_fails_clearly(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("PROMETHEUS_MULTIPROC_DIR", raising=False)
     with pytest.raises(SystemExit, match="PROMETHEUS_MULTIPROC_DIR"):
-        worker_metrics.start_metrics_server(sender=SimpleNamespace(concurrency=2))
+        worker_metrics.start_metrics_server(sender=SimpleNamespace(concurrency=1, pool_cls="prefork"))
 
 
 def test_process_shutdown_marks_process_dead(monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> None:

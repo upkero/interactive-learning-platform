@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 from time import perf_counter
 from uuid import UUID
 
@@ -30,6 +31,11 @@ logger = logging.getLogger(__name__)
 _CONTENT_ADAPTER = TypeAdapter(dict[str, JsonValue])
 
 
+@dataclass(slots=True)
+class _ProcessingState:
+    published: bool = False
+
+
 class StubPipeline:
     """Publish deterministic sample content while the real solver is unavailable."""
 
@@ -54,13 +60,14 @@ class StubPipeline:
         self._users = users
         self._notifications = notifications
         self._metrics = metrics
+        self._decisions = DecisionLog(metrics=metrics or NoopMetricsCollector())
         self._content: dict[str, JsonValue] | None = None
         self._delay = delay
 
     async def process(self, part_id: UUID) -> None:
         started = perf_counter()
         accepted = False
-        published = False
+        state = _ProcessingState()
         try:
             async with self._session_factory() as session, session.begin():
                 parts = self._parts(session)
@@ -83,27 +90,24 @@ class StubPipeline:
                 part_id=str(part_id), document_id=str(document_id), metrics=self._metrics, started=started
             )
 
-            def record_published() -> None:
-                nonlocal published
-                published = True
-                self._observe_part(perf_counter() - started, "published")
-                DecisionLog(metrics=self._metrics or NoopMetricsCollector()).part_summary(tracker.summary())
-
             with bind_log_context(document_id=str(document_id), part_id=str(part_id)), bind_usage_tracker(tracker):
-                await self._run_stages(document_id, part_id, content, locale, part_name, tracker, record_published)
+                await self._run_stages(document_id, part_id, content, locale, part_name, tracker, state, started)
         except BaseException:
-            if accepted and not published:
+            if accepted and not state.published:
                 self._observe_part(perf_counter() - started, "failed")
             raise
 
     def _observe_part(self, duration: float, outcome: str) -> None:
         if self._metrics is not None:
-            self._metrics.observe_histogram(
-                "part.processing_duration_seconds",
-                duration,
-                labels={"outcome": outcome},
-                buckets=(10, 30, 60, 120, 180, 240, 300, 330),
-            )
+            try:
+                self._metrics.observe_histogram(
+                    "part.processing_duration_seconds",
+                    duration,
+                    labels={"outcome": outcome},
+                    buckets=(10, 30, 60, 120, 180, 240, 300, 330),
+                )
+            except Exception:
+                logger.exception("metrics.part_observation_failed", extra={"outcome": outcome})
 
     async def _load_content(self) -> dict[str, JsonValue]:
         """Read and validate the fixture once for this pipeline instance."""
@@ -138,8 +142,9 @@ class StubPipeline:
         locale: str,
         part_name: str,
         tracker: UsageTracker,
-        record_published: Callable[[], None],
-    ) -> bool:
+        state: _ProcessingState,
+        started: float,
+    ) -> None:
         async def emit(
             event_type: ProgressEventType,
             stage: str | None = None,
@@ -182,7 +187,7 @@ class StubPipeline:
                 )
                 if not transitioned:
                     logger.info("part.skip", extra={"part_id": str(part_id)})
-                    return False
+                    return
                 if next_status is PartStatus.PUBLISHED:
                     await self._ledger.charge(session, part_id=part_id)
                     documents = self._documents(session)
@@ -201,7 +206,12 @@ class StubPipeline:
                 else:
                     outcome = None
             if next_status is PartStatus.PUBLISHED:
-                record_published()
+                state.published = True
+                self._observe_part(perf_counter() - started, "published")
+                try:
+                    self._decisions.part_summary(tracker.summary())
+                except Exception:
+                    logger.exception("part.summary_failed")
             await emit(ProgressEventType.PART_STATUS, next_status.value)
             if next_status is PartStatus.PUBLISHED:
                 await emit(ProgressEventType.PART_READY)
@@ -213,4 +223,3 @@ class StubPipeline:
                     )
                     await self._notifications.on_document_finished(document_id)
             current = next_status
-        return True

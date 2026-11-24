@@ -85,3 +85,84 @@ def test_prefork_worker_aggregates_two_processes(tmp_path: Path, monkeypatch: py
             worker.kill()
             worker.wait(timeout=5)
         app.close()
+
+
+def test_single_process_pools_require_correct_registry(monkeypatch: pytest.MonkeyPatch) -> None:
+    redis_url = os.environ.get("TEST_CELERY_REDIS_URL")
+    if not redis_url:
+        pytest.skip("TEST_CELERY_REDIS_URL must point to an isolated Redis instance")
+    assert os.getuid() != 0, "run the worker smoke test as an unprivileged user"
+    monkeypatch.setenv("CELERY_BROKER_URL", redis_url)
+    monkeypatch.setenv("CELERY_RESULT_BACKEND", redis_url)
+    monkeypatch.delenv("PROMETHEUS_MULTIPROC_DIR", raising=False)
+    prefork = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "celery",
+            "-A",
+            "tests.support.observability_worker",
+            "worker",
+            "--pool=prefork",
+            "--concurrency=1",
+            "--loglevel=WARNING",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert prefork.returncode != 0
+    assert "PROMETHEUS_MULTIPROC_DIR" in prefork.stderr
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    monkeypatch.setenv("OBSERVABILITY_WORKER_METRICS_PORT", str(port))
+    worker = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "celery",
+            "-A",
+            "tests.support.observability_worker",
+            "worker",
+            "--pool=solo",
+            "--concurrency=1",
+            "--loglevel=WARNING",
+            "--without-gossip",
+            "--without-mingle",
+            "--without-heartbeat",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    app = Celery("observability_solo_client", broker=redis_url, backend=redis_url)
+    try:
+        url = f"http://127.0.0.1:{port}/metrics"
+        for _ in range(150):
+            if worker.poll() is not None:
+                pytest.fail(f"solo worker exited with code {worker.returncode}")
+            try:
+                urllib.request.urlopen(url, timeout=1).close()
+                break
+            except OSError:
+                time.sleep(0.1)
+        else:
+            pytest.fail("solo metrics server did not start")
+        result = app.send_task("observability.smoke")
+        assert result.get(timeout=30)["broker"] == redis_url
+        for _ in range(100):
+            with urllib.request.urlopen(url, timeout=1) as response:
+                metrics = response.read().decode()
+            if 'celery_tasks_total{state="success",task="observability.smoke"} 1.0' in metrics:
+                break
+            time.sleep(0.1)
+        else:
+            pytest.fail("solo worker did not expose its completed task")
+    finally:
+        worker.terminate()
+        try:
+            worker.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            worker.kill()
+            worker.wait(timeout=5)
+        app.close()

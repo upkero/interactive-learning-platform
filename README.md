@@ -112,5 +112,5 @@ uv run python evals/usage_report.py parts.jsonl parts.csv
 
 Доля кэша — `cache_read / (input + cache_read + cache_write)`. Если цена
 модели неизвестна, стоимость части остаётся пустой, а не считается нулевой.
-Для локального Celery с несколькими процессами задайте `PROMETHEUS_MULTIPROC_DIR`
+Для локального Celery с пулом prefork (даже с одним процессом) задайте `PROMETHEUS_MULTIPROC_DIR`
 как существующий доступный на запись каталог и очищайте его перед стартом.

@@ -1,5 +1,6 @@
 """Per-part token and stage accounting shared by child asyncio tasks."""
 
+import logging
 from collections import defaultdict
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -13,6 +14,7 @@ from src.app.core.settings.pricing import get_model_pricing
 from src.app.interfaces.observability.metrics_collector import MetricsCollector
 
 _current: ContextVar["UsageTracker | None"] = ContextVar("usage_tracker", default=None)
+logger = logging.getLogger("grasp.usage")
 
 
 @dataclass(slots=True)
@@ -50,12 +52,15 @@ class UsageTracker:
             duration = perf_counter() - started
             self._stages[name] = self._stages.get(name, 0.0) + duration
             if self._metrics is not None:
-                self._metrics.observe_histogram(
-                    "part.stage_duration_seconds",
-                    duration,
-                    labels={"stage": name},
-                    buckets=(10, 30, 60, 120, 180, 240, 300, 330),
-                )
+                try:
+                    self._metrics.observe_histogram(
+                        "part.stage_duration_seconds",
+                        duration,
+                        labels={"stage": name},
+                        buckets=(10, 30, 60, 120, 180, 240, 300, 330),
+                    )
+                except Exception:
+                    logger.exception("metrics.stage_observation_failed", extra={"stage": name})
 
     def summary(self) -> PartSummary:
         by_purpose: dict[str, dict[str, int]] = {}

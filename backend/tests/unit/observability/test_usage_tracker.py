@@ -99,3 +99,27 @@ def test_report_handles_duplicates_bad_lines_unknown_cost_and_percentiles(tmp_pa
     assert result["parts"] == 3 and result["skipped"] == 3
     assert result["duration_p95"] == 300 and result["cost_p95"] == 2
     assert result["unknown_cost_parts"] == 1
+
+
+def test_report_rejects_invalid_stage_values_and_boolean_numbers(tmp_path: Path) -> None:
+    source = tmp_path / "input.jsonl"
+    base: dict[str, object] = {
+        "event": "part.summary",
+        "document_id": "d",
+        "part_id": "p",
+        "duration_s": 1,
+        "cost_usd": 0.1,
+        "usage": {"x": {"input": 1}},
+        "stage_durations": {},
+    }
+    bad = [
+        {**base, "stage_durations": {"main": "bad"}},
+        {**base, "duration_s": True},
+        {**base, "cost_usd": False},
+        {**base, "usage": {"x": {"input": True}}},
+        {**base, "stage_durations": {"main": True}},
+    ]
+    source.write_text("\n".join(json.dumps(row) for row in [*bad, base]), encoding="utf-8")
+    rows, skipped = read_summaries(source)
+    assert len(rows) == 1 and skipped == len(bad)
+    assert rows[0].usage["x"].input == 1

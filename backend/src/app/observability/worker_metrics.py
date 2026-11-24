@@ -3,6 +3,7 @@
 import os
 from time import perf_counter
 
+from celery.concurrency import get_implementation
 from celery.signals import task_postrun, task_prerun, worker_init, worker_process_shutdown
 from prometheus_client import REGISTRY, CollectorRegistry, Counter, Histogram, multiprocess, start_http_server
 
@@ -24,8 +25,15 @@ def start_metrics_server(sender: object = None, **_: object) -> None:
         registry = CollectorRegistry()
         multiprocess.MultiProcessCollector(registry)  # type: ignore[no-untyped-call]
     else:
-        if getattr(sender, "concurrency", 1) > 1:
-            raise SystemExit("PROMETHEUS_MULTIPROC_DIR is required when worker concurrency is greater than 1")
+        pool = getattr(sender, "pool_cls", "prefork")
+        pool_class = get_implementation(pool)
+        if pool_class.__module__ not in {
+            "celery.concurrency.solo",
+            "celery.concurrency.thread",
+            "celery.concurrency.eventlet",
+            "celery.concurrency.gevent",
+        }:
+            raise SystemExit("PROMETHEUS_MULTIPROC_DIR is required for process-based worker pools, including prefork")
         registry = REGISTRY
     start_http_server(get_observability_settings().worker_metrics_port, registry=registry)
 

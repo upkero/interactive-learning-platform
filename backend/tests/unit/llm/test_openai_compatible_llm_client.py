@@ -7,6 +7,8 @@ image_url parts, temperature passthrough) and real error mapping
 """
 
 import json
+import logging
+from pathlib import Path
 from typing import Any
 
 import httpx2
@@ -14,6 +16,7 @@ import pytest
 from openai import AsyncOpenAI
 from pydantic import BaseModel, SecretStr
 
+from evals.usage_report import read_summaries, write_report
 from src.app.contracts.llm.image_part import ImagePart
 from src.app.contracts.llm.llm_message import LLMMessage
 from src.app.contracts.llm.llm_request import LLMRequest
@@ -28,7 +31,10 @@ from src.app.exceptions.llm import (
     LLMSchemaError,
     LLMTimeoutError,
 )
+from src.app.llm.instrumented_llm_client import InstrumentedLLMClient
 from src.app.llm.openai_compatible_llm_client import OpenAICompatibleLLMClient
+from src.app.observability.usage_tracker import UsageTracker, bind_usage_tracker
+from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
 
 pytestmark = pytest.mark.unit
 
@@ -115,8 +121,65 @@ async def test_structured_success_parses_value_and_usage() -> None:
 
     assert response.value == _Draft()
     assert response.usage == TokenUsage(
-        input_tokens=10, output_tokens=5, cache_read_input_tokens=2, cache_creation_input_tokens=0
+        input_tokens=8, output_tokens=5, cache_read_input_tokens=2, cache_creation_input_tokens=0
     )
+
+
+async def test_cache_read_and_write_are_disjoint_in_summary_and_metrics() -> None:
+    usage = {
+        "prompt_tokens": 1000,
+        "completion_tokens": 0,
+        "total_tokens": 1000,
+        "prompt_tokens_details": {"cached_tokens": 800, "cache_write_tokens": 100},
+    }
+    handler = _replaying(httpx2.Response(200, json=_completion_response(usage=usage)), [])
+    http_client = httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
+    sdk = AsyncOpenAI(api_key="test-key", base_url=_BASE_URL, max_retries=0, http_client=http_client)
+    client = OpenAICompatibleLLMClient(settings=_settings(model="anthropic/claude-sonnet-5.5"), client=sdk)
+    metrics = RecordingMetricsCollector()
+    wrapped = InstrumentedLLMClient(client=client, logger=logging.getLogger("test.llm"), metrics=metrics)
+    tracker = UsageTracker(part_id="p", document_id="d")
+    with bind_usage_tracker(tracker):
+        response = await wrapped.complete_structured(_request(), _Draft)
+    assert response.usage == TokenUsage(100, 0, 800, 100)
+    assert tracker.summary().cost_usd == 0.00053
+    assert tracker.summary().usage["main_pass"] == {"input": 100, "output": 0, "cache_read": 800, "cache_write": 100}
+    for field, value in (("input_tokens", 100), ("cache_read_input_tokens", 800), ("cache_creation_input_tokens", 100)):
+        assert metrics.histograms_named(f"llm.complete.usage.{field}")[0].value == value
+
+
+async def test_cache_reads_cannot_exceed_prompt_tokens() -> None:
+    usage = {
+        "prompt_tokens": 10,
+        "completion_tokens": 1,
+        "total_tokens": 11,
+        "prompt_tokens_details": {"cached_tokens": 11},
+    }
+    client, _ = _client(_replaying(httpx2.Response(200, json=_completion_response(usage=usage)), []))
+    with pytest.raises(LLMGenerationError, match="inconsistent cache usage"):
+        await client.complete_structured(_request(), _Draft)
+
+
+async def test_cache_read_is_not_double_charged(tmp_path: Path) -> None:
+    usage = {
+        "prompt_tokens": 1000,
+        "completion_tokens": 0,
+        "total_tokens": 1000,
+        "prompt_tokens_details": {"cached_tokens": 800},
+    }
+    client, _ = _client(_replaying(httpx2.Response(200, json=_completion_response(usage=usage)), []))
+    response = await client.complete_structured(_request(), _Draft)
+    assert response.usage == TokenUsage(200, 0, 800, 0)
+    tracker = UsageTracker(part_id="p", document_id="d")
+    assert response.usage is not None
+    tracker.add(purpose="main_pass", model="anthropic/claude-sonnet-5.5", usage=response.usage)
+    assert tracker.summary().cost_usd == 0.00048
+    source = tmp_path / "summary.jsonl"
+    source.write_text(json.dumps({"event": "part.summary", **tracker.summary().to_dict()}), encoding="utf-8")
+    rows, skipped = read_summaries(source)
+    report = write_report(rows, tmp_path / "report.csv", skipped)
+    assert report["cache_share"] == 0.8
+    assert report["cost_median"] == 0.00048
 
 
 async def test_structured_request_body_uses_strict_json_schema() -> None:

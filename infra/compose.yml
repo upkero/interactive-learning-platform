@@ -180,6 +180,7 @@ services:
     ports: ["127.0.0.1:3100:3100"]
     volumes:
       - ./observability/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - lokidata:/loki
 
   promtail:
     image: grafana/promtail:3.3.2
@@ -233,3 +234,4 @@ volumes:
   pgdata: {}
   redisdata: {}
   ollamadata: {}
+  lokidata: {}

@@ -213,12 +213,19 @@ class OpenAICompatibleLLMClient(LLMClient):
         if usage is None:
             return None
         details = usage.prompt_tokens_details
-        # prompt_tokens_details and cached_tokens are both optional in the
-        # CompletionUsage contract (providers may omit them).
+        # OpenRouter includes both cached and cache-write tokens in prompt_tokens.
+        # The SDK preserves the OpenRouter-specific cache_write_tokens as an extra.
+        read = (details.cached_tokens if details is not None else 0) or 0
+        write = getattr(details, "cache_write_tokens", 0) or 0
+        if not isinstance(write, int) or isinstance(write, bool) or min(read, write) < 0:
+            raise LLMGenerationError("LLM provider returned invalid cache usage.")
+        if read + write > usage.prompt_tokens:
+            raise LLMGenerationError("LLM provider returned inconsistent cache usage.")
         return TokenUsage(
-            input_tokens=usage.prompt_tokens,
+            input_tokens=usage.prompt_tokens - read - write,
             output_tokens=usage.completion_tokens,
-            cache_read_input_tokens=(details.cached_tokens if details is not None else 0) or 0,
+            cache_read_input_tokens=read,
+            cache_creation_input_tokens=write,
         )
 
     @staticmethod

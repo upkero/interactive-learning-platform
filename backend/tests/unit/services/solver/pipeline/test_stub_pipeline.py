@@ -1,4 +1,5 @@
 import json
+from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
 from typing import cast
@@ -78,6 +79,41 @@ async def test_stub_does_not_notify_before_all_parts_finish() -> None:
     )
     await pipeline.process(case.part.id)
     assert notifications.completed == []
+
+
+async def test_metrics_failure_does_not_interrupt_published_events(caplog: pytest.LogCaptureFixture) -> None:
+    class BrokenMetrics(RecordingMetricsCollector):
+        def observe_histogram(
+            self,
+            name: str,
+            value: float,
+            *,
+            labels: Mapping[str, str] | None = None,
+            buckets: tuple[float, ...] | None = None,
+        ) -> None:
+            raise OSError("metrics unavailable")
+
+    case = await build_recovery(PartStatus.QUEUED, 0)
+    notifier = FakeProgressNotifier()
+    notifications = FakeDocumentNotifications()
+    pipeline = StubPipeline(
+        session_factory=cast(async_sessionmaker[AsyncSession], lambda: FakeSession()),
+        parts=lambda _: case.parts,
+        documents=lambda _: case.documents,
+        ledger=case.quota,
+        notifier=notifier,
+        users=lambda _: FakeUserRepository(),
+        notifications=notifications,
+        metrics=BrokenMetrics(),
+        delay=0,
+    )
+    with caplog.at_level("INFO", logger="grasp.decisions"):
+        await pipeline.process(case.part.id)
+        await pipeline.process(case.part.id)
+    assert [entry.op for entry in case.ledger.entries] == [LedgerOp.RESERVE, LedgerOp.CHARGE]
+    assert [e[1] for e in notifier.events] == ["part_status"] * 4 + ["part_ready", "document_done"]
+    assert notifications.completed == [case.part.document_id]
+    assert len([r for r in caplog.records if r.__dict__.get("event") == "part.summary"]) == 1
 
 
 async def test_invalid_fixture_fails_before_publishing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
