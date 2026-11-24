@@ -31,7 +31,7 @@ from src.app.exceptions.embeddings import (
 from src.app.interfaces.embeddings.embedding_service import EmbeddingServiceInterface
 from src.app.interfaces.observability.metrics_collector import MetricsCollector
 
-logger = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__name__)
 
 _CACHE_COUNTER = "embedding_cache.requests"
 
@@ -45,6 +45,7 @@ class EmbeddingService(EmbeddingServiceInterface):
         metrics: MetricsCollector,
         batch_size: int = 32,
         ttl_seconds: int = 30 * 24 * 3600,
+        logger: logging.Logger | None = None,
         logger_: logging.Logger | None = None,
     ) -> None:
         self._embedder = embedder
@@ -52,7 +53,7 @@ class EmbeddingService(EmbeddingServiceInterface):
         self._metrics = metrics
         self._batch_size = batch_size
         self._ttl = ttl_seconds
-        self._logger = logger_ or logger
+        self._logger = logger or logger_ or _LOGGER
 
     @property
     def model_name(self) -> str:
