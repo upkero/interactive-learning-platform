@@ -21,6 +21,12 @@ class RedisProgressNotifier:
         self._redis = redis
         self._settings = settings
 
+    async def reset(self, document_id: UUID) -> None:
+        try:
+            await self._redis.delete(stream_key(document_id))
+        except RedisError:
+            logger.warning("Progress stream reset failed.", extra={"document_id": str(document_id)}, exc_info=True)
+
     async def publish(self, event: ProgressEvent) -> str | None:
         key = stream_key(event.document_id)
         try:

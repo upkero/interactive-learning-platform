@@ -39,6 +39,7 @@ from src.app.interfaces.repositories.documents import (
 )
 from src.app.interfaces.repositories.users import UserRepositoryProtocol
 from src.app.interfaces.services.part_planner import PartPlanner
+from src.app.interfaces.services.progress_notifier import ProgressNotifier
 from src.app.interfaces.services.task_dispatcher import TaskDispatcher
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.services.documents.document_query_service import READABLE_STATUSES
@@ -63,7 +64,8 @@ class GenerationService:
         ledger: QuotaLedger,
         dispatcher: TaskDispatcher,
         settings: ProcessingSettings,
-        notification_claims: NotificationClaims | None = None,
+        notification_claims: NotificationClaims,
+        progress_notifier: ProgressNotifier,
     ) -> None:
         self._session_factory = session_factory
         self._documents = documents
@@ -76,6 +78,7 @@ class GenerationService:
         self._dispatcher = dispatcher
         self._settings = settings
         self._notification_claims = notification_claims
+        self._progress_notifier = progress_notifier
 
     async def start(self, command: GenerationCommand) -> GenerationStarted:
         user_id, document_id, topic_ids, answers = (
@@ -124,11 +127,14 @@ class GenerationService:
             await documents.set_generation_start(document_id, next_index)
             await documents.set_status(document_id, DocumentStatus.GENERATING)
             await self._users(session).save_last_answers(user_id, profile)
-        if self._notification_claims is not None:
-            try:
-                await self._notification_claims.reset(document_id)
-            except RedisError:
-                logger.warning("notification.reset_failed", extra={"document_id": str(document_id)}, exc_info=True)
+        try:
+            await self._notification_claims.reset(document_id)
+        except RedisError:
+            logger.warning("notification.reset_failed", extra={"document_id": str(document_id)}, exc_info=True)
+        try:
+            await self._progress_notifier.reset(document_id)
+        except RedisError:
+            logger.warning("progress.reset_failed", extra={"document_id": str(document_id)}, exc_info=True)
         for index, part in enumerate(created):
             await self._dispatcher.enqueue_part(part.id, high=index == 0)
         return GenerationStarted(document_id, tuple(p.id for p in created), len(created), quota.available)

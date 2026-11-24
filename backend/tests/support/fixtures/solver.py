@@ -14,6 +14,7 @@ from src.app.core.clock import SystemClock
 from src.app.services.quota.quota_ledger import QuotaLedger
 from src.app.services.solver.pipeline.part_recovery import PartRecovery
 from tests.support.fakes.db.session import FakeSession
+from tests.support.fakes.notifications.service import FakeDocumentNotifications
 from tests.support.fakes.repositories.documents import FakeDocumentPartRepository, FakeDocumentRepository
 from tests.support.fakes.repositories.quota import FakeGenerationLedgerRepository
 from tests.support.fakes.repositories.users import FakeUserRepository
@@ -87,6 +88,8 @@ async def build_recovery(status: PartStatus, attempts: int) -> RecoveryFixture:
         ledger=quota,
         dispatcher=dispatcher,
         notifier=notifier,
+        users=lambda _: users,
+        notifications=FakeDocumentNotifications(),
     )
     return RecoveryFixture(
         part=part,

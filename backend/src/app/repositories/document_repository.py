@@ -60,7 +60,12 @@ class DocumentRepository(DocumentRepositoryProtocol):
             func.bool_and(DocumentPart.status.in_([PartStatus.PUBLISHED.value, PartStatus.FAILED.value])),
             func.bool_or(DocumentPart.status == PartStatus.PUBLISHED.value),
         ).where(DocumentPart.document_id == document_id, DocumentPart.index >= document.generation_start_index)
-        all_terminal, any_published = (await self._session.execute(aggregate)).one()
+        all_terminal, _any_published_current = (await self._session.execute(aggregate)).one()
+        any_published = await self._session.scalar(
+            select(func.bool_or(DocumentPart.status == PartStatus.PUBLISHED.value)).where(
+                DocumentPart.document_id == document_id
+            )
+        )
         if all_terminal:
             document.status = DocumentStatus.DONE.value if any_published else DocumentStatus.FAILED.value
             await self._session.flush()

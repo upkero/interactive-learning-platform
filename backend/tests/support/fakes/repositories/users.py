@@ -20,6 +20,10 @@ class FakeUserRepository(UserRepositoryProtocol):
     async def get(self, user_id: UUID) -> UserRecord | None:
         return self._users.get(user_id)
 
+    async def get_locale_by_document(self, document_id: UUID) -> str:
+        user = next(iter(self._users.values()), None)
+        return user.locale if user is not None else "ru"
+
     async def get_by_email(self, email: str) -> UserRecord | None:
         return next((u for u in self._users.values() if u.email == email), None)
 

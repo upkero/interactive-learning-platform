@@ -23,6 +23,7 @@ from tests.support.fakes.repositories.documents import (
     FakeDocumentRepository,
     FakeUserMaterialRepository,
 )
+from tests.support.fakes.repositories.users import FakeUserRepository
 from tests.support.fakes.storage.object_storage_client import FakeObjectStorageClient
 
 pytestmark = pytest.mark.unit
@@ -48,6 +49,7 @@ def _service() -> tuple[
         materials=lambda _: materials,
         parts=lambda _: parts,
         storage=FakeObjectStorageClient(),
+        users=lambda _: FakeUserRepository(),
     )
     return service, documents, materials, parts
 

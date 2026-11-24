@@ -19,9 +19,8 @@ class SMTPSettings(BaseSettings):
 
 
 def validate_smtp_config(environment: str, settings: SMTPSettings) -> None:
-    if settings.enabled and (
-        not settings.host.strip() or (environment == "production" and settings.host.lower() == "mailpit")
-    ):
+    host = settings.host.strip().rstrip(".").lower()
+    if settings.enabled and (not host or (environment.lower() == "production" and host == "mailpit")):
         raise ValueError(
             "SMTP_ENABLED requires a configured external SMTP_HOST (Mailpit is not allowed in production)."
         )

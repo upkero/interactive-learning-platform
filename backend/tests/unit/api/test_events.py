@@ -10,6 +10,7 @@ from fastapi import Request
 from sse_starlette import ServerSentEvent
 
 from src.app.api.v1.routers.events import document_events
+from src.app.contracts.documents import ReadableDocument
 from src.app.contracts.documents.statuses import DocumentStatus
 from src.app.contracts.progress.stream_entry import StreamEntry
 from src.app.contracts.users.user_record import UserRecord
@@ -20,8 +21,8 @@ pytestmark = pytest.mark.unit
 
 
 class Documents:
-    async def get_readable(self, *, user_id: UUID, document_id: UUID) -> tuple[SimpleNamespace, str]:
-        return SimpleNamespace(status=DocumentStatus.DONE), "en"
+    async def get_readable(self, *, user_id: UUID, document_id: UUID) -> ReadableDocument:
+        return ReadableDocument(cast(object, SimpleNamespace(status=DocumentStatus.DONE)), "en")  # type: ignore[arg-type]
 
 
 class Reader:

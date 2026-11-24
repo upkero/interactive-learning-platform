@@ -36,8 +36,8 @@ class StubPipeline:
         documents: Callable[[AsyncSession], DocumentRepositoryProtocol],
         ledger: QuotaLedger,
         notifier: ProgressNotifier,
-        users: Callable[[AsyncSession], UserRepositoryProtocol] | None = None,
-        notifications: DocumentNotifications | None = None,
+        users: Callable[[AsyncSession], UserRepositoryProtocol],
+        notifications: DocumentNotifications,
         delay: float = 2.0,
     ) -> None:
         self._session_factory = session_factory
@@ -63,9 +63,9 @@ class StubPipeline:
                 raise RuntimeError("Part disappeared after transition")
             document_id = part.document_id
             document = await self._documents(session).get(document_id)
-            owner = await self._users(session).get(document.owner_id) if document is not None and self._users else None
-            locale = owner.locale if owner is not None else "ru"
-            part_name = str(part.index + 1)
+            locale = await self._users(session).get_locale_by_document(document_id)
+            start_index = document.generation_start_index if document is not None else 0
+            part_name = str(part.index - start_index + 1)
         content = await self._load_content()
         with bind_log_context(document_id=str(document_id)):
             await self._run_stages(document_id, part_id, content, locale, part_name)
@@ -98,15 +98,21 @@ class StubPipeline:
     async def _run_stages(
         self, document_id: UUID, part_id: UUID, content: dict[str, JsonValue], locale: str, part_name: str
     ) -> None:
-        await self._notifier.emit(
-            document_id,
-            ProgressEventType.PART_STATUS,
-            part_id=part_id,
-            stage=PartStatus.MAIN_PASS.value,
-            message=render_message(
-                locale, ProgressEventType.PART_STATUS, PartStatus.MAIN_PASS.value, {"part": part_name}
-            ),
-        )
+        async def emit(event_type: ProgressEventType, stage: str | None = None) -> None:
+            await self._notifier.emit(
+                document_id,
+                event_type,
+                part_id=part_id if event_type is not ProgressEventType.DOCUMENT_DONE else None,
+                stage=stage,
+                message=render_message(
+                    locale,
+                    event_type,
+                    stage,
+                    {"part": part_name} if event_type is ProgressEventType.PART_STATUS else {},
+                ),
+            )
+
+        await emit(ProgressEventType.PART_STATUS, PartStatus.MAIN_PASS.value)
         current = PartStatus.MAIN_PASS
         for next_status in (PartStatus.RESOLVING, PartStatus.ASSEMBLING, PartStatus.PUBLISHED):
             await asyncio.sleep(self._delay)
@@ -129,32 +135,10 @@ class StubPipeline:
                     document = await documents.get(document_id)
                     document_done = document is not None and document.status in TERMINAL_DOCUMENT_STATUSES
                     document_status = document.status if document is not None else None
-            await self._notifier.emit(
-                document_id,
-                ProgressEventType.PART_STATUS,
-                part_id=part_id,
-                stage=next_status.value,
-                message=render_message(locale, ProgressEventType.PART_STATUS, next_status.value, {"part": part_name}),
-            )
+            await emit(ProgressEventType.PART_STATUS, next_status.value)
             if next_status is PartStatus.PUBLISHED:
-                await self._notifier.emit(
-                    document_id,
-                    ProgressEventType.PART_READY,
-                    part_id=part_id,
-                    message=render_message(locale, ProgressEventType.PART_READY, None, {}),
-                )
+                await emit(ProgressEventType.PART_READY)
                 if document_done:
-                    await self._notifier.emit(
-                        document_id,
-                        ProgressEventType.DOCUMENT_DONE,
-                        stage=document_status.value if document_status else None,
-                        message=render_message(
-                            locale,
-                            ProgressEventType.DOCUMENT_DONE,
-                            document_status.value if document_status else None,
-                            {},
-                        ),
-                    )
-                    if self._notifications is not None:
-                        await self._notifications.on_document_finished(document_id)
+                    await emit(ProgressEventType.DOCUMENT_DONE, document_status.value if document_status else None)
+                    await self._notifications.on_document_finished(document_id)
             current = next_status

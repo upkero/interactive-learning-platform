@@ -21,6 +21,7 @@ from src.app.contracts.documents import (
     DocumentRecord,
     DocumentStatus,
     MaterialRole,
+    ReadableDocument,
     SourceType,
     TopicNode,
 )
@@ -47,7 +48,7 @@ class DocumentQueryService:
         materials: Callable[[AsyncSession], UserMaterialRepositoryProtocol],
         parts: Callable[[AsyncSession], DocumentPartRepositoryProtocol],
         storage: ObjectStorageClient,
-        users: Callable[[AsyncSession], UserRepositoryProtocol] | None = None,
+        users: Callable[[AsyncSession], UserRepositoryProtocol],
     ) -> None:
         self._session_factory = session_factory
         self._documents = documents
@@ -56,7 +57,7 @@ class DocumentQueryService:
         self._storage = storage
         self._users = users
 
-    async def get_readable(self, *, user_id: UUID, document_id: UUID) -> tuple[DocumentRecord, str]:
+    async def get_readable(self, *, user_id: UUID, document_id: UUID) -> ReadableDocument:
         """Cheap authorization and owner locale for the SSE stream."""
         async with self._session_factory() as session:
             if await self._materials(session).get_role(user_id, document_id) is None:
@@ -64,8 +65,7 @@ class DocumentQueryService:
             document = await self._documents(session).get(document_id)
             if document is None:
                 raise DocumentNotFoundError()
-            owner = await self._users(session).get(document.owner_id) if self._users is not None else None
-            return document, owner.locale if owner is not None else "ru"
+            return ReadableDocument(document, await self._users(session).get_locale_by_document(document.id))
 
     async def get_document(self, *, user_id: UUID, document_id: UUID) -> DocumentDetails:
         async with self._session_factory() as session:

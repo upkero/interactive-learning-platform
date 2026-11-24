@@ -11,6 +11,7 @@ from src.app.contracts.quota import LedgerOp
 from src.app.services.solver.pipeline import stub_pipeline as stub_pipeline_module
 from src.app.services.solver.pipeline.stub_pipeline import StubPipeline
 from tests.support.fakes.db.session import FakeSession
+from tests.support.fakes.notifications.service import FakeDocumentNotifications
 from tests.support.fakes.repositories.users import FakeUserRepository
 from tests.support.fakes.services.progress_notifier import FakeProgressNotifier
 from tests.support.fixtures.solver import build_recovery
@@ -30,6 +31,8 @@ async def test_stub_publishes_once_and_duplicate_delivery_is_noop() -> None:
         documents=lambda _: case.documents,
         ledger=case.quota,
         notifier=notifier,
+        users=lambda _: FakeUserRepository(),
+        notifications=FakeDocumentNotifications(),
         delay=0,
     )
     await pipeline.process(part.id)
@@ -53,6 +56,8 @@ async def test_invalid_fixture_fails_before_publishing(tmp_path: Path, monkeypat
         documents=lambda _: case.documents,
         ledger=case.quota,
         notifier=case.notifier,
+        users=lambda _: FakeUserRepository(),
+        notifications=FakeDocumentNotifications(),
         delay=0,
     )
     with pytest.raises(RuntimeError, match="Invalid published part fixture"):
@@ -75,6 +80,7 @@ async def test_pipeline_messages_use_owner_locale_and_part_number() -> None:
         ledger=case.quota,
         notifier=notifier,
         users=lambda _: users,
+        notifications=FakeDocumentNotifications(),
         delay=0,
     )
     await pipeline.process(case.part.id)

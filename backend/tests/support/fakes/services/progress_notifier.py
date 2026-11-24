@@ -13,6 +13,10 @@ class FakeProgressNotifier:
         # leave the service after the transaction that produced them committed.
         self._committed = committed
         self.committed_at_emit: list[int | None] = []
+        self.reset_calls: list[UUID] = []
+
+    async def reset(self, document_id: UUID) -> None:
+        self.reset_calls.append(document_id)
 
     async def emit(
         self,

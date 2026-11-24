@@ -7,6 +7,8 @@ from src.app.contracts.progress import ProgressEventType
 
 
 class ProgressNotifier(Protocol):
+    async def reset(self, document_id: UUID) -> None: ...
+
     async def emit(
         self,
         document_id: UUID,

@@ -32,6 +32,7 @@ from tests.support.fakes.repositories.documents import (
 )
 from tests.support.fakes.repositories.quota import FakeGenerationLedgerRepository
 from tests.support.fakes.repositories.users import FakeUserRepository
+from tests.support.fakes.services.progress_notifier import FakeProgressNotifier
 from tests.support.fakes.services.task_dispatcher import FakeTaskDispatcher
 from tests.support.fakes.storage.object_storage_client import FakeObjectStorageClient
 
@@ -121,6 +122,8 @@ def _service() -> tuple[
         ledger=_ledger(users, ledger_repo),
         dispatcher=FakeTaskDispatcher(),
         settings=ProcessingSettings(max_active_documents=2),
+        notification_claims=FakeNotificationClaims(),
+        progress_notifier=FakeProgressNotifier(),
     )
     return service, documents, materials, parts, ledger_repo, users
 
@@ -273,6 +276,8 @@ async def test_start_reserves_and_dispatches_after_commit() -> None:
         ledger=_ledger(users, ledger_repo),
         dispatcher=dispatcher,
         settings=ProcessingSettings(max_active_documents=2),
+        notification_claims=FakeNotificationClaims(),
+        progress_notifier=FakeProgressNotifier(),
     )
     started = await service.start(
         GenerationCommand(
@@ -379,6 +384,8 @@ async def test_queue_failure_keeps_committed_parts_and_reservation() -> None:
         ledger=_ledger(users, ledger_repo),
         dispatcher=FakeTaskDispatcher(fail_with=TaskDispatchError()),
         settings=ProcessingSettings(max_active_documents=2),
+        notification_claims=FakeNotificationClaims(),
+        progress_notifier=FakeProgressNotifier(),
     )
     with pytest.raises(TaskDispatchError):
         await service.start(
@@ -411,6 +418,8 @@ async def test_start_rejects_insufficient_quota_without_writes() -> None:
         ledger=_ledger(users, ledger_repo),
         dispatcher=dispatcher,
         settings=ProcessingSettings(max_active_documents=2),
+        notification_claims=FakeNotificationClaims(),
+        progress_notifier=FakeProgressNotifier(),
     )
     with pytest.raises(QuotaExceededError) as error:
         await service.start(
@@ -456,6 +465,8 @@ async def test_start_requires_owner_even_when_processing_limit_is_full() -> None
         ledger=_ledger(users, ledger_repo),
         dispatcher=FakeTaskDispatcher(),
         settings=ProcessingSettings(max_active_documents=2),
+        notification_claims=FakeNotificationClaims(),
+        progress_notifier=FakeProgressNotifier(),
     )
     with pytest.raises(DocumentNotFoundError):
         await service.start(
@@ -475,6 +486,7 @@ async def test_two_generations_send_two_emails_but_duplicate_completion_sends_on
     owner, document_id = await _parsed_document(users, documents, materials, parts)
     claims = FakeNotificationClaims()
     sender = FakeEmailSender()
+    progress_notifier = FakeProgressNotifier()
     service = GenerationService(
         session_factory=_factory(FakeSession()),
         documents=lambda _: documents,
@@ -487,6 +499,7 @@ async def test_two_generations_send_two_emails_but_duplicate_completion_sends_on
         dispatcher=FakeTaskDispatcher(),
         settings=ProcessingSettings(),
         notification_claims=claims,
+        progress_notifier=progress_notifier,
     )
     mail = NotificationService(
         session_factory=_factory(FakeSession()),
@@ -513,6 +526,7 @@ async def test_two_generations_send_two_emails_but_duplicate_completion_sends_on
         await mail.on_document_finished(document_id)
         assert len(sender.sent) == iteration + 1
     assert claims.reset_calls == [document_id, document_id]
+    assert progress_notifier.reset_calls == [document_id, document_id]
 
 
 async def test_notification_reset_outage_does_not_prevent_dispatch(caplog: pytest.LogCaptureFixture) -> None:
@@ -533,6 +547,7 @@ async def test_notification_reset_outage_does_not_prevent_dispatch(caplog: pytes
         dispatcher=dispatcher,
         settings=ProcessingSettings(),
         notification_claims=claims,
+        progress_notifier=FakeProgressNotifier(),
     )
     result = await service.start(
         GenerationCommand(

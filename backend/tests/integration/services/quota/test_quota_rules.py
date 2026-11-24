@@ -106,6 +106,8 @@ async def test_generate_publish_and_watchdog_refund(
         documents=DocumentRepository,
         ledger=container.quota_ledger,
         notifier=notifier,
+        users=UserRepository,
+        notifications=container.notification_service,
         delay=0,
     )
     await pipeline.process(part_ids[0])

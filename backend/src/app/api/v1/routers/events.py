@@ -36,7 +36,8 @@ async def document_events(
     last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
     last_event_id_query: Annotated[str | None, Query(alias="last_event_id")] = None,
 ) -> EventSourceResponse:
-    document, locale = await documents.get_readable(user_id=user.id, document_id=document_id)
+    readable = await documents.get_readable(user_id=user.id, document_id=document_id)
+    document, locale = readable.document, readable.owner_locale
     cursor = next(
         (value for value in (last_event_id, last_event_id_query) if value and _STREAM_ID.fullmatch(value)),
         "0-0",

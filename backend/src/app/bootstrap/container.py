@@ -220,6 +220,7 @@ class ApplicationContainer:
             dispatcher=self.task_dispatcher,
             settings=self.processing_settings,
             notification_claims=self.notification_claims,
+            progress_notifier=self.progress_notifier,
         )
 
     @cached_property
