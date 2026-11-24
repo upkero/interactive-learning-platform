@@ -8,12 +8,16 @@ export default tseslint.config(
     languageOptions: { parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname } },
     plugins: { boundaries, '@next/next': nextPlugin },
     settings: {
-      'boundaries/alias': { '@': './src' },
+      'import/resolver': {
+        typescript: {
+          project: './tsconfig.json',
+        },
+      },
       'boundaries/elements': [
         { type: 'app', pattern: 'src/app/**' },
-        { type: 'widget', pattern: 'src/widgets/*', capture: ['widget'] },
-        { type: 'feature', pattern: 'src/features/*', capture: ['feature'] },
-        { type: 'entity', pattern: 'src/entities/*', capture: ['entity'] },
+        { type: 'widget', pattern: 'src/widgets/**', capture: ['widget'] },
+        { type: 'feature', pattern: 'src/features/**', capture: ['feature'] },
+        { type: 'entity', pattern: 'src/entities/**', capture: ['entity'] },
         { type: 'shared', pattern: 'src/shared/**' },
       ],
     },
@@ -24,7 +28,7 @@ export default tseslint.config(
         rules: [
           { from: 'app', allow: ['app', 'widget', 'feature', 'entity', 'shared'] },
           { from: 'widget', allow: [['widget', { widget: '${from.widget}' }], 'feature', 'entity', 'shared'] },
-          { from: 'feature', allow: [['feature', { feature: '${from.feature}' }], 'entity', 'shared'] },
+          { from: 'feature', allow: ['entity', 'shared'] },
           { from: 'entity', allow: ['entity', 'shared'] },
           { from: 'shared', allow: ['shared'] },
         ],
@@ -32,7 +36,7 @@ export default tseslint.config(
       'boundaries/entry-point': ['error', {
         default: 'disallow',
         rules: [
-          { target: ['widget', 'feature', 'entity'], allow: 'index.ts' },
+          { target: ['widget', 'feature', 'entity'], allow: ['index.ts', '*/index.ts'] },
           { target: ['app', 'shared'], allow: '**' },
         ],
       }],
