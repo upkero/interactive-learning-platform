@@ -1,7 +1,9 @@
 """Bounded model windows and lossless topic boundaries at Markdown blocks."""
 
 import re
-from dataclasses import replace
+from bisect import bisect_right
+from collections.abc import Mapping
+from itertools import accumulate, pairwise
 
 from pydantic import BaseModel
 
@@ -16,6 +18,9 @@ from src.app.llm.structured import call_structured
 from src.app.services.documents.prompts import TOPICS_SYSTEM
 
 _WORD_BOUNDARY = re.compile(r"(?<=\S)[ \t]+(?=[^\W\d_])")
+_MODEL_WINDOW_TOKENS = 20000
+# Allow two ordinary fragments plus their labels and image directives to overlap.
+_PARAGRAPH_WINDOW_TOKENS = 9900
 
 
 class Section(BaseModel):
@@ -35,9 +40,11 @@ class TopicSegmenter:
         self._counter = counter
         self._max_tokens = max_tokens
 
-    def _blocks(self, markdown: str, structure: MarkdownStructure) -> list[tuple[int, int]]:
+    def _blocks(
+        self, markdown: str, structure: MarkdownStructure, image_spans: Mapping[str, tuple[int, int]]
+    ) -> list[str]:
         marker_refs = dict(structure.markers)
-        grouped: list[Block] = []
+        grouped: list[tuple[Block, list[tuple[Block, str]]]] = []
         for block in structure.blocks:
             ref = marker_refs.get(block.start)
             if (
@@ -45,61 +52,101 @@ class TopicSegmenter:
                 and ref is not None
                 and markdown[block.start : block.end].rstrip("\r\n") == f'::image{{id="{ref}"}}'
             ):
-                # Embedded images are emitted after their source block.
-                # Keep that block and all its trailing markers indivisible.
-                grouped[-1] = replace(grouped[-1], end=block.end, plain_text=False)
+                grouped[-1][1].append((block, ref))
             else:
-                grouped.append(block)
+                grouped.append((block, []))
 
-        blocks: list[tuple[int, int]] = []
-        split_at = min(self._max_tokens // 2, 10000)
-        for index, block in enumerate(grouped):
+        blocks: list[str] = []
+        split_at = min(self._max_tokens // 2, _PARAGRAPH_WINDOW_TOKENS)
+        for index, (block, markers) in enumerate(grouped):
             start = block.start if index else 0
-            end = grouped[index + 1].start if index + 1 < len(grouped) else len(markdown)
-            if not block.plain_text or self._counter.count(markdown[start:end]) <= split_at:
-                blocks.append((start, end))
+            end = grouped[index + 1][0].start if index + 1 < len(grouped) else len(markdown)
+            if not block.plain_text or self._counter.count(markdown[start : block.end]) <= split_at:
+                blocks.append(markdown[start:end])
                 continue
-            cursor = start
-            while cursor < end:
-                if self._counter.count(markdown[cursor:end]) <= split_at:
-                    blocks.append((cursor, end))
-                    break
-                # Start new paragraphs at letters so existing punctuation
-                # cannot become a block marker after inserting a heading.
-                whitespace = [match.end() for match in _WORD_BOUNDARY.finditer(markdown, cursor, block.end)]
-                low, high = 0, len(whitespace)
-                while low < high:
-                    middle = (low + high) // 2
-                    if self._counter.count(markdown[cursor : whitespace[middle]]) <= split_at:
-                        low = middle + 1
-                    else:
-                        high = middle
-                if low == 0:
-                    raise ValueError("Cannot safely split a long Markdown block")
-                cut = whitespace[low - 1]
-                blocks.append((cursor, cut))
-                cursor = cut
+            anchors = {
+                ref: (block.start + span[0], block.start + span[1])
+                for _, ref in markers
+                if (span := image_spans.get(ref)) is not None and 0 <= span[0] <= span[1] <= block.end - block.start
+            }
+            cuts = self._paragraph_cuts(markdown, start, block.end, split_at, anchors)
+            if not cuts:
+                blocks.append(markdown[start:end])
+                continue
+            fragments = [markdown[left:right] for left, right in pairwise((start, *cuts, block.end))]
+            moved: list[list[str]] = [[] for _ in cuts]
+            tail: list[str] = []
+            cursor = block.end
+            for marker, ref in markers:
+                anchor = anchors.get(ref)
+                fragment = bisect_right(cuts, anchor[0]) if anchor is not None else len(cuts)
+                if fragment == len(cuts):
+                    continue
+                moved[fragment].append(markdown[marker.start : marker.end].rstrip("\r\n"))
+                tail.append(markdown[cursor : marker.start])
+                cursor = marker.end
+                # Drop the empty separator following a relocated directive.
+                if markdown.startswith("\r\n", cursor):
+                    cursor += 2
+                elif markdown[cursor : cursor + 1] in {"\r", "\n"}:
+                    cursor += 1
+            for index, refs in enumerate(moved):
+                if refs:
+                    fragments[index] += "\n\n" + "\n\n".join(refs) + "\n\n"
+            fragments[-1] += "".join(tail) + markdown[cursor:end]
+            blocks.extend(fragments)
         return blocks
 
-    async def segment(self, markdown: str) -> str:
+    def _paragraph_cuts(
+        self, markdown: str, start: int, end: int, split_at: int, anchors: Mapping[str, tuple[int, int]]
+    ) -> list[int]:
+        # Start at a word boundary without cutting the alt text it belongs to.
+        whitespace = [
+            match.end()
+            for match in _WORD_BOUNDARY.finditer(markdown, start, end)
+            if all(not left < match.end() < right for left, right in anchors.values())
+        ]
+        cuts: list[int] = []
+        cursor = start
+        while self._counter.count(markdown[cursor:end]) > split_at:
+            first = bisect_right(whitespace, cursor)
+            low, high = first, len(whitespace)
+            while low < high:
+                middle = (low + high) // 2
+                if self._counter.count(markdown[cursor : whitespace[middle]]) <= split_at:
+                    low = middle + 1
+                else:
+                    high = middle
+            if low == first:
+                raise ValueError("Cannot safely split a long Markdown block")
+            cursor = whitespace[low - 1]
+            cuts.append(cursor)
+        return cuts
+
+    async def segment(self, markdown: str, *, image_spans: Mapping[str, tuple[int, int]] | None = None) -> str:
         structure = parse_markdown(markdown)
-        blocks = self._blocks(markdown, structure)
+        blocks = self._blocks(markdown, structure, image_spans or {})
         if not blocks or not markdown.strip():
             return markdown
+        numbered_blocks = [f"[p{index}] {block}" for index, block in enumerate(blocks, 1)]
+        if any(
+            self._counter.count(f"<document>\n{block}\n</document>") > _MODEL_WINDOW_TOKENS for block in numbered_blocks
+        ):
+            raise ValueError("A Markdown block exceeds the model window")
+        offsets = (0, *accumulate(map(len, blocks)))
+        markdown = "".join(blocks)
         valid: dict[int, str] = {}
         start = 0
         while start < len(blocks):
             end = start
             numbered = ""
             while end < len(blocks):
-                candidate = numbered + f"[p{end + 1}] {markdown[slice(*blocks[end])]}"
+                candidate = numbered + numbered_blocks[end]
                 content = f"<document>\n{candidate}\n</document>"
-                if self._counter.count(content) > 20000:
+                if self._counter.count(content) > _MODEL_WINDOW_TOKENS:
                     break
                 numbered = candidate
                 end += 1
-            if end == start:
-                raise ValueError("A Markdown block exceeds the model window")
             request = LLMRequest(
                 purpose="topics",
                 system=(SystemBlock(TOPICS_SYSTEM, cache=True),),
@@ -131,13 +178,13 @@ class TopicSegmenter:
             if index == 0 or index + 1 in boundaries:
                 continue
             beginning = max((pos for pos in boundaries if pos <= index), default=1)
-            chunk = markdown[blocks[beginning - 1][0] : blocks[index][1]]
+            chunk = markdown[offsets[beginning - 1] : offsets[index + 1]]
             if self._counter.count(f"{'#' * level} Topic\n\n{chunk}") > self._max_tokens:
                 boundaries[index + 1] = f"Тема {index + 1}"
         parts: list[str] = []
         last = 0
         for number, title in sorted(boundaries.items()):
-            pos = blocks[number - 1][0]
+            pos = offsets[number - 1]
             parts.append(markdown[last:pos])
             if pos and parts[-1] and not parts[-1].endswith("\n\n"):
                 parts.append("\n\n")

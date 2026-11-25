@@ -70,3 +70,14 @@ def test_marker_in_multiline_alt_does_not_overlap_image_replacement() -> None:
     assert parsed.images[0].caption == 'alt\n::image{id="img_88"}\ntext'
     assert {ref for _, ref in parse_markdown(parsed.markdown).markers} == {"img_1"}
     assert "data:image" not in parsed.markdown
+
+
+@pytest.mark.unit
+def test_inline_image_spans_are_relative_to_the_normalized_paragraph() -> None:
+    source = (
+        "Chapter\n=======\n\n![](data:image/png;base64,AAAA)\n"
+        "Real ![big diagram](data:image/png;base64,AAAA) paragraph.\n"
+    )
+    parsed = MarkdownParser().parse(source.encode(), filename="x.md")
+    assert "Real big diagram paragraph." in parsed.markdown
+    assert [image.paragraph_span for image in parsed.images] == [(0, 0), (5, 16)]

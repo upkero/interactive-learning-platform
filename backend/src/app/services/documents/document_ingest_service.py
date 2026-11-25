@@ -131,7 +131,10 @@ class DocumentIngestService:
         markdown, saved = await self._image_store.save(document_id, parsed.markdown, parsed.images)
         if not markdown.strip():
             raise IngestFailure(DocumentErrorCode.EMPTY_DOCUMENT, "Document is empty")
-        markdown, tree = await self._build_topics(document_id, markdown, parsed.heading_pages)
+        image_spans = {
+            image.ref: image.paragraph_span for item in saved if (image := item.image).paragraph_span is not None
+        }
+        markdown, tree = await self._build_topics(document_id, markdown, parsed.heading_pages, image_spans)
         await self._storage.put_object(
             bucket="documents",
             key=parsed_markdown_key(document.owner_id, document_id),
@@ -177,7 +180,11 @@ class DocumentIngestService:
             await self._documents(session).set_status(document_id, DocumentStatus.PARSED)
 
     async def _build_topics(
-        self, document_id: UUID, markdown: str, heading_pages: tuple[tuple[str, int], ...]
+        self,
+        document_id: UUID,
+        markdown: str,
+        heading_pages: tuple[tuple[str, int], ...],
+        image_spans: dict[str, tuple[int, int]],
     ) -> tuple[str, list[TopicNode]]:
         structure = parse_markdown(markdown)
         tree = build_topic_tree(markdown, self._counter, heading_pages, structure=structure)
@@ -192,7 +199,7 @@ class DocumentIngestService:
             return markdown, tree
 
         try:
-            segmented = await segmenter.segment(markdown)
+            segmented = await segmenter.segment(markdown, image_spans=image_spans)
             if not segmented.strip():
                 raise ValueError("Topic segmentation returned empty Markdown")
             if segmented != markdown:

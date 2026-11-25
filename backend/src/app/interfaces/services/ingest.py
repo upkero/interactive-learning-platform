@@ -1,5 +1,6 @@
 """Ports used by the document-ingestion service."""
 
+from collections.abc import Mapping
 from contextlib import AbstractAsyncContextManager
 from typing import Protocol
 from uuid import UUID
@@ -27,7 +28,7 @@ class ImageDescriberProtocol(Protocol):
 
 
 class TopicSegmenterProtocol(Protocol):
-    async def segment(self, markdown: str) -> str: ...
+    async def segment(self, markdown: str, *, image_spans: Mapping[str, tuple[int, int]] | None = None) -> str: ...
 
 
 class ParsingLease(Protocol):

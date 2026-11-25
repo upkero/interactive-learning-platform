@@ -5,6 +5,7 @@ import base64
 import json
 import os
 import re
+from collections.abc import Mapping
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import AsyncMock
@@ -19,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from src.app.contracts.documents.statuses import DocumentErrorCode, DocumentStatus, SourceType
 from src.app.contracts.documents.topic_node import TopicNode
 from src.app.contracts.ingest import ExtractedImage, ParsedDocument
+from src.app.contracts.llm.llm_request import LLMRequest
 from src.app.contracts.progress.stream import stream_key
 from src.app.core.settings.ingest import IngestSettings
 from src.app.core.settings.progress import ProgressSettings
@@ -226,7 +228,7 @@ async def test_image_refs_match_database_after_filtering(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.parametrize("layout", ["inline", "table"])
+@pytest.mark.parametrize("layout", ["inline", "table", "long-inline"])
 async def test_segmentation_keeps_images_in_their_source_topic(
     session_factory: async_sessionmaker[AsyncSession], monkeypatch: pytest.MonkeyPatch, layout: str
 ) -> None:
@@ -238,6 +240,8 @@ async def test_segmentation_keeps_images_in_their_source_topic(
     content = f"Paragraph about a diagram {pictures}."
     if layout == "table":
         content = f"Caption | Pictures\n--- | ---\nProcess | {pictures}"
+    if layout == "long-inline":
+        content += " " + "word " * 30000 + "end."
     source = f"{content}\n\nAnother subject.\n".encode()
     async with session_factory() as session, session.begin():
         user = await UserRepository(session).create(email=f"{uuid4()}@example.com", password_hash="x", monthly_limit=20)
@@ -251,15 +255,23 @@ async def test_segmentation_keeps_images_in_their_source_topic(
             checksum="a" * 64,
         )
     storage = FakeObjectStorageClient(objects={("documents", "topics.md"): source})
-    segment = AsyncMock(
-        return_value=Sections(
-            sections=[Section(title="Diagrams", first_paragraph=1), Section(title="Other", first_paragraph=2)]
-        )
-    )
-    monkeypatch.setattr("src.app.services.documents.topic_segmenter.call_structured", segment)
     vision = AsyncMock(spec=ImageDescriberProtocol)
     vision.describe.return_value = {}
     counter = TokenCounter()
+    model_inputs: list[str] = []
+
+    async def suggest(llm: LLMClient, request: LLMRequest, schema: type[Sections]) -> Sections:
+        markdown = request.messages[0].content
+        assert isinstance(markdown, str)
+        model_inputs.append(markdown)
+        sections = []
+        for match in re.finditer(r"\[p(\d+)\] (\S+)", markdown):
+            number = int(match[1])
+            title = "Diagrams" if number == 1 else "Other" if match[2] == "Another" else f"Text {number}"
+            sections.append(Section(title=title, first_paragraph=number))
+        return Sections(sections=sections)
+
+    monkeypatch.setattr("src.app.services.documents.topic_segmenter.call_structured", suggest)
     service = DocumentIngestService(
         session_factory=session_factory,
         documents=DocumentRepository,
@@ -279,25 +291,26 @@ async def test_segmentation_keeps_images_in_their_source_topic(
     )
     await service.parse(document.id)
 
-    segment.assert_awaited_once()
-    assert segment.await_args is not None
-    model_input = segment.await_args.args[1].messages[0].content
-    assert isinstance(model_input, str)
-    assert "[p2] Another subject." in model_input
-    assert '::image{id="img_3"}' not in model_input
+    assert model_inputs
+    assert all('::image{id="img_3"}' not in model_input for model_input in model_inputs)
     async with session_factory() as session:
         result = await DocumentRepository(session).get(document.id)
         images = await ImageRepository(session).list_by_document(document.id)
     assert result is not None and result.status is DocumentStatus.PARSED
     assert result.topic_tree is not None
-    first, second = result.topic_tree
+    first, last = result.topic_tree[0], result.topic_tree[-1]
+    if layout == "long-inline":
+        assert len(model_inputs) > 1 and len(result.topic_tree) > 2
+    else:
+        assert len(model_inputs) == 1 and len(result.topic_tree) == 2
     assert (first.title, first.image_ids) == ("Diagrams", ("img_1", "img_2"))
-    assert (second.title, second.image_ids) == ("Other", ())
+    assert (last.title, last.image_ids) == ("Other", ())
+    assert all(not topic.image_ids for topic in result.topic_tree[1:])
     assert len(images) == 2 and all(image.topic_id == first.id for image in images)
     saved_markdown = (
         await storage.get_object(bucket="documents", key=parsed_markdown_key(user.id, document.id))
     ).decode()
-    assert saved_markdown[second.start : second.end].startswith("## Other\n\nAnother subject.")
+    assert saved_markdown[last.start : last.end].startswith("## Other\n\nAnother subject.")
     vision.describe.assert_awaited_once()
     assert vision.describe.await_args.kwargs["topic_titles"] == {"img_1": "Diagrams", "img_2": "Diagrams"}
 
@@ -311,7 +324,7 @@ async def test_segmentation_failure_keeps_document_parsed(
     oversized_table: bool,
 ) -> None:
     class BrokenSegmenter:
-        async def segment(self, markdown: str) -> str:
+        async def segment(self, markdown: str, *, image_spans: Mapping[str, tuple[int, int]] | None = None) -> str:
             raise RuntimeError("unavailable")
 
     async with session_factory() as session, session.begin():

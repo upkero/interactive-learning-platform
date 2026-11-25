@@ -3,7 +3,7 @@
 import hashlib
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from io import BytesIO
 from uuid import UUID
 
@@ -48,13 +48,7 @@ def _normalize(images: tuple[ExtractedImage, ...]) -> tuple[tuple[ExtractedImage
             value.save(output, format="PNG", optimize=True)
             result.append(
                 (
-                    ExtractedImage(
-                        ref=image.ref,
-                        data=output.getvalue(),
-                        media_type="image/png",
-                        page=image.page,
-                        caption=image.caption,
-                    ),
+                    replace(image, data=output.getvalue(), media_type="image/png"),
                     value.width,
                     value.height,
                 )

@@ -8,6 +8,7 @@ import pytest
 
 from src.app.contracts.llm.llm_request import LLMRequest
 from src.app.ingest.markdown_syntax import parse_markdown
+from src.app.ingest.parsers.markdown_parser import MarkdownParser
 from src.app.ingest.tokens import TokenCounter
 from src.app.ingest.topic_tree import build_topic_tree
 from src.app.interfaces.llm.llm_client import LLMClient
@@ -149,12 +150,65 @@ async def test_working_token_limit_keeps_large_table_and_indented_code_intact(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_oversized_paragraph_with_image_is_not_split(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("kind", ["table", "code"])
+async def test_oversized_indivisible_block_in_middle_skips_model(monkeypatch: pytest.MonkeyPatch, kind: str) -> None:
     call = AsyncMock(return_value=Sections(sections=[]))
     monkeypatch.setattr("src.app.services.documents.topic_segmenter.call_structured", call)
     counter = TokenCounter()
-    source = "word " * 15000 + '\n\n::image{id="img_1"}\n'
-    assert counter.count(source) > 20000
+    large_block = "Col A | Col B\n--- | ---\n" + "a | b\n" * 6000
+    if kind == "code":
+        large_block = "    " + "print(value) " * 5500 + "\n"
+    assert counter.count(large_block) > 20000
+    source = f"Introduction.\n\nAnother paragraph.\n\n{large_block}\nConclusion.\n"
     with pytest.raises(ValueError, match="exceeds the model window"):
         await TopicSegmenter(AsyncMock(spec=LLMClient), counter=counter).segment(source)
     call.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("with_source_spans", [False, True])
+async def test_long_paragraph_with_images_fits_windows_and_preserves_ownership(
+    monkeypatch: pytest.MonkeyPatch, with_source_spans: bool
+) -> None:
+    counter = TokenCounter()
+    windows: list[list[int]] = []
+
+    async def suggest(llm: LLMClient, request: LLMRequest, schema: type[Sections]) -> Sections:
+        content = request.messages[0].content
+        assert isinstance(content, str)
+        assert counter.count(content) <= 20000
+        numbers = [int(value) for value in re.findall(r"\[p(\d+)\]", content)]
+        windows.append(numbers)
+        return Sections(sections=[Section(title=f"Topic {n}", first_paragraph=n) for n in numbers])
+
+    monkeypatch.setattr("src.app.services.documents.topic_segmenter.call_structured", suggest)
+    source = (
+        "Opening notes.\n\nSecond paragraph.\n\n"
+        "Start ![early figure](data:image/png;base64,AAAA) "
+        + "word " * 30000
+        + "End ![late figure](data:image/png;base64,AAAA).\n\nConclusion.\n"
+    )
+    parsed = MarkdownParser().parse(source.encode(), filename="long.md")
+    spans = (
+        {image.ref: image.paragraph_span for image in parsed.images if image.paragraph_span is not None}
+        if with_source_spans
+        else None
+    )
+    assert counter.count(parsed.markdown) > 40000
+    result = await TopicSegmenter(AsyncMock(spec=LLMClient), counter=counter).segment(
+        parsed.markdown, image_spans=spans
+    )
+    assert len(windows) > 1
+    assert all(previous[-1] == current[0] for previous, current in pairwise(windows))
+    assert result.count("word ") == 30000
+    topics = build_topic_tree(result, counter)
+    assert len(topics) > 3 and all(topic.total_tokens <= 22000 for topic in topics)
+    early = next(topic for topic in topics if "img_1" in topic.image_ids)
+    late = next(topic for topic in topics if "img_2" in topic.image_ids)
+    assert "late figure" in result[late.start : late.end]
+    if with_source_spans:
+        assert "early figure" in result[early.start : early.end]
+        assert early.id != late.id
+    else:
+        assert early.id == late.id
