@@ -228,21 +228,20 @@ async def test_image_refs_match_database_after_filtering(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.parametrize("layout", ["inline", "table", "long-inline"])
+@pytest.mark.parametrize("layout", ["inline", "table", "long-inline", "empty-alt-line"])
 async def test_segmentation_keeps_images_in_their_source_topic(
     session_factory: async_sessionmaker[AsyncSession], monkeypatch: pytest.MonkeyPatch, layout: str
 ) -> None:
-    pictures = (
-        f"![diagram]({_png_data_url(64, 'red')}) "
-        f"![detail]({_png_data_url(80, 'blue')}) "
-        f"![tiny]({_png_data_url(8, 'white')})"
-    )
-    content = f"Paragraph about a diagram {pictures}."
+    pictures = f"![diagram]({_png_data_url(64, 'red')}) ![detail]({_png_data_url(80, 'blue')})"
+    tiny = _png_data_url(8, "white")
+    content = f"Paragraph about a diagram {pictures} ![tiny]({tiny})."
     if layout == "table":
-        content = f"Caption | Pictures\n--- | ---\nProcess | {pictures}"
+        content = f"Caption | Pictures\n--- | ---\nProcess | {pictures} ![tiny]({tiny})"
     if layout == "long-inline":
         content += " " + "word " * 30000 + "end."
     source = f"{content}\n\nAnother subject.\n".encode()
+    if layout == "empty-alt-line":
+        source = f"Paragraph about a diagram {pictures}.\n![]({tiny})\nAnother subject.\n".encode()
     async with session_factory() as session, session.begin():
         user = await UserRepository(session).create(email=f"{uuid4()}@example.com", password_hash="x", monthly_limit=20)
         document = await DocumentRepository(session).create(
