@@ -1,41 +1,64 @@
-import re
+from email.message import Message
 
+import anyio
 import httpx
 
 from src.app.contracts.documents.statuses import DocumentErrorCode
-from src.app.core.settings.ingest import get_ingest_settings
-
-_GDOCS_RE = re.compile(
-    r"^https://docs\.google\.com/document/(?:u/\d+/)?d/(?!e/)([A-Za-z0-9][A-Za-z0-9_-]*)(?:/[^?\s]*)?(?:\?[^\s]*)?$"
-)
-
-
-class GDocsImportError(Exception):
-    def __init__(self, code: DocumentErrorCode, message: str) -> None:
-        super().__init__(message)
-        self.code = code
+from src.app.exceptions.ingest import GDocsImportError as GDocsImportError
+from src.app.ingest.gdocs_url import gdocs_id
 
 
 class GDocsImporter:
-    def __init__(self, *, max_bytes: int | None = None, client: httpx.AsyncClient | None = None) -> None:
-        self._max_bytes = max_bytes or get_ingest_settings().gdocs_max_bytes
+    """Download a public Google Docs export within one size and time budget."""
+
+    def __init__(
+        self, *, max_bytes: int, client: httpx.AsyncClient | None = None, timeout_seconds: float = 30.0
+    ) -> None:
+        self._max_bytes = max_bytes
         self._client = client
+        self._timeout_seconds = timeout_seconds
 
     async def fetch(self, url: str) -> tuple[bytes, str | None]:
-        match = _GDOCS_RE.match(url.strip())
-        if match is None:
+        """Export a public document; malformed worker URLs are import failures."""
+        document_id = gdocs_id(url)
+        if document_id is None:
             raise GDocsImportError(DocumentErrorCode.GDOCS_IMPORT_FAILED, "Invalid Google Docs URL")
-        export_url = f"https://docs.google.com/document/d/{match.group(1)}/export?format=docx"
+        export_url = f"https://docs.google.com/document/d/{document_id}/export?format=docx"
         owns_client = self._client is None
-        client = self._client or httpx.AsyncClient(follow_redirects=True, timeout=30.0)
+        client = self._client or httpx.AsyncClient(timeout=self._timeout_seconds)
         try:
-            async with client.stream("GET", export_url) as response:
+            with anyio.fail_after(self._timeout_seconds):
+                return await self._download(client, export_url)
+        except GDocsImportError:
+            raise
+        except (TimeoutError, httpx.HTTPError) as exc:
+            raise GDocsImportError(DocumentErrorCode.GDOCS_IMPORT_FAILED, "Google Docs export failed") from exc
+        finally:
+            if owns_client:
+                await client.aclose()
+
+    async def _download(self, client: httpx.AsyncClient, export_url: str) -> tuple[bytes, str | None]:
+        url = httpx.URL(export_url)
+        for _ in range(10):
+            allowed = url.host == "docs.google.com" or url.host.endswith(".googleusercontent.com")
+            if url.scheme != "https" or not allowed:
+                raise GDocsImportError(DocumentErrorCode.GDOCS_IMPORT_FAILED, "Invalid Google Docs redirect")
+            async with client.stream("GET", url, follow_redirects=False) as response:
+                if response.is_redirect:
+                    location = response.headers.get("location")
+                    if not location:
+                        raise GDocsImportError(DocumentErrorCode.GDOCS_IMPORT_FAILED, "Invalid Google Docs redirect")
+                    url = url.join(location)
+                    continue
                 content_type = response.headers.get("content-type", "").lower()
                 if "text/html" in content_type:
                     raise GDocsImportError(DocumentErrorCode.GDOCS_NOT_PUBLIC, "Google Docs document is not public")
                 if response.status_code >= 400:
                     raise GDocsImportError(DocumentErrorCode.GDOCS_IMPORT_FAILED, "Google Docs export failed")
-                length = int(response.headers.get("content-length", "0") or 0)
+                try:
+                    length = int(response.headers.get("content-length", "0") or 0)
+                except ValueError as exc:
+                    raise GDocsImportError(DocumentErrorCode.GDOCS_IMPORT_FAILED, "Invalid export size") from exc
                 if length > self._max_bytes:
                     raise GDocsImportError(DocumentErrorCode.GDOCS_IMPORT_FAILED, "Google Docs export is too large")
                 chunks: list[bytes] = []
@@ -45,12 +68,8 @@ class GDocsImporter:
                     if total > self._max_bytes:
                         raise GDocsImportError(DocumentErrorCode.GDOCS_IMPORT_FAILED, "Google Docs export is too large")
                     chunks.append(chunk)
-                title = response.headers.get("x-goog-document-title")
+                disposition = Message()
+                disposition["content-disposition"] = response.headers.get("content-disposition", "")
+                title = disposition.get_filename()
                 return b"".join(chunks), title
-        except GDocsImportError:
-            raise
-        except (httpx.TimeoutException, httpx.HTTPError) as exc:
-            raise GDocsImportError(DocumentErrorCode.GDOCS_IMPORT_FAILED, "Google Docs export failed") from exc
-        finally:
-            if owns_client:
-                await client.aclose()
+        raise GDocsImportError(DocumentErrorCode.GDOCS_IMPORT_FAILED, "Too many Google Docs redirects")

@@ -1,24 +1,9 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import ClassVar
 
-
-@dataclass(frozen=True, slots=True)
-class ExtractedImage:
-    ref: str
-    data: bytes
-    media_type: str
-    page: int | None = None
-    caption: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class ParsedDocument:
-    markdown: str
-    images: tuple[ExtractedImage, ...] = ()
-    page_count: int | None = None
-    title: str | None = None
-    heading_pages: tuple[tuple[str, int], ...] = ()
+from src.app.contracts.ingest import ExtractedImage as ExtractedImage
+from src.app.contracts.ingest import ParsedDocument as ParsedDocument
+from src.app.exceptions.ingest import ParseError
 
 
 class DocumentParser(ABC):
@@ -38,4 +23,4 @@ class ParserRegistry:
         for parser in self._parsers:
             if normalized in parser.supported_mime_types:
                 return parser
-        raise ValueError(f"Unsupported document MIME type: {mime}")
+        raise ParseError(f"Unsupported document MIME type: {mime}")

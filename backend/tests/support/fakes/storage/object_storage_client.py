@@ -50,6 +50,14 @@ class FakeObjectStorageClient(ObjectStorageClient):
         self.delete_object_calls.append((bucket, key))
         self._objects.pop((bucket, key), None)
 
+    async def delete_prefix(self, *, bucket: StorageBucket, prefix: str) -> None:
+        self._raise_if_configured()
+        if not prefix:
+            raise ValueError("A non-empty prefix is required")
+        for name, key in list(self._objects):
+            if name == bucket and key.startswith(prefix):
+                await self.delete_object(bucket=bucket, key=key)
+
     def presign_get_url(
         self,
         *,

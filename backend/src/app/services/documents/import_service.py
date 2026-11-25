@@ -6,7 +6,6 @@ the network. The worker later builds the export URL from the extracted
 identifier, not from the user string, which closes SSRF.
 """
 
-import re
 from collections.abc import Callable
 from uuid import UUID, uuid4
 
@@ -16,6 +15,7 @@ from src.app.contracts.documents import DocumentRecord, MaterialRole, SourceType
 from src.app.core.settings.processing import ProcessingSettings
 from src.app.exceptions.documents import InvalidGdocsUrlError
 from src.app.exceptions.tasks import TaskDispatchError
+from src.app.ingest.gdocs_url import gdocs_id
 from src.app.interfaces.repositories.documents import (
     DocumentRepositoryProtocol,
     UserMaterialRepositoryProtocol,
@@ -31,9 +31,6 @@ from src.app.services.documents.processing_capacity import assert_processing_cap
 # query string are tolerated, the bare id link is not part of the
 # contract. The first character must be alphanumeric: ``/d/e/2PACX-...``
 # is the Drive "export token" form, not a document id.
-_GDOCS_URL_RE = re.compile(
-    r"^https://docs\.google\.com/document/(?:u/\d+/)?d/(?!e/)([A-Za-z0-9][A-Za-z0-9_-]*)(/[^?\s]*)?(?:\?[^\s]*)?$"
-)
 
 # a stable placeholder for the not-yet-exported source object; the
 # worker addresses the export by the identifier in source_uri
@@ -44,10 +41,10 @@ GDOCS_MIME_TYPE = "application/vnd.google-apps.document"
 
 def extract_gdocs_id(url: str) -> str:
     """Return the document identifier of a Google Docs link or raise 422."""
-    match = _GDOCS_URL_RE.match(url.strip())
-    if match is None:
+    document_id = gdocs_id(url)
+    if document_id is None:
         raise InvalidGdocsUrlError()
-    return match.group(1)
+    return document_id
 
 
 class ImportService:

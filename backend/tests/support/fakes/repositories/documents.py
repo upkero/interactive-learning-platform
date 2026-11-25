@@ -96,13 +96,31 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
             self._documents[document_id] = replace(self._documents[document_id], updated_at=now())
 
     async def update_source(
-        self, document_id: UUID, *, object_key: str, title: str | None = None, page_count: int | None = None
+        self,
+        document_id: UUID,
+        *,
+        object_key: str,
+        title: str | None = None,
+        page_count: int | None = None,
+        mime_type: str | None = None,
+        size_bytes: int | None = None,
     ) -> None:
         row = self._documents.get(document_id)
         if row is not None:
             self._documents[document_id] = replace(
-                row, object_key=object_key, title=title or row.title, page_count=page_count or row.page_count
+                row,
+                object_key=object_key,
+                title=title or row.title,
+                page_count=page_count if page_count is not None else row.page_count,
+                mime_type=mime_type if mime_type is not None else row.mime_type,
+                size_bytes=size_bytes if size_bytes is not None else row.size_bytes,
             )
+
+    async def begin_parsing(self, document_id: UUID) -> DocumentRecord | None:
+        row = self._documents.get(document_id)
+        if row is None or row.status not in {DocumentStatus.UPLOADED, DocumentStatus.PARSING, DocumentStatus.FAILED}:
+            return None
+        return await self.set_status(document_id, DocumentStatus.PARSING)
 
     async def get_owned(self, document_id: UUID, owner_id: UUID) -> DocumentRecord | None:
         row = self._documents.get(document_id)

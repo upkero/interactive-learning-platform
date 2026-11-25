@@ -11,7 +11,11 @@ class TokenCounter:
     def count(self, text: str) -> int:
         if not text:
             return 0
-        return max(1, int(len(self._encoding.encode(text, disallowed_special=())) * self._calibration))
+        return int(self.count_raw(text) * self._calibration) + 1
+
+    def count_raw(self, text: str) -> int:
+        """Uncalibrated tiktoken count, for calibration reports."""
+        return len(self._encoding.encode(text, disallowed_special=()))
 
 
 @lru_cache(maxsize=1)

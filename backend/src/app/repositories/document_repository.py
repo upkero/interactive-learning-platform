@@ -50,6 +50,16 @@ class DocumentRepository(DocumentRepositoryProtocol):
         row = await self._session.get(Document, document_id)
         return self._to_record(row) if row is not None else None
 
+    async def begin_parsing(self, document_id: UUID) -> DocumentRecord | None:
+        stmt = (
+            update(Document)
+            .where(Document.id == document_id, Document.status.in_(["uploaded", "parsing", "failed"]))
+            .values(status="parsing", error_code=None, error_detail=None)
+            .returning(Document)
+        )
+        row = (await self._session.scalars(stmt)).first()
+        return self._to_record(row) if row is not None else None
+
     async def refresh_status(self, document_id: UUID) -> None:
         """Finish a generation when all parts are terminal; any publication makes it done."""
         stmt = select(Document).where(Document.id == document_id).with_for_update()
@@ -84,7 +94,14 @@ class DocumentRepository(DocumentRepositoryProtocol):
         await self._session.execute(update(Document).where(Document.id == document_id).values(updated_at=func.now()))
 
     async def update_source(
-        self, document_id: UUID, *, object_key: str, title: str | None = None, page_count: int | None = None
+        self,
+        document_id: UUID,
+        *,
+        object_key: str,
+        title: str | None = None,
+        page_count: int | None = None,
+        mime_type: str | None = None,
+        size_bytes: int | None = None,
     ) -> None:
         row = await self._session.get(Document, document_id)
         if row is not None:
@@ -93,6 +110,10 @@ class DocumentRepository(DocumentRepositoryProtocol):
                 row.title = title
             if page_count is not None:
                 row.page_count = page_count
+            if mime_type is not None:
+                row.mime_type = mime_type
+            if size_bytes is not None:
+                row.size_bytes = size_bytes
             await self._session.flush()
 
     async def get_owned(self, document_id: UUID, owner_id: UUID) -> DocumentRecord | None:

@@ -30,6 +30,8 @@ class DocumentRepositoryProtocol(Protocol):
 
     async def get(self, document_id: UUID) -> DocumentRecord | None: ...
 
+    async def begin_parsing(self, document_id: UUID) -> DocumentRecord | None: ...
+
     async def get_owned(self, document_id: UUID, owner_id: UUID) -> DocumentRecord | None: ...
 
     async def create(
@@ -73,7 +75,14 @@ class DocumentRepositoryProtocol(Protocol):
     async def touch(self, document_id: UUID) -> None: ...
 
     async def update_source(
-        self, document_id: UUID, *, object_key: str, title: str | None = None, page_count: int | None = None
+        self,
+        document_id: UUID,
+        *,
+        object_key: str,
+        title: str | None = None,
+        page_count: int | None = None,
+        mime_type: str | None = None,
+        size_bytes: int | None = None,
     ) -> None: ...
 
 

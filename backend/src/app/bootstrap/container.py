@@ -1,5 +1,5 @@
 import inspect
-from functools import cached_property
+from functools import cached_property, lru_cache
 from logging import getLogger
 
 import redis.asyncio as aioredis
@@ -9,6 +9,7 @@ from src.app.core.clock import SystemClock
 from src.app.core.settings.app import get_app_settings
 from src.app.core.settings.auth import AuthSettings, get_auth_settings
 from src.app.core.settings.celery import get_celery_settings
+from src.app.core.settings.ingest import get_ingest_settings
 from src.app.core.settings.llm import CheapLLMSettings, LLMSettings, get_cheap_llm_settings, get_llm_settings
 from src.app.core.settings.processing import ProcessingSettings, get_processing_settings
 from src.app.core.settings.progress import get_progress_settings
@@ -17,9 +18,11 @@ from src.app.core.settings.reports import ReportsSettings, get_reports_settings
 from src.app.core.settings.smtp import get_smtp_settings
 from src.app.core.settings.storage import get_storage_settings
 from src.app.core.settings.upload import get_upload_settings
+from src.app.db.parsing_lease import PostgresParsingLease
 from src.app.db.session import build_engine, build_session_factory
 from src.app.ingest.parsers.base import DocumentParser as IngestDocumentParser
 from src.app.ingest.parsers.base import ParserRegistry
+from src.app.ingest.parsers.gdocs_importer import GDocsImporter
 from src.app.ingest.parsers.markdown_parser import MarkdownParser
 from src.app.ingest.tokens import get_token_counter
 from src.app.interfaces.llm.llm_client import LLMClient
@@ -44,7 +47,6 @@ from src.app.repositories.widget_repository import WidgetRepository
 from src.app.repositories.widget_usage_repository import WidgetUsageRepository
 from src.app.services.auth.auth_service import AuthService
 from src.app.services.documents.document_ingest_service import DocumentIngestService
-from src.app.services.documents.document_parser import DocumentParser as WorkerDocumentParser
 from src.app.services.documents.document_query_service import DocumentQueryService
 from src.app.services.documents.file_inspector import FileInspector
 from src.app.services.documents.generation_service import GenerationService
@@ -72,6 +74,7 @@ from src.app.storage.s3_object_storage_client import S3ObjectStorageClient, buil
 from src.app.tasks.dispatcher import CeleryTaskDispatcher
 
 
+@lru_cache(maxsize=1)
 def _build_docling_parser() -> IngestDocumentParser:
     from src.app.ingest.parsers.docling_parser import DoclingParser
 
@@ -102,10 +105,6 @@ class ApplicationContainer:
     # -- services -----------------------------------------------------------
 
     @cached_property
-    def document_parser(self) -> WorkerDocumentParser:
-        return WorkerDocumentParser()
-
-    @cached_property
     def document_ingest(self) -> DocumentIngestService:
         return DocumentIngestService(
             session_factory=self.session_factory,
@@ -113,9 +112,17 @@ class ApplicationContainer:
             images=ImageRepository,
             storage=self.object_storage,
             registry=ParserRegistry((_build_docling_parser(), MarkdownParser())),
+            gdocs=GDocsImporter(max_bytes=get_upload_settings().max_bytes),
+            parsing_lease=PostgresParsingLease(self._db_engine),
             notifier=self.progress_notifier,
-            image_describer=ImageDescriber(self.cheap_llm),
-            topic_segmenter=TopicSegmenter(self.cheap_llm, counter=get_token_counter()),
+            image_describer=ImageDescriber(
+                self.cheap_llm,
+                max_images=get_ingest_settings().max_images,
+                concurrency=get_ingest_settings().image_concurrency,
+            ),
+            topic_segmenter=TopicSegmenter(
+                self.cheap_llm, counter=get_token_counter(), max_tokens=get_ingest_settings().segment_max_tokens
+            ),
         )
 
     @cached_property

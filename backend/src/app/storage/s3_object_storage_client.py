@@ -145,6 +145,21 @@ class S3ObjectStorageClient(ObjectStorageClient):
         except (BotoCoreError, ClientError) as exc:
             raise ObjectStorageError(f"Failed to delete object: {key}") from exc
 
+    async def delete_prefix(self, *, bucket: StorageBucket, prefix: str) -> None:
+        if not prefix:
+            raise ValueError("A non-empty prefix is required")
+        try:
+            await asyncio.to_thread(self._delete_prefix, self._bucket(bucket), prefix)
+        except (BotoCoreError, ClientError) as exc:
+            raise ObjectStorageError(f"Failed to delete prefix: {prefix}") from exc
+
+    def _delete_prefix(self, bucket: str, prefix: str) -> None:
+        paginator = self._client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            objects = [{"Key": item["Key"]} for item in page.get("Contents", [])]
+            if objects:
+                self._client.delete_objects(Bucket=bucket, Delete={"Objects": objects})
+
     def presign_get_url(
         self,
         *,

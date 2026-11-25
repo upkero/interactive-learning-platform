@@ -3,6 +3,7 @@ import binascii
 import re
 from pathlib import PurePosixPath
 
+from src.app.exceptions.ingest import ParseError
 from src.app.ingest.parsers.base import DocumentParser, ExtractedImage, ParsedDocument
 
 _IMAGE = re.compile(r"!\[([^]]*)\]\(([^)\s]+)(?:\s+[^)]*)?\)")
@@ -13,7 +14,10 @@ class MarkdownParser(DocumentParser):
     supported_mime_types = frozenset({"text/markdown", "text/plain"})
 
     def parse(self, data: bytes, *, filename: str) -> ParsedDocument:
-        text = data.decode("utf-8-sig")
+        try:
+            text = data.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise ParseError("Markdown must be UTF-8") from exc
         text = text.replace("\r\n", "\n").replace("\r", "\n")
         lines = text.splitlines()
         result: list[str] = []
@@ -23,7 +27,13 @@ class MarkdownParser(DocumentParser):
             line = lines[i]
             if line.lstrip().startswith("```") or line.lstrip().startswith("~~~"):
                 in_fence = not in_fence
-            if not in_fence and i + 1 < len(lines) and line.strip() and re.fullmatch(r"\s*(=+|-+)\s*", lines[i + 1]):
+            if (
+                not in_fence
+                and i + 1 < len(lines)
+                and line.strip()
+                and not re.match(r"^\s{0,3}(?:[-+*]\s|\d+[.)]\s)", line)
+                and re.fullmatch(r"\s*(=+|-+)\s*", lines[i + 1])
+            ):
                 result.append(f"{'#' if lines[i + 1].strip()[0] == '=' else '##'} {line.strip()}")
                 i += 2
                 continue
