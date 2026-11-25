@@ -25,7 +25,6 @@ from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.llm.factory import create_llm_client
 from src.app.llm.instrumented_llm_client import InstrumentedLLMClient
 from src.app.observability.decision_log import DecisionLog
-from src.app.observability.noop_metrics_collector import NoopMetricsCollector
 from src.app.observability.notification_claims import RedisNotificationClaims
 from src.app.observability.progress_notifier import RedisProgressNotifier
 from src.app.observability.prometheus_metrics_collector import PrometheusMetricsCollector
@@ -127,6 +126,7 @@ class ApplicationContainer:
             notifier=self.progress_notifier,
             users=UserRepository,
             notifications=self.notification_service,
+            metrics=self.metrics_collector,
         )
 
     @cached_property
@@ -250,7 +250,7 @@ class ApplicationContainer:
             reports=ReportRepository,
             usages=WidgetUsageRepository,
             widgets=WidgetRepository,
-            decision_log=DecisionLog(metrics=NoopMetricsCollector()),
+            decision_log=DecisionLog(metrics=self.metrics_collector),
             settings=self.reports_settings,
         )
 

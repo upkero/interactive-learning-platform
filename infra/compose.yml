@@ -7,6 +7,8 @@ x-backend: &backend
     target: runtime
   image: grasp-backend:dev
   env_file: ../backend/.env
+  environment:
+    LOG_FORMAT: json
 
 # Условие: сервисы стартуют только после готовности БД, Redis, MinIO и выполнения миграций
 x-backend-deps: &backend-deps
@@ -131,17 +133,14 @@ services:
   # 7. Воркер фоновых задач Celery
   worker:
     <<: *backend
+    expose: ["9101"]
     command:
-      [
-        "celery",
-        "-A",
-        "src.worker",
-        "worker",
-        "-Q",
-        "maintenance,parts.high,parts",
-        "--concurrency=2",
-        "--loglevel=INFO",
-      ]
+      ["sh", "-c", "rm -rf /tmp/prom/* && exec celery -A src.worker worker -Q maintenance,parts.high,parts --concurrency=2 --loglevel=INFO"]
+    environment:
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prom
+      LOG_FORMAT: json
+    tmpfs:
+      - /tmp/prom:uid=1001,gid=1001,mode=0700
     depends_on: *backend-deps
     networks:
       - default
@@ -168,6 +167,36 @@ services:
     depends_on: *backend-deps
     # В beat нет веб-сервера — HTTP-healthcheck из Dockerfile неуместен
     healthcheck: { disable: true }
+
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    ports: ["127.0.0.1:9090:9090"]
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  loki:
+    image: grafana/loki:3.3.2
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    ports: ["127.0.0.1:3100:3100"]
+    volumes:
+      - ./observability/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - lokidata:/loki
+
+  promtail:
+    image: grafana/promtail:3.3.2
+    command: ["-config.file=/etc/promtail/promtail-config.yml"]
+    volumes:
+      - ./observability/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    ports: ["127.0.0.1:3001:3000"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-local-only-change-me}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
 
   # 9. Изолированная песочница для безопасного рендера виджетов
   sandbox:
@@ -205,3 +234,4 @@ volumes:
   pgdata: {}
   redisdata: {}
   ollamadata: {}
+  lokidata: {}

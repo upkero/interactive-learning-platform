@@ -5,6 +5,7 @@ import uvicorn
 from fastapi import FastAPI
 
 from src.app.api.v1.exception_handlers import register_exception_handlers
+from src.app.api.v1.middleware.metrics import register_metrics
 from src.app.api.v1.middleware.rate_limit import register_rate_limit
 from src.app.api.v1.middleware.request_id import register_request_id_middleware
 from src.app.api.v1.router import api_router
@@ -53,6 +54,7 @@ def create_app() -> FastAPI:
     )
 
     register_request_id_middleware(app)
+    register_metrics(app)
     register_rate_limit(app)
     register_exception_handlers(app)
 
