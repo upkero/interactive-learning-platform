@@ -4,6 +4,9 @@ import { routing } from '@/shared/i18n/routing';
 
 const intlMiddleware = createIntlMiddleware(routing);
 
+// Session cookie name - matches backend AUTH_SESSION_COOKIE_NAME
+const SESSION_COOKIE = 'grasp_session';
+
 const PROTECTED_PREFIXES = ['/materials', '/upload', '/documents', '/parts'];
 
 function isProtectedRoute(pathname: string): boolean {
@@ -14,16 +17,20 @@ export default function middleware(request: NextRequest) {
   const response = intlMiddleware(request);
 
   const pathname = request.nextUrl.pathname;
-  const localeMatch = pathname.match(/^\/(ru|en)/);
-  const locale = localeMatch ? localeMatch[1] : routing.defaultLocale;
-  const localePathname = pathname.slice(locale.length + 1) || '/';
+
+  // Extract locale using routing config
+  const localeMatch = routing.locales.find((l) => pathname.startsWith(`/${l}/`));
+  const locale = localeMatch || routing.defaultLocale;
+  const localePrefix = `/${locale}`;
+  const localePathname = pathname.slice(localePrefix.length) || '/';
 
   if (isProtectedRoute(localePathname)) {
-    const sessionCookie = request.headers.get('cookie') || '';
-    const hasSession = sessionCookie.includes('grasp_session=');
+    const sessionCookie = request.cookies.get(SESSION_COOKIE)?.value;
 
-    if (!hasSession) {
+    if (!sessionCookie || sessionCookie.trim() === '') {
       const loginUrl = new URL(`/${locale}/login`, request.url);
+      // Preserve the original path and query as `next` parameter
+      loginUrl.searchParams.set('next', pathname + request.nextUrl.search);
       return NextResponse.redirect(loginUrl);
     }
   }

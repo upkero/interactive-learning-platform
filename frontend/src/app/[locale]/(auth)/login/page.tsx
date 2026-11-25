@@ -1,6 +1,6 @@
 import { getTranslations } from 'next-intl/server';
 import { Suspense } from 'react';
-import { LoginForm } from '@/features/auth';
+import { LoginPageClient } from './LoginPageClient';
 import styles from '../auth.module.css';
 
 export default async function LoginPage({
@@ -14,7 +14,7 @@ export default async function LoginPage({
   return (
     <div className={styles.content}>
       <Suspense fallback={<p className={styles.loading}>{t('loading')}</p>}>
-        <LoginForm mode="login" />
+        <LoginPageClient />
       </Suspense>
     </div>
   );

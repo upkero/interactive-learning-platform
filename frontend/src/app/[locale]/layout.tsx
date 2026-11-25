@@ -1,9 +1,6 @@
-import '@grasp/primitives/tokens.css';
-import '@/shared/styles/globals.css';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import type { ReactNode } from 'react';
-import { QueryProvider } from '@/shared/api/query-provider';
 
 export default async function LocaleLayout({
   children,
@@ -19,7 +16,7 @@ export default async function LocaleLayout({
     <html lang={locale}>
       <body>
         <NextIntlClientProvider locale={locale} messages={messages}>
-          <QueryProvider>{children}</QueryProvider>
+          {children}
         </NextIntlClientProvider>
       </body>
     </html>

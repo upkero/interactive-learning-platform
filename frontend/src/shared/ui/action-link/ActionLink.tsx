@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { Link } from '@/shared/i18n/navigation';
 import type { ReactNode, AnchorHTMLAttributes } from 'react';
 import styles from './ActionLink.module.css';
 

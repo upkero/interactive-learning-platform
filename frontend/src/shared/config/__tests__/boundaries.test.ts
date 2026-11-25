@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import boundariesPlugin from 'eslint-plugin-boundaries';
 
-describe('eslint-plugin-boundaries', () => {
+describe('eslint-plugin-boundaries config', () => {
   it('should export the plugin', () => {
     expect(boundariesPlugin).toBeDefined();
     expect(boundariesPlugin.rules).toBeDefined();

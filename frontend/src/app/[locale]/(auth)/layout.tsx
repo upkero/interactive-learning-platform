@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import styles from './layout.module.css';
 
@@ -18,7 +17,7 @@ export default async function AuthLayout({ children, params }: AuthLayoutProps) 
       <aside className={styles.leftPanel} aria-hidden="true">
         <div className={styles.leftContent}>
           <div className={styles.brandTop}>
-            <Link href={`/${locale}/materials`} className={styles.brand} aria-label={tCommon('appName')}>
+            <a href={`/${locale}/materials`} className={styles.brand} aria-label={tCommon('appName')}>
               <span className={styles.brandMark}>
                 <svg width="48" height="48" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                   <rect width="32" height="32" rx="8" fill="currentColor" />
@@ -26,7 +25,7 @@ export default async function AuthLayout({ children, params }: AuthLayoutProps) 
                 </svg>
               </span>
               <span className={styles.brandText}>{tCommon('appName')}</span>
-            </Link>
+            </a>
           </div>
 
           <div className={styles.centerSymbol} aria-hidden="true">
@@ -47,14 +46,6 @@ export default async function AuthLayout({ children, params }: AuthLayoutProps) 
       {/* Right panel - Form */}
       <main className={styles.rightPanel}>
         <div className={styles.rightContent}>
-          <div className={styles.formSwitcher}>
-            <Link
-              href={locale === 'ru' ? `/${locale}/register` : `/${locale}/login`}
-              className={styles.switchLink}
-            >
-              {locale === 'ru' ? 'Регистрация' : 'Sign up'}
-            </Link>
-          </div>
           {children}
         </div>
       </main>

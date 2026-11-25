@@ -1,7 +1,7 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { Link } from '@/shared/i18n/navigation';
+import { usePathname } from '@/shared/i18n/navigation-client';
 import { useTranslations } from 'next-intl';
 import { UserMenu } from '@/features/auth';
 import { LocaleSwitch } from '@/features/locale';

@@ -44,6 +44,32 @@ export default tseslint.config(
         ],
       }],
       'boundaries/no-unknown': 'error',
+      'no-restricted-imports': ['error', {
+        patterns: [
+          {
+            group: ['next/link', 'next/navigation'],
+            message: 'Use @/shared/i18n/navigation instead',
+          },
+        ],
+        paths: [
+          {
+            name: 'next/link',
+            message: 'Use @/shared/i18n/navigation instead',
+            importNames: ['default'],
+          },
+          {
+            name: 'next/navigation',
+            message: 'Use @/shared/i18n/navigation instead',
+          },
+        ],
+      }],
+    },
+  },
+  // Allow next/link and next/navigation in specific files
+  {
+    files: ['src/shared/i18n/navigation.ts', 'src/shared/i18n/navigation-client.ts', 'src/middleware.ts'],
+    rules: {
+      'no-restricted-imports': 'off',
     },
   },
 );

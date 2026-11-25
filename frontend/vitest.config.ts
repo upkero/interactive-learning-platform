@@ -9,5 +9,10 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    setupFiles: ['./vitest.setup.ts'],
+  },
+  esbuild: {
+    jsx: 'automatic',
+    jsxImportSource: 'react',
   },
 });

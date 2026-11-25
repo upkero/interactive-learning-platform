@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from '@/shared/i18n/navigation-client';
 import { useDocument } from '../model/useDocument';
 import type { MaterialStatus } from './types';
 import { getRedirectForStatus, getRouteForStep, type WizardStep } from './types';

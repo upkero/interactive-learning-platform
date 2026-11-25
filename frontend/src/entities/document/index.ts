@@ -40,3 +40,15 @@ export {
   useDocumentStatusGuard,
   useDocumentErrorRedirect,
 } from './guard/useDocumentStatusGuard';
+
+export {
+  SseEventType,
+  type StageEventData,
+  type PartStatusEventData,
+  type PartReadyEventData,
+  type DocumentDoneEventData,
+  type ErrorEventData,
+  type SseEvent,
+  isFinalEvent,
+  parseSseEvent,
+} from './model/events';

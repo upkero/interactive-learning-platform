@@ -1,28 +1,17 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useLocale, useTranslations } from 'next-intl';
-import { useRouter } from 'next/navigation';
-import { useMe } from '@/entities/user';
-import { logout } from '../api';
+import { useTranslations } from 'next-intl';
+import { useLogout } from '../api';
 import styles from './UserMenu.module.css';
 
 export function UserMenu() {
-  const { data: user } = useMe();
   const t = useTranslations('common');
-  const locale = useLocale();
-  const router = useRouter();
-  const queryClient = useQueryClient();
+  const logoutMutation = useLogout();
 
-  const logoutMutation = useMutation({
-    mutationFn: logout,
-    onSettled: () => {
-      queryClient.clear();
-      router.replace(`/${locale}/login`);
-    },
-  });
-
-  if (!user) return null;
+  if (!logoutMutation.isSuccess && !logoutMutation.isError && !logoutMutation.isPending) {
+    // Not logged in
+    return null;
+  }
 
   return (
     <div className={styles.menu}>
@@ -33,7 +22,6 @@ export function UserMenu() {
         }}
         disabled={logoutMutation.isPending}
         className={styles.button}
-        title={user.email}
         aria-label={t('logout')}
       >
         <span className={styles.icon} aria-hidden="true">

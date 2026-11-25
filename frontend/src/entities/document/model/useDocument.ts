@@ -1,10 +1,10 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/shared/api/client';
+import { apiClient, unwrap, qk } from '@/shared/api';
 import type { components } from '@/shared/api/schema';
 
-export const DOCUMENT_QUERY_KEY = ['document'] as const;
+export const DOCUMENT_QUERY_KEY = (documentId: string) => qk.document(documentId);
 
 export type DocumentOut = components['schemas']['DocumentOut'];
 export type PartSummaryOut = components['schemas']['PartSummaryOut'];
@@ -31,30 +31,47 @@ export interface DocumentPart {
 
 export function useDocument(documentId: string | null) {
   return useQuery({
-    queryKey: [...DOCUMENT_QUERY_KEY, documentId],
+    queryKey: documentId ? DOCUMENT_QUERY_KEY(documentId) : ['document', 'null'],
     enabled: !!documentId,
     queryFn: async () => {
       if (!documentId) throw new Error('Document ID is required');
-      const { data, response } = await apiClient.GET('/api/v1/documents/{document_id}', {
+      return unwrap(apiClient.GET('/api/v1/documents/{document_id}', {
         params: { path: { document_id: documentId } },
-      });
-      if (!response.ok || !data) throw new Error('Failed to load document');
-      return data;
+      }));
     },
   });
 }
 
 export function useDocumentTopics(documentId: string | null) {
   return useQuery({
-    queryKey: [...DOCUMENT_QUERY_KEY, documentId, 'topics'],
+    queryKey: documentId ? qk.documentTopics(documentId) : ['document', 'null', 'topics'],
     enabled: !!documentId,
     queryFn: async () => {
       if (!documentId) throw new Error('Document ID is required');
-      const { data, response } = await apiClient.GET('/api/v1/documents/{document_id}/topics', {
+      const data = await unwrap(apiClient.GET('/api/v1/documents/{document_id}/topics', {
         params: { path: { document_id: documentId } },
-      });
-      if (!response.ok || !data) throw new Error('Failed to load topics');
+      }));
       return data.topics;
+    },
+  });
+}
+
+export function useDocumentParts(documentId: string | null) {
+  // Use select to derive parts from the document query (no duplicate request)
+  return useQuery({
+    queryKey: documentId ? qk.documentParts(documentId) : ['document', 'null', 'parts'],
+    enabled: !!documentId,
+    queryFn: async () => {
+      if (!documentId) throw new Error('Document ID is required');
+      const document = await unwrap(apiClient.GET('/api/v1/documents/{document_id}', {
+        params: { path: { document_id: documentId } },
+      }));
+      return document.parts.map(p => ({
+        id: p.id,
+        index: p.index,
+        title: p.title,
+        status: p.status,
+      }));
     },
   });
 }
@@ -64,15 +81,15 @@ export function useUploadDocument() {
 
   return useMutation({
     mutationFn: async (formData: FormData) => {
-      const { data, response } = await apiClient.POST('/api/v1/documents', {
+      const { data } = await apiClient.POST('/api/v1/documents', {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         body: formData as any,
       });
-      if (!response.ok) throw new Error('Failed to upload document');
+      if (!data) throw new Error('Failed to upload document');
       return data;
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['materials'] });
+      void queryClient.invalidateQueries({ queryKey: qk.materials() });
     },
   });
 }
@@ -82,14 +99,10 @@ export function useImportDocument() {
 
   return useMutation({
     mutationFn: async (url: string) => {
-      const { data, response } = await apiClient.POST('/api/v1/documents/import', {
-        body: { url },
-      });
-      if (!response.ok) throw new Error('Failed to import document');
-      return data;
+      return unwrap(apiClient.POST('/api/v1/documents/import', { body: { url } }));
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['materials'] });
+      void queryClient.invalidateQueries({ queryKey: qk.materials() });
     },
   });
 }
@@ -105,16 +118,14 @@ export function useGenerateDocument() {
       documentId: string;
       body: GenerateRequest;
     }) => {
-      const { data, response } = await apiClient.POST('/api/v1/documents/{document_id}/generate', {
+      return unwrap(apiClient.POST('/api/v1/documents/{document_id}/generate', {
         params: { path: { document_id: documentId } },
         body,
-      });
-      if (!response.ok) throw new Error('Failed to start generation');
-      return data;
+      }));
     },
     onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({ queryKey: [...DOCUMENT_QUERY_KEY, variables.documentId] });
-      void queryClient.invalidateQueries({ queryKey: ['me', 'quota'] });
+      void queryClient.invalidateQueries({ queryKey: qk.document(variables.documentId) });
+      void queryClient.invalidateQueries({ queryKey: qk.quota });
     },
   });
 }
@@ -128,31 +139,9 @@ export function usePlanDocument() {
       documentId: string;
       body: PlanRequest;
     }) => {
-      const { data, response } = await apiClient.POST('/api/v1/documents/{document_id}/plan', {
+      return unwrap(apiClient.POST('/api/v1/documents/{document_id}/plan', {
         params: { path: { document_id: documentId } },
         body,
-      });
-      if (!response.ok) throw new Error('Failed to plan generation');
-      return data;
-    },
-  });
-}
-
-export function useDocumentParts(documentId: string | null) {
-  return useQuery({
-    queryKey: [...DOCUMENT_QUERY_KEY, documentId, 'parts'],
-    enabled: !!documentId,
-    queryFn: async () => {
-      if (!documentId) throw new Error('Document ID is required');
-      const { data, response } = await apiClient.GET('/api/v1/documents/{document_id}', {
-        params: { path: { document_id: documentId } },
-      });
-      if (!response.ok || !data) throw new Error('Failed to load document');
-      return data.parts.map(p => ({
-        id: p.id,
-        index: p.index,
-        title: p.title,
-        status: p.status,
       }));
     },
   });
@@ -160,15 +149,13 @@ export function useDocumentParts(documentId: string | null) {
 
 export function usePart(partId: string | null) {
   return useQuery({
-    queryKey: [...DOCUMENT_QUERY_KEY, 'part', partId],
+    queryKey: partId ? qk.part(partId) : ['part', 'null'],
     enabled: !!partId,
     queryFn: async () => {
       if (!partId) throw new Error('Part ID is required');
-      const { data, response } = await apiClient.GET('/api/v1/parts/{part_id}', {
+      return unwrap(apiClient.GET('/api/v1/parts/{part_id}', {
         params: { path: { part_id: partId } },
-      });
-      if (!response.ok || !data) throw new Error('Failed to load part');
-      return data;
+      }));
     },
   });
 }

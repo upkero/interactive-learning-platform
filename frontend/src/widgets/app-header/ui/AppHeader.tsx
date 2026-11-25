@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { Link, getPathname } from '@/shared/i18n/navigation';
 import { getTranslations } from 'next-intl/server';
 import { UserMenu } from '@/features/auth';
 import { LocaleSwitch } from '@/features/locale';
@@ -10,17 +10,21 @@ export async function AppHeader({ locale }: { locale: string }) {
   const tMaterials = await getTranslations({ locale, namespace: 'materials' });
   const tUpload = await getTranslations({ locale, namespace: 'upload' });
 
+  // Use getPathname for server-side link generation
+  const materialsPath = getPathname({ locale, href: '/materials' });
+  const uploadPath = getPathname({ locale, href: '/upload' });
+
   return (
     <header className={styles.header}>
-      <Link href={`/${locale}/materials`} className={styles.brand}>
+      <Link href={materialsPath} className={styles.brand}>
         {tCommon('appName')}
       </Link>
 
       <nav className={styles.nav} aria-label={tCommon('appName')}>
-        <Link href={`/${locale}/materials`} className={styles.navLink}>
+        <Link href={materialsPath} className={styles.navLink}>
           {tMaterials('title')}
         </Link>
-        <Link href={`/${locale}/upload`} className={styles.navLink}>
+        <Link href={uploadPath} className={styles.navLink}>
           {tUpload('title')}
         </Link>
       </nav>

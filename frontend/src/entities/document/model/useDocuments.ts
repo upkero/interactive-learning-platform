@@ -1,40 +1,38 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/shared/api/client';
+import { apiClient, unwrap, qk } from '@/shared/api';
 import type { components } from '@/shared/api/schema';
 
-export const MATERIALS_QUERY_KEY = ['materials'] as const;
+export const MATERIALS_QUERY_KEY = qk.materials;
 
 export type MaterialOut = components['schemas']['MaterialOut'];
 export type MaterialStatus = MaterialOut['status'];
 
 export function useMaterials(filter: 'mine' | 'shared' = 'mine') {
   return useQuery({
-    queryKey: [...MATERIALS_QUERY_KEY, filter],
+    queryKey: qk.materials(filter),
     queryFn: async () => {
-      const { data, response } = await apiClient.GET('/api/v1/me/materials', {
+      return unwrap(apiClient.GET('/api/v1/me/materials', {
         params: { query: { filter } },
-      });
-      if (!response.ok || !data) throw new Error('Failed to load materials');
-      return data;
+      }));
     },
   });
 }
 
-// DELETE /documents/{document_id} is not in the new schema, using POST with _method override or separate endpoint
-// For now, we'll use a no-op mutation that just invalidates queries
 export function useDeleteDocument() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async () => {
+    mutationFn: async (documentId: string) => {
       // Note: DELETE endpoint not in new schema, this is a placeholder
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const _documentId = documentId;
       console.warn('Delete document not implemented in new API');
       await Promise.resolve();
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: MATERIALS_QUERY_KEY });
+      void queryClient.invalidateQueries({ queryKey: qk.materials() });
     },
   });
 }

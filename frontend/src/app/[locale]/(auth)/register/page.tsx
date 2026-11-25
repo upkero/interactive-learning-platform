@@ -1,6 +1,6 @@
 import { getTranslations } from 'next-intl/server';
 import { Suspense } from 'react';
-import { LoginForm } from '@/features/auth';
+import { RegisterPageClient } from './RegisterPageClient';
 import styles from '../auth.module.css';
 
 export default async function RegisterPage({
@@ -14,7 +14,7 @@ export default async function RegisterPage({
   return (
     <div className={styles.content}>
       <Suspense fallback={<p className={styles.loading}>{t('loading')}</p>}>
-        <LoginForm mode="register" />
+        <RegisterPageClient />
       </Suspense>
     </div>
   );

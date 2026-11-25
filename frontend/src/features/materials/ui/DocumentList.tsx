@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { Link } from '@/shared/i18n/navigation';
 import { useTranslations } from 'next-intl';
 import { useMaterials, useDeleteDocument, getMaterialRoute, type MaterialOut } from '@/entities/document';
 import { ApiError } from '@/shared/api/errors';
@@ -83,7 +83,7 @@ export function DocumentList({ scope = 'mine' }: DocumentListProps) {
       <div className={styles.emptyState}>
         <p className={styles.emptyText}>{tEmpty(emptyKey)}</p>
         {scope === 'mine' && (
-          <Link href={`/${tCommon('appName').toLowerCase()}/upload`} className={styles.emptyAction}>
+          <Link href="/upload" className={styles.emptyAction}>
             {t('uploadButton')}
           </Link>
         )}
@@ -139,7 +139,7 @@ function DocumentRow({ doc, deleteMutation }: DocumentRowProps) {
     e.stopPropagation();
     if (!window.confirm(t('deleteConfirm', { title: doc.title }))) return;
 
-    void deleteMutation.mutateAsync().catch((error: unknown) => {
+    deleteMutation.mutateAsync(doc.document_id).catch((error: unknown) => {
       const message = error instanceof ApiError
         ? tErrors(error.code)
         : tErrors('unknown_error');
