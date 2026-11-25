@@ -9,6 +9,7 @@ from src.app.contracts.llm.llm_message import LLMMessage
 from src.app.contracts.llm.llm_request import LLMRequest
 from src.app.contracts.llm.system_block import SystemBlock
 from src.app.contracts.llm.text_part import TextPart
+from src.app.ingest.markdown_syntax import parse_markdown
 from src.app.ingest.parsers.base import ExtractedImage
 from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.llm.structured import call_structured
@@ -27,6 +28,8 @@ class StructuredCall(Protocol):
 
 
 class ImageDescriber:
+    """Describe normalized images using their captions and owning topics."""
+
     def __init__(
         self,
         llm: LLMClient,
@@ -48,12 +51,12 @@ class ImageDescriber:
         topic_titles: dict[str, str] | None = None,
     ) -> dict[str, str | None]:
         semaphore = asyncio.Semaphore(self._concurrency)
+        marker_positions = {ref: start for start, ref in parse_markdown(document_context).markers}
 
         async def one(image: ExtractedImage) -> tuple[str, str | None]:
             async with semaphore:
                 marker = f'::image{{id="{image.ref}"}}'
-                position = document_context.find(marker)
-                position = max(0, position)
+                position = marker_positions.get(image.ref, 0)
                 surrounding = document_context[max(0, position - 250) : position + len(marker) + 250]
                 topic = (topic_titles or {}).get(image.ref, "Вступление")
                 request = LLMRequest(

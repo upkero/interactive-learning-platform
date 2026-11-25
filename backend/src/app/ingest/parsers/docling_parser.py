@@ -5,12 +5,15 @@ from threading import Lock
 from pypdf import PdfReader
 
 from src.app.exceptions.ingest import ParseError
+from src.app.ingest.markdown_syntax import escape_image_markers, parse_markdown
 from src.app.ingest.parsers.base import DocumentParser, ExtractedImage, ParsedDocument
 
 _PLACEHOLDER = "<!-- grasp:image -->"
 
 
 class DoclingParser(DocumentParser):
+    """Convert PDF and DOCX sources to Markdown and extract figure images."""
+
     supported_mime_types = frozenset(
         {
             "application/pdf",
@@ -43,6 +46,7 @@ class DoclingParser(DocumentParser):
                 result = self._converter.convert(DocumentStream(name=filename, stream=BytesIO(data)))
             doc = result.document
             markdown = doc.export_to_markdown(image_placeholder=_PLACEHOLDER)
+            markdown = escape_image_markers(markdown, parse_markdown(markdown))
         except Exception as exc:
             raise ParseError("Docling failed to convert document") from exc
         images: list[ExtractedImage] = []
@@ -80,7 +84,7 @@ class DoclingParser(DocumentParser):
             prov = picture.prov
             caption = picture.caption_text(doc) or None
             ref = f"img_{index}"
-            markdown = markdown.replace(_PLACEHOLDER, f'\n::image{{id="{ref}"}}\n', 1)
+            markdown = markdown.replace(_PLACEHOLDER, f'\n\n::image{{id="{ref}"}}\n\n', 1)
             images.append(
                 ExtractedImage(
                     ref=ref,
@@ -116,6 +120,7 @@ def _recover_numbered_pdf_headings(
     """
     insertions: list[tuple[int, str]] = []
     headings: list[tuple[str, int]] = []
+    marker_positions = {ref: position for position, ref in parse_markdown(markdown).markers}
     cursor = 0
     for page_number, page in enumerate(PdfReader(BytesIO(data)).pages, 1):
         lines = [line.strip() for line in (page.extract_text() or "").splitlines() if line.strip()]
@@ -127,7 +132,7 @@ def _recover_numbered_pdf_headings(
         position = anchor
         first_picture = next((image for image in images if image.page == page_number), None)
         if first_picture is not None:
-            marker = markdown.find(f'::image{{id="{first_picture.ref}"}}', cursor)
+            marker = marker_positions.get(first_picture.ref, -1)
             if cursor <= marker < anchor:
                 position = marker
         if position < cursor:

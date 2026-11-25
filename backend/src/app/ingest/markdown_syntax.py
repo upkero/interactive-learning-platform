@@ -1,21 +1,57 @@
-"""Source-preserving Markdown ranges shared by ingestion, tree building and segmentation."""
+"""Source ranges and token kinds shared by the Markdown ingest pipeline."""
 
 import re
+from bisect import bisect_right
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from markdown_it import MarkdownIt
+from markdown_it.renderer import RendererHTML
+from markdown_it.rules_inline import StateInline, backtick, html_inline, image
+from markdown_it.token import Token
 
-_MARKDOWN = MarkdownIt("default").enable("table")
-_IMAGE = re.compile(r"!\[([^]\n]*)\]\(([^)\s]+)(?:\s+[^)]*)?\)")
 _MARKER = re.compile(r'::image\{id="(img_\d+)"\}')
-_HEADING = re.compile(r"^ {0,3}(#{1,6})[ \t]+(.+?)[ \t]*$", re.MULTILINE)
+_TABLE_ESCAPE = re.compile(r"\\(?=\|)")
+
+
+def _with_source_range(rule: Callable[[StateInline, bool], bool]) -> Callable[[StateInline, bool], bool]:
+    def capture(state: StateInline, silent: bool) -> bool:
+        start, token_count = state.pos, len(state.tokens)
+        matched = rule(state, silent)
+        if matched and not silent and len(state.tokens) > token_count:
+            state.tokens[-1].meta["source_range"] = (start, state.pos)
+        return matched
+
+    return capture
+
+
+class _IngestMarkdown(MarkdownIt):
+    def validateLink(self, url: str) -> bool:
+        return super().validateLink(url) or url.lower().startswith("data:image/jpg;")
+
+
+_MARKDOWN = _IngestMarkdown("default").enable("table")
+_MARKDOWN.inline.ruler.at("image", _with_source_range(image))
+_MARKDOWN.inline.ruler.at("backticks", _with_source_range(backtick))
+_MARKDOWN.inline.ruler.at("html_inline", _with_source_range(html_inline))
+_RENDERER = RendererHTML()
 
 
 @dataclass(frozen=True, slots=True)
 class Heading:
     start: int
+    end: int
     level: int
     title: str
+    markup: str
+
+
+@dataclass(frozen=True, slots=True)
+class Block:
+    start: int
+    end: int
+    kind: str
+    plain_text: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,78 +60,111 @@ class Image:
     end: int
     caption: str
     source: str
+    block: Block
 
 
 @dataclass(frozen=True, slots=True)
 class MarkdownStructure:
     headings: tuple[Heading, ...]
     images: tuple[Image, ...]
-    blocks: tuple[tuple[int, int], ...]
-    markers: tuple[tuple[int, str], ...] = ()
+    blocks: tuple[Block, ...]
+    markers: tuple[tuple[int, str], ...]
 
 
-def inline_code_spans(text: str) -> list[tuple[int, int]]:
-    """Backtick runs delimit inline code; unmatched runs remain ordinary text."""
-    spans: list[tuple[int, int]] = []
-    index = 0
-    while index < len(text):
-        if text[index] != "`":
-            index += 1
-            continue
-        end = index
-        while end < len(text) and text[end] == "`":
-            end += 1
-        run = text[index:end]
-        closing = re.search(rf"(?<!`)`{{{len(run)}}}(?!`)", text[end:])
-        if closing is None:
-            index = end
-            continue
-        stop = end + closing.end()
-        spans.append((index, stop))
-        index = stop
-    return spans
+def _find_images(
+    inline: Token, lines: list[str], offsets: list[int], block: Block, row_columns: dict[int, int], *, table: bool
+) -> list[Image]:
+    assert inline.map is not None
+    tokens = [child for child in inline.children or () if child.type == "image"]
+    first = inline.map[0]
+    if not tokens and not table:
+        return []
+    # Inline content strips container prefixes and trims cell edges. Match
+    # the token's source lines back to the original lines in reading order.
+    ranges: list[tuple[int, int, int, tuple[int, ...]]] = []
+    cursor = 0
+    for line, content in enumerate(inline.content.split("\n"), first):
+        raw = lines[line]
+        escapes = tuple(match.start() - i for i, match in enumerate(_TABLE_ESCAPE.finditer(raw))) if table else ()
+        source = _TABLE_ESCAPE.sub("", raw) if escapes else raw
+        column = source.find(content, row_columns.get(line, 0) if table else 0)
+        if column < 0:
+            return []
+        if table:
+            row_columns[line] = column + len(content)
+        ranges.append((cursor, cursor + len(content), offsets[line] + column, escapes))
+        cursor += len(content) + 1
+
+    def source_position(position: int) -> int:
+        for line, (start, end, base, escapes) in enumerate(ranges, first):
+            if start <= position <= end:
+                mapped = base + position - start
+                return mapped + bisect_right(escapes, mapped - offsets[line])
+        raise ValueError("Image position outside its Markdown inline token")
+
+    return [
+        Image(
+            source_position(child.meta["source_range"][0]),
+            source_position(child.meta["source_range"][1] - 1) + 1,
+            _RENDERER.renderInlineAsText(child.children or [], _MARKDOWN.options, {}),
+            str(child.attrGet("src")),
+            block,
+        )
+        for child in tokens
+    ]
 
 
-def parse_markdown(markdown: str) -> MarkdownStructure:
-    lines = markdown.splitlines(keepends=True)
+def parse_markdown(markdown: str, *, extract_images: bool = False) -> MarkdownStructure:
+    lines: list[str] = []
     offsets = [0]
-    for line in lines:
-        offsets.append(offsets[-1] + len(line))
+    for ending in re.finditer(r"\r\n?|\n", markdown):
+        lines.append(markdown[offsets[-1] : ending.start()])
+        offsets.append(ending.end())
+    if offsets[-1] < len(markdown):
+        lines.append(markdown[offsets[-1] :])
+        offsets.append(len(markdown))
+    tokens = _MARKDOWN.parse(markdown)
     headings: list[Heading] = []
-    images: dict[tuple[int, int], Image] = {}
-    markers: dict[int, str] = {}
-    ranges: list[tuple[int, int]] = []
-    for token in _MARKDOWN.parse(markdown):
+    images: list[Image] = []
+    markers: list[tuple[int, str]] = []
+    blocks: list[Block] = []
+    row_columns: dict[int, int] = {}
+    for index, token in enumerate(tokens):
         if token.map is None:
             continue
         first, last = token.map
         if token.level == 0 and token.type != "inline" and token.nesting != -1:
-            ranges.append((offsets[first], offsets[last]))
-        if token.type == "heading_open" and token.tag in {"h1", "h2", "h3"}:
-            match = _HEADING.match(lines[first])
-            if match:
-                title = re.sub(r"[ \t]+#+[ \t]*$", "", match.group(2)).strip()
-                headings.append(Heading(offsets[first], int(token.tag[1]), title))
-            elif last - first == 2:
-                headings.append(Heading(offsets[first], int(token.tag[1]), lines[first].strip()))
+            plain = token.type == "paragraph_open" and all(
+                child.type in {"text", "softbreak"} for child in tokens[index + 1].children or ()
+            )
+            blocks.append(Block(offsets[first], offsets[last], token.type, plain))
+            if token.type == "heading_open" and token.tag in {"h1", "h2", "h3"}:
+                headings.append(
+                    Heading(offsets[first], offsets[last], int(token.tag[1]), tokens[index + 1].content, token.markup)
+                )
         if token.type != "inline":
             continue
-        # Inline token.map points at source lines; do not inspect fenced/code
-        # blocks or HTML. A code span is masked with its exact source range.
-        source = markdown[offsets[first] : offsets[last]]
-        spans = inline_code_spans(source)
-        for match in _IMAGE.finditer(source):
-            if any(a <= match.start() < b for a, b in spans):
-                continue
-            start, end = offsets[first] + match.start(), offsets[first] + match.end()
-            images[(start, end)] = Image(start, end, match.group(1), match.group(2))
-        for match in _MARKER.finditer(source):
-            if not any(a <= match.start() < b for a, b in spans):
-                markers[offsets[first] + match.start()] = match.group(1)
-    # Block ranges are line-aligned. Preserve all whitespace between adjacent
-    # blocks by slicing the original string at their starting offsets.
-    starts = sorted({start for start, _ in ranges if start < len(markdown)})
-    if not starts or starts[0] != 0:
-        starts.insert(0, 0)
-    blocks = tuple((start, end) for start, end in zip(starts, [*starts[1:], len(markdown)], strict=True))
-    return MarkdownStructure(tuple(headings), tuple(images.values()), blocks, tuple(markers.items()))
+        previous = tokens[index - 1]
+        if previous.type == "paragraph_open" and previous.level == 0 and "::image" in token.content:
+            protected = [child.meta["source_range"] for child in token.children or () if "source_range" in child.meta]
+            inline_offset = 0
+            for line, content in enumerate(token.content.split("\n"), first):
+                if (
+                    (match := _MARKER.fullmatch(lines[line]))
+                    and content == lines[line]
+                    and all(not start <= inline_offset < end for start, end in protected)
+                ):
+                    markers.append((offsets[line], match.group(1)))
+                inline_offset += len(content) + 1
+        if extract_images:
+            images.extend(
+                _find_images(token, lines, offsets, blocks[-1], row_columns, table=previous.tag in {"td", "th"})
+            )
+    return MarkdownStructure(tuple(headings), tuple(images), tuple(blocks), tuple(markers))
+
+
+def escape_image_markers(markdown: str, structure: MarkdownStructure) -> str:
+    """Preserve literal user text without treating it as extracted image metadata."""
+    for start, _ in reversed(structure.markers):
+        markdown = markdown[:start] + "\\" + markdown[start:]
+    return markdown

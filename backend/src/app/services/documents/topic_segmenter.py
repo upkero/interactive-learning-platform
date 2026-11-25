@@ -7,12 +7,14 @@ from pydantic import BaseModel
 from src.app.contracts.llm.llm_message import LLMMessage
 from src.app.contracts.llm.llm_request import LLMRequest
 from src.app.contracts.llm.system_block import SystemBlock
-from src.app.ingest.markdown_syntax import inline_code_spans, parse_markdown
+from src.app.ingest.markdown_syntax import MarkdownStructure, parse_markdown
 from src.app.ingest.tokens import TokenCounter
 from src.app.ingest.topic_tree import build_topic_tree, heading_level
 from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.llm.structured import call_structured
 from src.app.services.documents.prompts import TOPICS_SYSTEM
+
+_WORD_BOUNDARY = re.compile(r"(?<=\S)[ \t]+(?=[^\W\d_])")
 
 
 class Section(BaseModel):
@@ -32,31 +34,27 @@ class TopicSegmenter:
         self._counter = counter
         self._max_tokens = max_tokens
 
-    def _blocks(self, markdown: str) -> list[tuple[int, int]]:
+    def _blocks(self, markdown: str, structure: MarkdownStructure) -> list[tuple[int, int]]:
         blocks: list[tuple[int, int]] = []
-        for start, end in parse_markdown(markdown).blocks:
-            block = markdown[start:end]
-            if self._counter.count(block) <= self._max_tokens // 2:
+        split_at = min(self._max_tokens // 2, 10000)
+        for index, block in enumerate(structure.blocks):
+            start = block.start if index else 0
+            end = structure.blocks[index + 1].start if index + 1 < len(structure.blocks) else len(markdown)
+            if not block.plain_text or self._counter.count(markdown[start:end]) <= split_at:
                 blocks.append((start, end))
                 continue
-            # A fence/table is atomic: splitting it would corrupt Markdown.
-            if block.lstrip().startswith(("```", "~~~", "|", "    ")):
-                raise ValueError("An indivisible Markdown block exceeds the topic limit")
-            code = inline_code_spans(block)
             cursor = start
             while cursor < end:
-                if self._counter.count(markdown[cursor:end]) <= self._max_tokens // 2:
+                if self._counter.count(markdown[cursor:end]) <= split_at:
                     blocks.append((cursor, end))
                     break
-                whitespace = [
-                    match.end() + cursor
-                    for match in re.finditer(r"\s+", markdown[cursor:end])
-                    if not any(a < match.end() + cursor - start < b for a, b in code)
-                ]
+                # Start new paragraphs at letters so existing punctuation
+                # cannot become a block marker after inserting a heading.
+                whitespace = [match.end() for match in _WORD_BOUNDARY.finditer(markdown, cursor, block.end)]
                 low, high = 0, len(whitespace)
                 while low < high:
                     middle = (low + high) // 2
-                    if self._counter.count(markdown[cursor : whitespace[middle]]) <= self._max_tokens // 2:
+                    if self._counter.count(markdown[cursor : whitespace[middle]]) <= split_at:
                         low = middle + 1
                     else:
                         high = middle
@@ -68,7 +66,8 @@ class TopicSegmenter:
         return blocks
 
     async def segment(self, markdown: str) -> str:
-        blocks = self._blocks(markdown)
+        structure = parse_markdown(markdown)
+        blocks = self._blocks(markdown, structure)
         if not blocks or not markdown.strip():
             return markdown
         valid: dict[int, str] = {}
@@ -94,7 +93,7 @@ class TopicSegmenter:
             result = await call_structured(self._llm, request, Sections)
             previous = start
             for section in result.sections:
-                number, title = section.first_paragraph, section.title.strip()
+                number, title = section.first_paragraph, " ".join(section.title.split())
                 if not title or number <= previous or number > end:
                     raise ValueError("Invalid or non-monotonic topic boundaries")
                 previous = number
@@ -103,7 +102,7 @@ class TopicSegmenter:
                 break
             start = max(start + 1, end - 1)
 
-        existing = parse_markdown(markdown).headings
+        existing = structure.headings
         level = existing[0].level if existing else 2
         if not existing:
             valid.setdefault(1, "Вступление")

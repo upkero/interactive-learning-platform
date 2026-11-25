@@ -2,9 +2,11 @@ from functools import lru_cache
 
 import tiktoken
 
+from src.app.core.settings.ingest import DEFAULT_TOKENS_CALIBRATION, get_ingest_settings
+
 
 class TokenCounter:
-    def __init__(self, *, encoding: str = "o200k_base", calibration: float = 1.15) -> None:
+    def __init__(self, *, encoding: str = "o200k_base", calibration: float = DEFAULT_TOKENS_CALIBRATION) -> None:
         self._encoding = tiktoken.get_encoding(encoding)
         self._calibration = calibration
 
@@ -20,7 +22,5 @@ class TokenCounter:
 
 @lru_cache(maxsize=1)
 def get_token_counter() -> TokenCounter:
-    from src.app.core.settings.ingest import get_ingest_settings
-
     settings = get_ingest_settings()
     return TokenCounter(encoding=settings.tokens_encoding, calibration=settings.tokens_calibration)

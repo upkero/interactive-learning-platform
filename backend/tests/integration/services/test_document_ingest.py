@@ -7,6 +7,7 @@ import os
 import re
 from io import BytesIO
 from pathlib import Path
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import httpx
@@ -30,6 +31,7 @@ from src.app.ingest.parsers.docling_parser import DoclingParser
 from src.app.ingest.parsers.gdocs_importer import GDocsImporter
 from src.app.ingest.parsers.markdown_parser import MarkdownParser
 from src.app.ingest.tokens import TokenCounter
+from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.interfaces.storage.object_storage_client import StorageBucket
 from src.app.observability.progress_notifier import RedisProgressNotifier
 from src.app.repositories.document_repository import DocumentRepository
@@ -38,6 +40,7 @@ from src.app.repositories.user_repository import UserRepository
 from src.app.services.documents.document_ingest_runner import DocumentIngestRunner
 from src.app.services.documents.document_ingest_service import DocumentIngestService
 from src.app.services.documents.file_inspector import FileInspector
+from src.app.services.documents.topic_segmenter import TopicSegmenter
 from src.app.storage.object_keys import parsed_markdown_key
 from tests.support.fakes.services.progress_notifier import FakeProgressNotifier
 from tests.support.fakes.storage.object_storage_client import FakeObjectStorageClient
@@ -221,8 +224,11 @@ async def test_image_refs_match_database_after_filtering(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.parametrize("oversized_table", [False, True])
 async def test_segmentation_failure_keeps_document_parsed(
-    session_factory: async_sessionmaker[AsyncSession], caplog: pytest.LogCaptureFixture
+    session_factory: async_sessionmaker[AsyncSession],
+    caplog: pytest.LogCaptureFixture,
+    oversized_table: bool,
 ) -> None:
     class BrokenSegmenter:
         async def segment(self, markdown: str) -> str:
@@ -239,7 +245,10 @@ async def test_segmentation_failure_keeps_document_parsed(
             size_bytes=5,
             checksum="c" * 64,
         )
-    storage = FakeObjectStorageClient(objects={("documents", "text.md"): b"Plain text."})
+    source = "Col A | Col B\n--- | ---\n" + "a | b\n" * 6000 if oversized_table else "Plain text."
+    storage = FakeObjectStorageClient(objects={("documents", "text.md"): source.encode()})
+    counter = TokenCounter()
+    llm = AsyncMock(spec=LLMClient)
     service = DocumentIngestService(
         session_factory=session_factory,
         documents=DocumentRepository,
@@ -251,16 +260,20 @@ async def test_segmentation_failure_keeps_document_parsed(
         parsing_lease=PostgresParsingLease(session_factory.kw["bind"]),
         image_store=ImageStore(storage),
         inspector=FileInspector(UploadSettings()),
-        counter=TokenCounter(),
+        counter=counter,
         ingest_settings=IngestSettings(),
         upload_settings=UploadSettings(),
-        topic_segmenter=BrokenSegmenter(),
+        topic_segmenter=TopicSegmenter(llm, counter=counter) if oversized_table else BrokenSegmenter(),
     )
     await service.parse(document.id)
     async with session_factory() as session:
         result = await DocumentRepository(session).get(document.id)
     assert result is not None and result.status is DocumentStatus.PARSED
     assert result.topic_tree and len(result.topic_tree) == 1
+    assert (
+        await storage.get_object(bucket="documents", key=parsed_markdown_key(user.id, document.id)) == source.encode()
+    )
+    assert not llm.mock_calls
     assert any(
         record.name == "grasp.decisions" and getattr(record, "event", None) == "ingest.segmentation_skipped"
         for record in caplog.records
@@ -269,7 +282,7 @@ async def test_segmentation_failure_keeps_document_parsed(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.parametrize("scenario", ["empty", "pages", "private", "parser"])
+@pytest.mark.parametrize("scenario", ["empty", "filtered_image", "pages", "private", "parser"])
 async def test_known_ingest_errors(session_factory: async_sessionmaker[AsyncSession], scenario: str) -> None:
     class TestParser(DocumentParser):
         supported_mime_types = frozenset({"text/plain"})
@@ -277,6 +290,13 @@ async def test_known_ingest_errors(session_factory: async_sessionmaker[AsyncSess
         def parse(self, data: bytes, *, filename: str) -> ParsedDocument:
             if scenario == "parser":
                 raise RuntimeError("internal parser detail")
+            if scenario == "filtered_image":
+                buffer = BytesIO()
+                Image.new("RGB", (8, 8), "white").save(buffer, format="PNG")
+                return ParsedDocument(
+                    markdown='::image{id="img_1"}\n',
+                    images=(ExtractedImage(ref="img_1", data=buffer.getvalue(), media_type="image/png"),),
+                )
             return ParsedDocument(
                 markdown="" if scenario == "empty" else "Text", page_count=301 if scenario == "pages" else 1
             )
@@ -323,24 +343,30 @@ async def test_known_ingest_errors(session_factory: async_sessionmaker[AsyncSess
         result.error_code
         is {
             "empty": DocumentErrorCode.EMPTY_DOCUMENT,
+            "filtered_image": DocumentErrorCode.EMPTY_DOCUMENT,
             "pages": DocumentErrorCode.TOO_MANY_PAGES,
             "private": DocumentErrorCode.GDOCS_NOT_PUBLIC,
             "parser": DocumentErrorCode.PARSE_FAILED,
         }[scenario]
     )
     assert notifier.error_codes[-1] is result.error_code
+    assert not storage.put_object_calls
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.parametrize("scenario", ["login", "invalid", "oversized", "bomb"])
+@pytest.mark.parametrize("scenario", ["login", "empty", "invalid", "pdf", "oversized", "bomb"])
 async def test_gdocs_export_validation_before_storage_and_public_code(
     session_factory: async_sessionmaker[AsyncSession], scenario: str
 ) -> None:
     def respond(request: httpx.Request) -> httpx.Response:
         if scenario == "login":
             return httpx.Response(302, headers={"location": "https://accounts.google.com/ServiceLogin"})
+        if scenario == "pdf":
+            pdf = (Path(__file__).parents[2] / "fixtures/documents/textbook_en.pdf").read_bytes()
+            return httpx.Response(200, content=pdf, headers={"content-type": "application/pdf"})
         content = {
+            "empty": b"",
             "invalid": b"not a docx",
             "oversized": b"x" * 1025,
             "bomb": docx_bomb_bytes(1001),
@@ -369,7 +395,10 @@ async def test_gdocs_export_validation_before_storage_and_public_code(
             storage=storage,
             registry=ParserRegistry((MarkdownParser(),)),
             notifier=notifier,
-            gdocs=GDocsImporter(max_bytes=1024 if scenario != "bomb" else 10240, client=client),
+            gdocs=GDocsImporter(
+                max_bytes=UploadSettings().max_bytes if scenario == "pdf" else 10240 if scenario == "bomb" else 1024,
+                client=client,
+            ),
             parsing_lease=PostgresParsingLease(session_factory.kw["bind"]),
             image_store=ImageStore(storage),
             inspector=FileInspector(UploadSettings(max_unzipped_bytes=1000)),

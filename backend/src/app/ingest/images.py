@@ -10,11 +10,14 @@ from uuid import UUID
 from anyio import to_thread
 from PIL import Image
 
+from src.app.ingest.markdown_syntax import parse_markdown
 from src.app.ingest.parsers.base import ExtractedImage
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.storage.object_keys import image_key
 
 logger = logging.getLogger(__name__)
+_LEADING_EMPTY_LINES = re.compile(r"^(?:[ \t]*\n)+")
+_TRAILING_EMPTY_LINES = re.compile(r"\n(?:[ \t]*\n)*\Z")
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,11 +85,32 @@ class ImageStore:
                 saved.append(StoredImage(image=image, key=key, width=width, height=height))
             except Exception:
                 logger.warning("Could not store extracted image", extra={"image_ref": image.ref}, exc_info=True)
+        extracted = {image.ref for image in images}
         kept = {item.image.ref for item in saved}
-        for image in images:
-            if image.ref not in kept:
-                marker = re.escape(f'::image{{id="{image.ref}"}}')
-                markdown = re.sub(marker, "", markdown, count=1)
-        markdown = re.sub(r'(\n{3,})(?=::image\{id="img_\d+"\})', "\n\n", markdown)
-        markdown = re.sub(r'(::image\{id="img_\d+"\})\n{3,}', r"\1\n\n", markdown)
-        return markdown, tuple(saved)
+        return _format_markers(markdown, extracted, kept), tuple(saved)
+
+
+def _format_markers(markdown: str, extracted: set[str], kept: set[str]) -> str:
+    if not extracted:
+        return markdown
+    parts: list[str] = []
+    cursor = 0
+    for start, ref in parse_markdown(markdown).markers:
+        if ref not in extracted:
+            continue
+        prose = markdown[cursor:start]
+        if cursor:
+            prose = _LEADING_EMPTY_LINES.sub("", prose)
+        if prose := _TRAILING_EMPTY_LINES.sub("", prose):
+            parts.append(prose)
+        end = start + len(f'::image{{id="{ref}"}}')
+        if ref in kept:
+            parts.append(markdown[start:end])
+        cursor = end
+    if not cursor:
+        return markdown
+    if tail := _LEADING_EMPTY_LINES.sub("", markdown[cursor:]):
+        parts.append(tail)
+    elif parts and markdown.endswith("\n"):
+        parts[-1] += "\n"
+    return "\n\n".join(parts)

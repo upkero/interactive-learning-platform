@@ -31,13 +31,15 @@ from src.app.interfaces.services.ingest import (
 from src.app.interfaces.services.progress_notifier import ProgressNotifier
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.services.documents.document_failure import mark_document_failed
-from src.app.services.documents.file_inspector import FileInspector
+from src.app.services.documents.file_inspector import DOCX, FileInspector
 from src.app.storage.object_keys import parsed_markdown_key, source_key
 
 logger = logging.getLogger(__name__)
 
 
 class DocumentIngestService:
+    """Parse a leased document and persist its Markdown, topics, and images."""
+
     def __init__(
         self,
         *,
@@ -57,8 +59,12 @@ class DocumentIngestService:
         image_describer: ImageDescriberProtocol | None = None,
         topic_segmenter: TopicSegmenterProtocol | None = None,
     ) -> None:
-        self._session_factory, self._documents, self._images = session_factory, documents, images
-        self._storage, self._registry, self._notifier = storage, registry, notifier
+        self._session_factory = session_factory
+        self._documents = documents
+        self._images = images
+        self._storage = storage
+        self._registry = registry
+        self._notifier = notifier
         self._gdocs = gdocs
         self._parsing_lease = parsing_lease
         self._image_store = image_store
@@ -87,34 +93,33 @@ class DocumentIngestService:
             if document.source_type is SourceType.GDOCS:
                 data, title = await self._gdocs.fetch(document.source_uri or "")
                 try:
-                    await self._inspector.inspect(data, "source.docx")
+                    inspected = await self._inspector.inspect(data, "source.docx")
                 except UploadValidationError as exc:
                     raise GDocsImportError(DocumentErrorCode.GDOCS_IMPORT_FAILED, "Invalid Google Docs export") from exc
+                if inspected.mime_type != DOCX:
+                    raise GDocsImportError(DocumentErrorCode.GDOCS_IMPORT_FAILED, "Google Docs export is not DOCX")
                 source = source_key(document.owner_id, document.id, "docx")
                 await self._storage.put_object(
                     bucket="documents",
                     key=source,
                     data=data,
-                    content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    content_type=DOCX,
                 )
                 await self._update_source(document_id, source, title, len(data))
                 filename = "source.docx"
             else:
                 data = await self._storage.get_object(bucket="documents", key=document.object_key)
                 filename = document.object_key.rsplit("/", 1)[-1]
-            mime = (
-                document.mime_type
-                if document.source_type is SourceType.UPLOAD
-                else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            )
+            mime = document.mime_type if document.source_type is SourceType.UPLOAD else DOCX
             parser = self._registry.for_mime(mime)
             parsed = await to_thread.run_sync(partial(parser.parse, data, filename=filename))
             if not parsed.markdown.strip():
                 raise IngestFailure(DocumentErrorCode.EMPTY_DOCUMENT, "Document is empty")
             if parsed.page_count is not None and parsed.page_count > self._upload_settings.max_pages:
                 raise IngestFailure(DocumentErrorCode.TOO_MANY_PAGES, "Document has too many pages")
-            initial_tree = build_topic_tree(parsed.markdown, self._counter, parsed.heading_pages)
-            segment_needed = not parse_markdown(parsed.markdown).headings or (
+            structure = parse_markdown(parsed.markdown)
+            initial_tree = build_topic_tree(parsed.markdown, self._counter, parsed.heading_pages, structure=structure)
+            segment_needed = not structure.headings or (
                 len(initial_tree) == 1
                 and not initial_tree[0].children
                 and initial_tree[0].total_tokens > self._ingest_settings.segment_max_tokens
@@ -148,6 +153,8 @@ class DocumentIngestService:
     async def _store_result(self, document: DocumentRecord, parsed: ParsedDocument) -> None:
         document_id = document.id
         markdown, saved = await self._image_store.save(document_id, parsed.markdown, parsed.images)
+        if not markdown.strip():
+            raise IngestFailure(DocumentErrorCode.EMPTY_DOCUMENT, "Document is empty")
         tree = build_topic_tree(markdown, self._counter, parsed.heading_pages)
         await self._storage.put_object(
             bucket="documents",
@@ -212,7 +219,7 @@ class DocumentIngestService:
                 object_key=key,
                 title=title,
                 size_bytes=size_bytes,
-                mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                mime_type=DOCX,
             )
 
 

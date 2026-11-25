@@ -35,9 +35,11 @@ async def test_references_match_saved_images_after_filter_and_failure() -> None:
         ExtractedImage(ref="img_4", data=first, media_type="image/png"),
         ExtractedImage(ref="img_5", data=png(150, 100, "yellow"), media_type="image/png"),
     )
-    markdown = "\n\n".join(f'::image{{id="{image.ref}"}}' for image in images)
+    code = 'Example: `begin\n::image{id="img_2"}\nend`'
+    markers = "\n\n\n".join(f'::image{{id="{image.ref}"}}' for image in images)
+    markdown = f"# Topic\n\n \n\n{markers}\n\n\n{code}\n"
     markdown, saved = await ImageStore(storage).save(document_id, markdown, images)
     assert [item.image.ref for item in saved] == ["img_1", "img_3"]
     assert [item.key for item in saved] == [f"{document_id}/img_1.png", f"{document_id}/img_3.png"]
-    assert markdown == '::image{id="img_1"}\n\n::image{id="img_3"}\n\n'
+    assert markdown == f'# Topic\n\n::image{{id="img_1"}}\n\n::image{{id="img_3"}}\n\n{code}\n'
     assert ("images", f"{document_id}/orphan.png") in storage.delete_object_calls

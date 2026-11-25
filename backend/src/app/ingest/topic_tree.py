@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from src.app.contracts.documents.topic_node import TopicNode
-from src.app.ingest.markdown_syntax import parse_markdown
+from src.app.ingest.markdown_syntax import MarkdownStructure, parse_markdown
 
 
 class TokenCounter(Protocol):
@@ -53,9 +53,14 @@ def heading_level(title: str, markdown_level: int) -> int:
 
 
 def build_topic_tree(
-    markdown: str, counter: TokenCounter, heading_pages: tuple[tuple[str, int], ...] = ()
+    markdown: str,
+    counter: TokenCounter,
+    heading_pages: tuple[tuple[str, int], ...] = (),
+    *,
+    structure: MarkdownStructure | None = None,
 ) -> list[TopicNode]:
-    structure = parse_markdown(markdown)
+    if structure is None:
+        structure = parse_markdown(markdown)
     headings = [(item.start, heading_level(item.title, item.level), item.title) for item in structure.headings]
     roots: list[_TopicBuilder] = []
     if not headings or markdown[: headings[0][0]].strip():

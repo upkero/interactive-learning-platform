@@ -37,5 +37,9 @@ def test_data_image_inside_table_keeps_table_delimiters_and_inline_code_unchange
     )
     parsed = MarkdownParser().parse(source.encode(), filename="table.md")
     assert len(parsed.images) == 1
-    assert '| ::image{id="img_1"} | `![fake]' in parsed.markdown
-    assert "| --- | --- |" in parsed.markdown
+    expected_table = source.replace(f"![diagram](data:image/png;base64,{png})", "diagram")
+    assert parsed.markdown.startswith(expected_table + "\n")
+    assert parsed.markdown.splitlines()[-2] == '::image{id="img_1"}'
+    structure = parse_markdown(parsed.markdown)
+    assert structure.blocks[0].kind == "table_open"
+    assert len(structure.markers) == 1

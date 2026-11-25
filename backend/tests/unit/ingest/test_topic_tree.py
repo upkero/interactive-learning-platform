@@ -64,6 +64,7 @@ def test_tree_matches_golden_fixture(name: str) -> None:
             "children": [summary(child) for child in node.children],
         }
 
-    assert [summary(node) for node in roots] == json.loads((directory / f"{name}.tree.json").read_text())
+    expected = json.loads((directory / f"{name}.tree.json").read_text(encoding="utf-8"))
+    assert [summary(node) for node in roots] == expected
     assert roots[0].start == 0 and roots[-1].end == len(markdown)
     assert all(first.end == second.start for first, second in pairwise(roots))

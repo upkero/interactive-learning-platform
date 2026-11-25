@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from src.app.contracts.llm.llm_request import LLMRequest
+from src.app.ingest.markdown_syntax import parse_markdown
 from src.app.ingest.tokens import TokenCounter
 from src.app.ingest.topic_tree import build_topic_tree
 from src.app.interfaces.llm.llm_client import LLMClient
@@ -111,3 +112,36 @@ async def test_segmenter_never_inserts_heading_inside_fence(monkeypatch: pytest.
     assert "````\n```\n# Example\n```\n````" in result
     assert "## Second" in result
     assert [node.title for node in build_topic_tree(result, TokenCounter())] == ["First", "Second"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("kind", "block"),
+    [
+        ("table_open", "Col A | Col B\n--- | ---\n" + "a | b\n" * 3200),
+        ("code_block", "    " + "print(value) " * 3500 + "\n"),
+    ],
+    ids=["table", "indented-code"],
+)
+async def test_working_token_limit_keeps_large_table_and_indented_code_intact(
+    monkeypatch: pytest.MonkeyPatch, kind: str, block: str
+) -> None:
+    counter = TokenCounter()
+    assert 11000 < counter.count(block) < 20000
+    call = AsyncMock(
+        return_value=Sections(
+            sections=[
+                Section(title="Before", first_paragraph=1),
+                Section(title="Block", first_paragraph=2),
+                Section(title="After", first_paragraph=3),
+            ]
+        )
+    )
+    monkeypatch.setattr("src.app.services.documents.topic_segmenter.call_structured", call)
+    source = f"Intro text.\n\n{block}\nEnd text.\n"
+    result = await TopicSegmenter(cast(LLMClient, object()), counter=counter).segment(source)
+    assert "## After" in result
+    before = [source[item.start : item.end] for item in parse_markdown(source).blocks if item.kind == kind]
+    after = [result[item.start : item.end] for item in parse_markdown(result).blocks if item.kind == kind]
+    assert before == after == [block]

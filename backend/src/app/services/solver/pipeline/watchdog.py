@@ -108,31 +108,6 @@ class Watchdog:
                     errors += 1
                     logger.exception("watchdog.document_failed", extra={"document_id": str(document.id)})
         await self._recovery.publish(events)
-        # A killed prefork child can ACK its late-ack message. The PostgreSQL
-        # connection (and advisory lease) dies with it; fail the abandoned row
-        # so it no longer holds the user's processing slot. Never fail a live
-        # parse, even when a large PDF runs longer than the stale threshold.
-        if self._parsing_lease is not None:
-            async with self._session_factory() as session:
-                abandoned = await self._documents(session).stale_parsing(older_than=self._stuck_after, limit=BATCH_SIZE)
-            for document in abandoned:
-                async with self._parsing_lease.acquire(document.id) as acquired:
-                    if not acquired:
-                        continue
-                    async with self._session_factory() as session, session.begin():
-                        recovered = await self._documents(session).fail_stale_parsing(
-                            document.id, older_than=self._stuck_after
-                        )
-                    if recovered:
-                        failed += 1
-                        if self._notifier is not None:
-                            await self._notifier.emit(
-                                document.id,
-                                ProgressEventType.ERROR,
-                                stage="parsing",
-                                message="Document parsing failed",
-                                error_code=DocumentErrorCode.PARSE_FAILED,
-                            )
         for part_id in [*retry, *lost_parts]:
             try:
                 await self._dispatcher.enqueue_part(part_id, high=False)
@@ -143,6 +118,43 @@ class Watchdog:
                 await self._dispatcher.enqueue_parse(document_id)
             except TaskDispatchError:
                 logger.exception("watchdog.enqueue_document_failed", extra={"document_id": str(document_id)})
+        # A killed prefork child can ACK its late-ack message. The PostgreSQL
+        # connection (and advisory lease) dies with it; fail the abandoned row
+        # so it no longer holds the user's processing slot. Never fail a live
+        # parse, even when a large PDF runs longer than the stale threshold.
+        if self._parsing_lease is not None:
+            try:
+                async with self._session_factory() as session:
+                    abandoned = await self._documents(session).stale_parsing(
+                        older_than=self._stuck_after, limit=BATCH_SIZE
+                    )
+            except Exception:
+                errors += 1
+                abandoned = []
+                logger.exception("watchdog.find_stale_parsing_failed")
+            for document in abandoned:
+                try:
+                    async with self._parsing_lease.acquire(document.id) as acquired:
+                        if not acquired:
+                            continue
+                        async with self._session_factory() as session, session.begin():
+                            recovered = await self._documents(session).fail_stale_parsing(
+                                document.id, older_than=self._stuck_after
+                            )
+                        if not recovered:
+                            continue
+                        failed += 1
+                        if self._notifier is not None:
+                            await self._notifier.emit(
+                                document.id,
+                                ProgressEventType.ERROR,
+                                stage="parsing",
+                                message="Document parsing failed",
+                                error_code=DocumentErrorCode.PARSE_FAILED,
+                            )
+                except Exception:
+                    errors += 1
+                    logger.exception("watchdog.recover_parsing_failed", extra={"document_id": str(document.id)})
         lost = len(lost_parts) + len(lost_documents)
         for action, count in (("requeued", len(retry)), ("failed", failed), ("lost", lost), ("error", errors)):
             if count:
