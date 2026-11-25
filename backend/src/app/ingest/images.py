@@ -86,7 +86,7 @@ class ImageStore:
         for image in images:
             if image.ref not in kept:
                 marker = re.escape(f'::image{{id="{image.ref}"}}')
-                markdown = re.sub(rf"\n*{marker}\n*", "\n\n", markdown, count=1)
+                markdown = re.sub(marker, "", markdown, count=1)
         markdown = re.sub(r'(\n{3,})(?=::image\{id="img_\d+"\})', "\n\n", markdown)
         markdown = re.sub(r'(::image\{id="img_\d+"\})\n{3,}', r"\1\n\n", markdown)
         return markdown, tuple(saved)

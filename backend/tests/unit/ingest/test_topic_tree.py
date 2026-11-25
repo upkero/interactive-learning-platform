@@ -21,6 +21,19 @@ def test_builds_numbered_tree_and_ignores_fenced_headings() -> None:
     assert roots[1].level == 1
     assert roots[1].children[0].id == "1.1"
     assert roots[1].total_tokens == roots[1].own_tokens + roots[1].children[0].total_tokens
+    assert roots[1].own_tokens == len(markdown[roots[1].start : roots[1].children[0].start])
+
+
+@pytest.mark.unit
+def test_indented_heading_and_nested_image_ownership() -> None:
+    markdown = '# Main\nparent\n\n  ## Child\n::image{id="img_1"}\n\n#### Deep\n'
+    roots = build_topic_tree(markdown, Count())
+    assert len(roots) == 1
+    parent, child = roots[0], roots[0].children[0]
+    assert parent.own_tokens == len(markdown[parent.start : child.start])
+    assert parent.image_ids == ()
+    assert child.image_ids == ("img_1",)
+    assert child.total_tokens == child.own_tokens == len(markdown[child.start : child.end])
 
 
 @pytest.mark.unit

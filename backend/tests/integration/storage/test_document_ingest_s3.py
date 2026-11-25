@@ -13,16 +13,21 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents.statuses import DocumentStatus, SourceType
 from src.app.contracts.documents.topic_node import TopicNode
+from src.app.core.settings.ingest import IngestSettings
+from src.app.core.settings.upload import UploadSettings
 from src.app.db.parsing_lease import PostgresParsingLease
 from src.app.exceptions.storage import ObjectNotFoundError
+from src.app.ingest.images import ImageStore
 from src.app.ingest.parsers.base import ParserRegistry
 from src.app.ingest.parsers.docling_parser import DoclingParser
 from src.app.ingest.parsers.gdocs_importer import GDocsImporter
 from src.app.ingest.parsers.markdown_parser import MarkdownParser
+from src.app.ingest.tokens import TokenCounter
 from src.app.repositories.document_repository import DocumentRepository
 from src.app.repositories.image_repository import ImageRepository
 from src.app.repositories.user_repository import UserRepository
 from src.app.services.documents.document_ingest_service import DocumentIngestService
+from src.app.services.documents.file_inspector import FileInspector
 from src.app.storage.object_keys import parsed_markdown_key
 from src.app.storage.s3_object_storage_client import S3ObjectStorageClient
 from tests.support.fakes.services.progress_notifier import FakeProgressNotifier
@@ -71,6 +76,11 @@ async def test_ingest_images_match_s3_and_database(
             notifier=FakeProgressNotifier(),
             gdocs=GDocsImporter(max_bytes=1024),
             parsing_lease=PostgresParsingLease(session_factory.kw["bind"]),
+            image_store=ImageStore(object_storage),
+            inspector=FileInspector(UploadSettings()),
+            counter=TokenCounter(),
+            ingest_settings=IngestSettings(),
+            upload_settings=UploadSettings(),
         )
         await service.parse(document.id)
         async with session_factory() as session:
@@ -123,10 +133,15 @@ async def test_pdf_parses_and_retry_cleans_orphaned_s3_images(
             documents=DocumentRepository,
             images=ImageRepository,
             storage=object_storage,
-            registry=ParserRegistry((DoclingParser(),)),
+            registry=ParserRegistry((DoclingParser(artifacts_path=IngestSettings().docling_artifacts_path),)),
             notifier=FakeProgressNotifier(),
             gdocs=GDocsImporter(max_bytes=1024),
             parsing_lease=PostgresParsingLease(session_factory.kw["bind"]),
+            image_store=ImageStore(object_storage),
+            inspector=FileInspector(UploadSettings()),
+            counter=TokenCounter(),
+            ingest_settings=IngestSettings(),
+            upload_settings=UploadSettings(),
         )
         await service.parse(document.id)
         async with session_factory() as session:

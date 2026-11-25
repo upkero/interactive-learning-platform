@@ -3,32 +3,45 @@
 import asyncio
 import base64
 import json
+import os
 import re
 from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
+import httpx
 import pytest
 from PIL import Image
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents.statuses import DocumentErrorCode, DocumentStatus, SourceType
 from src.app.contracts.documents.topic_node import TopicNode
 from src.app.contracts.ingest import ExtractedImage, ParsedDocument
+from src.app.contracts.progress.stream import stream_key
+from src.app.core.settings.ingest import IngestSettings
+from src.app.core.settings.progress import ProgressSettings
+from src.app.core.settings.upload import UploadSettings
 from src.app.db.parsing_lease import PostgresParsingLease
 from src.app.exceptions.ingest import GDocsImportError
+from src.app.ingest.images import ImageStore
 from src.app.ingest.parsers.base import DocumentParser, ParserRegistry
 from src.app.ingest.parsers.docling_parser import DoclingParser
 from src.app.ingest.parsers.gdocs_importer import GDocsImporter
 from src.app.ingest.parsers.markdown_parser import MarkdownParser
+from src.app.ingest.tokens import TokenCounter
 from src.app.interfaces.storage.object_storage_client import StorageBucket
+from src.app.observability.progress_notifier import RedisProgressNotifier
 from src.app.repositories.document_repository import DocumentRepository
 from src.app.repositories.image_repository import ImageRepository
 from src.app.repositories.user_repository import UserRepository
+from src.app.services.documents.document_ingest_runner import DocumentIngestRunner
 from src.app.services.documents.document_ingest_service import DocumentIngestService
+from src.app.services.documents.file_inspector import FileInspector
 from src.app.storage.object_keys import parsed_markdown_key
 from tests.support.fakes.services.progress_notifier import FakeProgressNotifier
 from tests.support.fakes.storage.object_storage_client import FakeObjectStorageClient
+from tests.support.fixtures.documents import docx_bomb_bytes
 
 
 @pytest.mark.integration
@@ -55,9 +68,16 @@ async def test_docx_parsed_and_repeated_delivery_does_not_overwrite(
         documents=DocumentRepository,
         images=ImageRepository,
         storage=storage,
-        registry=ParserRegistry((DoclingParser(), MarkdownParser())),
+        registry=ParserRegistry(
+            (DoclingParser(artifacts_path=IngestSettings().docling_artifacts_path), MarkdownParser())
+        ),
         gdocs=GDocsImporter(max_bytes=1024),
         parsing_lease=PostgresParsingLease(session_factory.kw["bind"]),
+        image_store=ImageStore(storage),
+        inspector=FileInspector(UploadSettings()),
+        counter=TokenCounter(),
+        ingest_settings=IngestSettings(),
+        upload_settings=UploadSettings(),
         notifier=notifier,
     )
     await service.parse(document.id)
@@ -107,6 +127,11 @@ async def test_concurrent_delivery_does_not_replace_active_parse(
         notifier=FakeProgressNotifier(),
         gdocs=GDocsImporter(max_bytes=1024),
         parsing_lease=PostgresParsingLease(session_factory.kw["bind"]),
+        image_store=ImageStore(storage),
+        inspector=FileInspector(UploadSettings()),
+        counter=TokenCounter(),
+        ingest_settings=IngestSettings(),
+        upload_settings=UploadSettings(),
     )
     first = asyncio.create_task(service.parse(document.id))
     try:
@@ -154,7 +179,11 @@ async def test_image_refs_match_database_after_filtering(
 
     class FailedVision:
         async def describe(
-            self, images: tuple[ExtractedImage, ...], *, document_context: str = ""
+            self,
+            images: tuple[ExtractedImage, ...],
+            *,
+            document_context: str = "",
+            topic_titles: dict[str, str] | None = None,
         ) -> dict[str, str | None]:
             raise RuntimeError("vision unavailable")
 
@@ -167,6 +196,11 @@ async def test_image_refs_match_database_after_filtering(
         notifier=FakeProgressNotifier(),
         gdocs=GDocsImporter(max_bytes=1024),
         parsing_lease=PostgresParsingLease(session_factory.kw["bind"]),
+        image_store=ImageStore(storage),
+        inspector=FileInspector(UploadSettings()),
+        counter=TokenCounter(),
+        ingest_settings=IngestSettings(),
+        upload_settings=UploadSettings(),
         image_describer=FailedVision(),
     )
     await service.parse(document.id)
@@ -215,6 +249,11 @@ async def test_segmentation_failure_keeps_document_parsed(
         notifier=FakeProgressNotifier(),
         gdocs=GDocsImporter(max_bytes=1024),
         parsing_lease=PostgresParsingLease(session_factory.kw["bind"]),
+        image_store=ImageStore(storage),
+        inspector=FileInspector(UploadSettings()),
+        counter=TokenCounter(),
+        ingest_settings=IngestSettings(),
+        upload_settings=UploadSettings(),
         topic_segmenter=BrokenSegmenter(),
     )
     await service.parse(document.id)
@@ -230,12 +269,14 @@ async def test_segmentation_failure_keeps_document_parsed(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.parametrize("scenario", ["empty", "pages", "private"])
+@pytest.mark.parametrize("scenario", ["empty", "pages", "private", "parser"])
 async def test_known_ingest_errors(session_factory: async_sessionmaker[AsyncSession], scenario: str) -> None:
     class TestParser(DocumentParser):
         supported_mime_types = frozenset({"text/plain"})
 
         def parse(self, data: bytes, *, filename: str) -> ParsedDocument:
+            if scenario == "parser":
+                raise RuntimeError("internal parser detail")
             return ParsedDocument(
                 markdown="" if scenario == "empty" else "Text", page_count=301 if scenario == "pages" else 1
             )
@@ -258,15 +299,21 @@ async def test_known_ingest_errors(session_factory: async_sessionmaker[AsyncSess
             checksum="d" * 64,
         )
     storage = FakeObjectStorageClient(objects={("documents", "test.txt"): b"x"})
+    notifier = FakeProgressNotifier()
     service = DocumentIngestService(
         session_factory=session_factory,
         documents=DocumentRepository,
         images=ImageRepository,
         storage=storage,
         registry=ParserRegistry((TestParser(),)),
-        notifier=FakeProgressNotifier(),
+        notifier=notifier,
         gdocs=PrivateDocs(),
         parsing_lease=PostgresParsingLease(session_factory.kw["bind"]),
+        image_store=ImageStore(storage),
+        inspector=FileInspector(UploadSettings()),
+        counter=TokenCounter(),
+        ingest_settings=IngestSettings(),
+        upload_settings=UploadSettings(),
     )
     await service.parse(document.id)
     async with session_factory() as session:
@@ -278,8 +325,168 @@ async def test_known_ingest_errors(session_factory: async_sessionmaker[AsyncSess
             "empty": DocumentErrorCode.EMPTY_DOCUMENT,
             "pages": DocumentErrorCode.TOO_MANY_PAGES,
             "private": DocumentErrorCode.GDOCS_NOT_PUBLIC,
+            "parser": DocumentErrorCode.PARSE_FAILED,
         }[scenario]
     )
+    assert notifier.error_codes[-1] is result.error_code
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scenario", ["login", "invalid", "oversized", "bomb"])
+async def test_gdocs_export_validation_before_storage_and_public_code(
+    session_factory: async_sessionmaker[AsyncSession], scenario: str
+) -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        if scenario == "login":
+            return httpx.Response(302, headers={"location": "https://accounts.google.com/ServiceLogin"})
+        content = {
+            "invalid": b"not a docx",
+            "oversized": b"x" * 1025,
+            "bomb": docx_bomb_bytes(1001),
+        }[scenario]
+        return httpx.Response(200, content=content)
+
+    async with session_factory() as session, session.begin():
+        user = await UserRepository(session).create(email=f"{uuid4()}@example.com", password_hash="x", monthly_limit=20)
+        document = await DocumentRepository(session).create(
+            owner_id=user.id,
+            title="Google Docs",
+            source_type=SourceType.GDOCS,
+            source_uri="https://docs.google.com/document/d/abc123/edit",
+            object_key="",
+            mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            size_bytes=0,
+            checksum="d" * 64,
+        )
+    storage = FakeObjectStorageClient()
+    notifier = FakeProgressNotifier()
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        service = DocumentIngestService(
+            session_factory=session_factory,
+            documents=DocumentRepository,
+            images=ImageRepository,
+            storage=storage,
+            registry=ParserRegistry((MarkdownParser(),)),
+            notifier=notifier,
+            gdocs=GDocsImporter(max_bytes=1024 if scenario != "bomb" else 10240, client=client),
+            parsing_lease=PostgresParsingLease(session_factory.kw["bind"]),
+            image_store=ImageStore(storage),
+            inspector=FileInspector(UploadSettings(max_unzipped_bytes=1000)),
+            counter=TokenCounter(),
+            ingest_settings=IngestSettings(),
+            upload_settings=UploadSettings(),
+        )
+        await service.parse(document.id)
+    async with session_factory() as session:
+        saved = await DocumentRepository(session).get(document.id)
+    assert saved is not None and saved.status is DocumentStatus.FAILED
+    expected = DocumentErrorCode.GDOCS_NOT_PUBLIC if scenario == "login" else DocumentErrorCode.GDOCS_IMPORT_FAILED
+    assert saved.error_code is expected and notifier.error_codes[-1] is expected
+    assert not storage.put_object_calls
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+@pytest.mark.parametrize("private", [False, True])
+async def test_error_code_in_real_redis_stream_matches_database(
+    session_factory: async_sessionmaker[AsyncSession], private: bool
+) -> None:
+    url = os.environ.get("REDIS_PROGRESS_URL")
+    if not url:
+        pytest.skip("REDIS_PROGRESS_URL must point to an isolated Redis database")
+    async with session_factory() as session, session.begin():
+        user = await UserRepository(session).create(email=f"{uuid4()}@example.com", password_hash="x", monthly_limit=20)
+        document = await DocumentRepository(session).create(
+            owner_id=user.id,
+            title="Progress error",
+            source_type=SourceType.GDOCS if private else SourceType.UPLOAD,
+            source_uri="https://docs.google.com/document/d/abc123/edit" if private else None,
+            object_key="test.txt",
+            mime_type="text/plain",
+            size_bytes=1,
+            checksum="d" * 64,
+        )
+
+    class BrokenParser(DocumentParser):
+        supported_mime_types = frozenset({"text/plain"})
+
+        def parse(self, data: bytes, *, filename: str) -> ParsedDocument:
+            raise RuntimeError("internal diagnostics")
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda req: httpx.Response(302, headers={"location": "https://accounts.google.com/ServiceLogin"})
+        )
+    ) as client:
+        redis = Redis.from_url(url)
+        try:
+            storage = FakeObjectStorageClient(objects={("documents", "test.txt"): b"x"})
+            service = DocumentIngestService(
+                session_factory=session_factory,
+                documents=DocumentRepository,
+                images=ImageRepository,
+                storage=storage,
+                registry=ParserRegistry((BrokenParser(),)),
+                notifier=RedisProgressNotifier(redis, ProgressSettings()),
+                gdocs=GDocsImporter(max_bytes=1024, client=client),
+                parsing_lease=PostgresParsingLease(session_factory.kw["bind"]),
+                image_store=ImageStore(storage),
+                inspector=FileInspector(UploadSettings()),
+                counter=TokenCounter(),
+                ingest_settings=IngestSettings(),
+                upload_settings=UploadSettings(),
+            )
+            await service.parse(document.id)
+            entries = await redis.xrange(stream_key(document.id))
+        finally:
+            await redis.delete(stream_key(document.id))
+            await redis.aclose()
+    async with session_factory() as session:
+        saved = await DocumentRepository(session).get(document.id)
+    assert saved is not None and saved.error_code is not None
+    payload = json.loads(entries[-1][1][b"data"])
+    assert payload["type"] == "error" and payload["error_code"] == saved.error_code.value
+    assert "internal diagnostics" not in payload["message"]
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_initialization_failure_uses_lease_and_emits_code(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with session_factory() as session, session.begin():
+        user = await UserRepository(session).create(email=f"{uuid4()}@example.com", password_hash="x", monthly_limit=20)
+        document = await DocumentRepository(session).create(
+            owner_id=user.id,
+            title="Init failure",
+            source_type=SourceType.UPLOAD,
+            object_key="test.md",
+            mime_type="text/markdown",
+            size_bytes=1,
+            checksum="f" * 64,
+        )
+    notifier = FakeProgressNotifier()
+
+    def broken() -> DocumentIngestService:
+        raise RuntimeError("broken dependency")
+
+    lease = PostgresParsingLease(session_factory.kw["bind"])
+    runner = DocumentIngestRunner(
+        lease=lease, build=broken, session_factory=session_factory, documents=DocumentRepository, notifier=notifier
+    )
+    async with lease.acquire(document.id) as acquired:
+        assert acquired
+        await runner.parse(document.id)
+    async with session_factory() as session:
+        untouched = await DocumentRepository(session).get(document.id)
+    assert untouched is not None and untouched.status is DocumentStatus.UPLOADED
+    await runner.parse(document.id)
+    async with session_factory() as session:
+        failed = await DocumentRepository(session).get(document.id)
+    assert failed is not None and failed.status is DocumentStatus.FAILED
+    assert failed.error_code is DocumentErrorCode.PARSE_FAILED
+    assert notifier.error_codes == [DocumentErrorCode.PARSE_FAILED]
 
 
 @pytest.mark.integration
@@ -304,11 +511,16 @@ async def test_pdf_parses_to_tree_and_images(session_factory: async_sessionmaker
 
     class PDFVision:
         async def describe(
-            self, images: tuple[ExtractedImage, ...], *, document_context: str = ""
+            self,
+            images: tuple[ExtractedImage, ...],
+            *,
+            document_context: str = "",
+            topic_titles: dict[str, str] | None = None,
         ) -> dict[str, str | None]:
             nonlocal described_ref
             assert images and all(image.media_type == "image/png" for image in images)
             assert all(f'::image{{id="{image.ref}"}}' in document_context for image in images)
+            assert topic_titles is not None and all(topic_titles[image.ref] for image in images)
             described_ref = images[0].ref
             return {
                 image.ref: "Diagram of the learning process" if image.ref == described_ref else None for image in images
@@ -319,10 +531,15 @@ async def test_pdf_parses_to_tree_and_images(session_factory: async_sessionmaker
         documents=DocumentRepository,
         images=ImageRepository,
         storage=storage,
-        registry=ParserRegistry((DoclingParser(),)),
+        registry=ParserRegistry((DoclingParser(artifacts_path=IngestSettings().docling_artifacts_path),)),
         notifier=FakeProgressNotifier(),
         gdocs=GDocsImporter(max_bytes=1024),
         parsing_lease=PostgresParsingLease(session_factory.kw["bind"]),
+        image_store=ImageStore(storage),
+        inspector=FileInspector(UploadSettings()),
+        counter=TokenCounter(),
+        ingest_settings=IngestSettings(),
+        upload_settings=UploadSettings(),
         image_describer=PDFVision(),
     )
     await service.parse(document.id)

@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from uuid import UUID
 
+from src.app.contracts.documents.statuses import DocumentErrorCode
 from src.app.contracts.progress import ProgressEventType
 
 
@@ -14,6 +15,7 @@ class FakeProgressNotifier:
         self._committed = committed
         self.committed_at_emit: list[int | None] = []
         self.reset_calls: list[UUID] = []
+        self.error_codes: list[DocumentErrorCode | None] = []
 
     async def reset(self, document_id: UUID) -> None:
         self.reset_calls.append(document_id)
@@ -26,7 +28,9 @@ class FakeProgressNotifier:
         part_id: UUID | None = None,
         stage: str | None = None,
         message: str = "",
+        error_code: DocumentErrorCode | None = None,
     ) -> str | None:
         self.committed_at_emit.append(self._committed() if self._committed is not None else None)
         self.events.append((document_id, event_type, part_id, stage, message))
+        self.error_codes.append(error_code)
         return f"{len(self.events)}-0"

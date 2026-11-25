@@ -4,9 +4,9 @@ import re
 from pathlib import PurePosixPath
 
 from src.app.exceptions.ingest import ParseError
+from src.app.ingest.markdown_syntax import parse_markdown
 from src.app.ingest.parsers.base import DocumentParser, ExtractedImage, ParsedDocument
 
-_IMAGE = re.compile(r"!\[([^]]*)\]\(([^)\s]+)(?:\s+[^)]*)?\)")
 _DATA = re.compile(r"^data:(image/(?:png|jpeg|jpg|gif|webp));base64,(.+)$", re.IGNORECASE | re.DOTALL)
 
 
@@ -21,23 +21,26 @@ class MarkdownParser(DocumentParser):
         text = text.replace("\r\n", "\n").replace("\r", "\n")
         lines = text.splitlines()
         result: list[str] = []
-        in_fence = False
+        structure = parse_markdown(text)
+        setext_lines = {heading.start: heading.level for heading in structure.headings}
+        offset = 0
         i = 0
         while i < len(lines):
             line = lines[i]
-            if line.lstrip().startswith("```") or line.lstrip().startswith("~~~"):
-                in_fence = not in_fence
+            # Markdown-it determines heading positions, including fence lengths.
             if (
-                not in_fence
-                and i + 1 < len(lines)
+                i + 1 < len(lines)
                 and line.strip()
                 and not re.match(r"^\s{0,3}(?:[-+*]\s|\d+[.)]\s)", line)
                 and re.fullmatch(r"\s*(=+|-+)\s*", lines[i + 1])
+                and offset in setext_lines
             ):
                 result.append(f"{'#' if lines[i + 1].strip()[0] == '=' else '##'} {line.strip()}")
+                offset += len(line) + len(lines[i + 1]) + 2
                 i += 2
                 continue
             result.append(line)
+            offset += len(line) + 1
             i += 1
         normalized = "\n".join(result)
         if text.endswith("\n"):
@@ -46,27 +49,22 @@ class MarkdownParser(DocumentParser):
         images: list[ExtractedImage] = []
         counter = 0
 
-        def replace(match: re.Match[str]) -> str:
-            nonlocal counter
-            if in_code_at(normalized, match.start()):
-                return match.group(0)
-            source = match.group(2)
+        replacements: list[tuple[int, int, str]] = []
+        for image in parse_markdown(normalized).images:
+            source = image.source
             data_match = _DATA.match(source)
             if data_match is None:
-                return match.group(1) or source
+                continue
             try:
                 raw = base64.b64decode(data_match.group(2), validate=True)
             except (binascii.Error, ValueError):
-                return match.group(1) or source
+                continue
             counter += 1
             ref = f"img_{counter}"
             media_type = data_match.group(1).lower().replace("jpg", "jpeg")
-            images.append(ExtractedImage(ref=ref, data=raw, media_type=media_type, caption=match.group(1) or None))
-            return f'\n::image{{id="{ref}"}}\n'
+            images.append(ExtractedImage(ref=ref, data=raw, media_type=media_type, caption=image.caption or None))
+            replacements.append((image.start, image.end, f'::image{{id="{ref}"}}'))
 
-        normalized = _IMAGE.sub(replace, normalized)
+        for start, end, replacement in reversed(replacements):
+            normalized = normalized[:start] + replacement + normalized[end:]
         return ParsedDocument(markdown=normalized, images=tuple(images), title=PurePosixPath(filename).stem)
-
-
-def in_code_at(text: str, position: int) -> bool:
-    return sum(1 for line in text[:position].splitlines() if line.lstrip().startswith(("```", "~~~"))) % 2 == 1

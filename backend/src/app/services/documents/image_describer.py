@@ -1,6 +1,5 @@
 import asyncio
 import base64
-import re
 from typing import Literal, Protocol
 
 from pydantic import BaseModel, Field
@@ -42,7 +41,11 @@ class ImageDescriber:
         self._concurrency = concurrency
 
     async def describe(
-        self, images: tuple[ExtractedImage, ...], *, document_context: str = ""
+        self,
+        images: tuple[ExtractedImage, ...],
+        *,
+        document_context: str = "",
+        topic_titles: dict[str, str] | None = None,
     ) -> dict[str, str | None]:
         semaphore = asyncio.Semaphore(self._concurrency)
 
@@ -52,8 +55,7 @@ class ImageDescriber:
                 position = document_context.find(marker)
                 position = max(0, position)
                 surrounding = document_context[max(0, position - 250) : position + len(marker) + 250]
-                headings = re.findall(r"^#{1,3}\s+(.+)$", document_context[:position], re.MULTILINE)
-                topic = headings[-1] if headings else "Вступление"
+                topic = (topic_titles or {}).get(image.ref, "Вступление")
                 request = LLMRequest(
                     purpose="vision",
                     system=(SystemBlock(VISION_SYSTEM, cache=True),),

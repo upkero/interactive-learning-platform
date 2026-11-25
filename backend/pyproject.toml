@@ -47,6 +47,7 @@ dependencies = [
     "docling>=2.152.0",
     "torch",
     "torchvision",
+    "markdown-it-py>=4,<5",
 ]
 
 [dependency-groups]

@@ -32,3 +32,26 @@ async def test_failed_or_decorative_description_is_empty() -> None:
     )
     describer = ImageDescriber(cast(LLMClient, object()), call=cast(StructuredCall, call))
     assert await describer.describe(images) == {"img_1": None, "img_2": None}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_vision_uses_supplied_topic_not_a_fenced_example_heading() -> None:
+    from src.app.contracts.llm.llm_request import LLMRequest
+    from src.app.contracts.llm.text_part import TextPart
+
+    captured: list[str] = []
+
+    async def capture(llm: LLMClient, request: LLMRequest, schema: type[ImageDescription]) -> ImageDescription:
+        content = request.messages[0].content
+        assert isinstance(content, tuple) and isinstance(content[0], TextPart)
+        captured.append(content[0].text)
+        return ImageDescription(kind="diagram", description="A useful diagram.")
+
+    image = ExtractedImage(ref="img_1", data=b"image", media_type="image/png")
+    context = '# Actual\n\n````\n# Fake example\n````\n\n::image{id="img_1"}'
+    describer = ImageDescriber(cast(LLMClient, object()), call=cast(StructuredCall, capture))
+    assert await describer.describe((image,), document_context=context, topic_titles={"img_1": "Actual"}) == {
+        "img_1": "A useful diagram."
+    }
+    assert "Topic: Actual" in captured[0] and "Topic: Fake example" not in captured[0]

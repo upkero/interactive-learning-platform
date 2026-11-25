@@ -49,6 +49,8 @@ class GDocsImporter:
                     if not location:
                         raise GDocsImportError(DocumentErrorCode.GDOCS_IMPORT_FAILED, "Invalid Google Docs redirect")
                     url = url.join(location)
+                    if url.host == "accounts.google.com" and url.path.startswith(("/ServiceLogin", "/signin/")):
+                        raise GDocsImportError(DocumentErrorCode.GDOCS_NOT_PUBLIC, "Google Docs document is not public")
                     continue
                 content_type = response.headers.get("content-type", "").lower()
                 if "text/html" in content_type:

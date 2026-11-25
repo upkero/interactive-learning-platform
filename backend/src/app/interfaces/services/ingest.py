@@ -18,7 +18,11 @@ class GoogleDocsImporter(Protocol):
 
 class ImageDescriberProtocol(Protocol):
     async def describe(
-        self, images: tuple[ExtractedImage, ...], *, document_context: str = ""
+        self,
+        images: tuple[ExtractedImage, ...],
+        *,
+        document_context: str = "",
+        topic_titles: dict[str, str] | None = None,
     ) -> dict[str, str | None]: ...
 
 

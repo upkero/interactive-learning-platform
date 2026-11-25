@@ -90,6 +90,32 @@ class DocumentRepository(DocumentRepositoryProtocol):
         )
         return [self._to_record(row) for row in (await self._session.scalars(stmt)).all()]
 
+    async def stale_parsing(self, *, older_than: timedelta, limit: int) -> list[DocumentRecord]:
+        stmt = (
+            select(Document)
+            .where(Document.status == DocumentStatus.PARSING.value, Document.updated_at < func.now() - older_than)
+            .order_by(Document.updated_at, Document.id)
+            .limit(limit)
+        )
+        return [self._to_record(row) for row in (await self._session.scalars(stmt)).all()]
+
+    async def fail_stale_parsing(self, document_id: UUID, *, older_than: timedelta) -> bool:
+        stmt = (
+            update(Document)
+            .where(
+                Document.id == document_id,
+                Document.status == DocumentStatus.PARSING.value,
+                Document.updated_at < func.now() - older_than,
+            )
+            .values(
+                status=DocumentStatus.FAILED.value,
+                error_code=DocumentErrorCode.PARSE_FAILED.value,
+                error_detail="Worker lost while parsing",
+            )
+            .returning(Document.id)
+        )
+        return (await self._session.scalar(stmt)) is not None
+
     async def touch(self, document_id: UUID) -> None:
         await self._session.execute(update(Document).where(Document.id == document_id).values(updated_at=func.now()))
 

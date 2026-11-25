@@ -91,6 +91,20 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
             key=lambda d: (d.updated_at, d.id),
         )[:limit]
 
+    async def stale_parsing(self, *, older_than: timedelta, limit: int) -> list[DocumentRecord]:
+        before = now() - older_than
+        return sorted(
+            (d for d in self._documents.values() if d.status is DocumentStatus.PARSING and d.updated_at < before),
+            key=lambda d: (d.updated_at, d.id),
+        )[:limit]
+
+    async def fail_stale_parsing(self, document_id: UUID, *, older_than: timedelta) -> bool:
+        row = self._documents.get(document_id)
+        if row is None or row.status is not DocumentStatus.PARSING or row.updated_at >= now() - older_than:
+            return False
+        await self.set_status(document_id, DocumentStatus.FAILED, error_code=DocumentErrorCode.PARSE_FAILED)
+        return True
+
     async def touch(self, document_id: UUID) -> None:
         if document_id in self._documents:
             self._documents[document_id] = replace(self._documents[document_id], updated_at=now())

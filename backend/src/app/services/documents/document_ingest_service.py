@@ -12,12 +12,14 @@ from src.app.contracts.documents.statuses import DocumentErrorCode, DocumentStat
 from src.app.contracts.documents.topic_node import TopicNode
 from src.app.contracts.ingest import ParsedDocument
 from src.app.contracts.progress.event_type import ProgressEventType
-from src.app.core.settings.ingest import get_ingest_settings
-from src.app.core.settings.upload import get_upload_settings
+from src.app.core.settings.ingest import IngestSettings
+from src.app.core.settings.upload import UploadSettings
+from src.app.exceptions.documents import UploadValidationError
 from src.app.exceptions.ingest import GDocsImportError, IngestFailure
 from src.app.ingest.images import ImageStore
-from src.app.ingest.tokens import get_token_counter
-from src.app.ingest.topic_tree import _inside_code_fence, build_topic_tree
+from src.app.ingest.markdown_syntax import parse_markdown
+from src.app.ingest.tokens import TokenCounter
+from src.app.ingest.topic_tree import build_topic_tree
 from src.app.interfaces.repositories.documents import DocumentRepositoryProtocol, ImageRepositoryProtocol
 from src.app.interfaces.services.ingest import (
     GoogleDocsImporter,
@@ -29,6 +31,7 @@ from src.app.interfaces.services.ingest import (
 from src.app.interfaces.services.progress_notifier import ProgressNotifier
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.services.documents.document_failure import mark_document_failed
+from src.app.services.documents.file_inspector import FileInspector
 from src.app.storage.object_keys import parsed_markdown_key, source_key
 
 logger = logging.getLogger(__name__)
@@ -46,6 +49,11 @@ class DocumentIngestService:
         notifier: ProgressNotifier,
         gdocs: GoogleDocsImporter,
         parsing_lease: ParsingLease,
+        image_store: ImageStore,
+        inspector: FileInspector,
+        counter: TokenCounter,
+        ingest_settings: IngestSettings,
+        upload_settings: UploadSettings,
         image_describer: ImageDescriberProtocol | None = None,
         topic_segmenter: TopicSegmenterProtocol | None = None,
     ) -> None:
@@ -53,6 +61,11 @@ class DocumentIngestService:
         self._storage, self._registry, self._notifier = storage, registry, notifier
         self._gdocs = gdocs
         self._parsing_lease = parsing_lease
+        self._image_store = image_store
+        self._inspector = inspector
+        self._counter = counter
+        self._ingest_settings = ingest_settings
+        self._upload_settings = upload_settings
         self._image_describer = image_describer
         self._topic_segmenter = topic_segmenter
 
@@ -73,6 +86,10 @@ class DocumentIngestService:
         try:
             if document.source_type is SourceType.GDOCS:
                 data, title = await self._gdocs.fetch(document.source_uri or "")
+                try:
+                    await self._inspector.inspect(data, "source.docx")
+                except UploadValidationError as exc:
+                    raise GDocsImportError(DocumentErrorCode.GDOCS_IMPORT_FAILED, "Invalid Google Docs export") from exc
                 source = source_key(document.owner_id, document.id, "docx")
                 await self._storage.put_object(
                     bucket="documents",
@@ -94,13 +111,13 @@ class DocumentIngestService:
             parsed = await to_thread.run_sync(partial(parser.parse, data, filename=filename))
             if not parsed.markdown.strip():
                 raise IngestFailure(DocumentErrorCode.EMPTY_DOCUMENT, "Document is empty")
-            if parsed.page_count is not None and parsed.page_count > get_upload_settings().max_pages:
+            if parsed.page_count is not None and parsed.page_count > self._upload_settings.max_pages:
                 raise IngestFailure(DocumentErrorCode.TOO_MANY_PAGES, "Document has too many pages")
-            initial_tree = build_topic_tree(parsed.markdown, get_token_counter(), parsed.heading_pages)
-            segment_needed = not _has_heading(parsed.markdown) or (
+            initial_tree = build_topic_tree(parsed.markdown, self._counter, parsed.heading_pages)
+            segment_needed = not parse_markdown(parsed.markdown).headings or (
                 len(initial_tree) == 1
                 and not initial_tree[0].children
-                and initial_tree[0].total_tokens > get_ingest_settings().segment_max_tokens
+                and initial_tree[0].total_tokens > self._ingest_settings.segment_max_tokens
             )
             if self._topic_segmenter is not None and segment_needed:
                 try:
@@ -130,8 +147,8 @@ class DocumentIngestService:
 
     async def _store_result(self, document: DocumentRecord, parsed: ParsedDocument) -> None:
         document_id = document.id
-        markdown, saved = await ImageStore(self._storage).save(document_id, parsed.markdown, parsed.images)
-        tree = build_topic_tree(markdown, get_token_counter(), parsed.heading_pages)
+        markdown, saved = await self._image_store.save(document_id, parsed.markdown, parsed.images)
+        tree = build_topic_tree(markdown, self._counter, parsed.heading_pages)
         await self._storage.put_object(
             bucket="documents",
             key=parsed_markdown_key(document.owner_id, document_id),
@@ -139,11 +156,14 @@ class DocumentIngestService:
             content_type="text/markdown; charset=utf-8",
         )
         await self._notifier.emit(document_id, ProgressEventType.STAGE, stage="images", message="Images extracted")
+        owners = {ref: node for node in _walk(tree) for ref in node.image_ids}
         descriptions: dict[str, str | None] = {}
         if self._image_describer is not None and saved:
             try:
                 descriptions = await self._image_describer.describe(
-                    tuple(item.image for item in saved), document_context=markdown
+                    tuple(item.image for item in saved),
+                    document_context=markdown,
+                    topic_titles={ref: node.title for ref, node in owners.items()},
                 )
             except Exception:
                 logger.warning(
@@ -156,7 +176,7 @@ class DocumentIngestService:
                 height=item.height,
                 page=item.image.page,
                 caption=item.image.caption,
-                topic_id=next((node.id for node in _walk(tree) if item.image.ref in node.image_ids), None),
+                topic_id=owners[item.image.ref].id if item.image.ref in owners else None,
             )
             for item in saved
         ]
@@ -182,7 +202,7 @@ class DocumentIngestService:
             error_detail=detail,
         )
         await self._notifier.emit(
-            document_id, ProgressEventType.ERROR, stage="parsing", message="Document parsing failed"
+            document_id, ProgressEventType.ERROR, stage="parsing", message="Document parsing failed", error_code=code
         )
 
     async def _update_source(self, document_id: UUID, key: str, title: str | None, size_bytes: int) -> None:
@@ -200,12 +220,3 @@ def _walk(nodes: list[TopicNode] | tuple[TopicNode, ...]) -> Iterator[TopicNode]
     for node in nodes:
         yield node
         yield from _walk(node.children)
-
-
-def _has_heading(markdown: str) -> bool:
-    import re
-
-    return any(
-        not _inside_code_fence(markdown, match.start())
-        for match in re.finditer(r"^#{1,3}\s+\S", markdown, re.MULTILINE)
-    )

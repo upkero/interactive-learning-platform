@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.documents.part_draft import PartDraft
-from src.app.contracts.documents.statuses import DocumentStatus, PartStatus
+from src.app.contracts.documents.statuses import DocumentErrorCode, DocumentStatus, PartStatus
 from src.app.contracts.quota import LedgerOp
 from src.app.core.clock import SystemClock
 from src.app.models.document import Document
@@ -279,4 +279,53 @@ async def test_uploaded_lock_touch_and_quota_lookup(
         await documents.touch(document_id)
     async with session_factory() as session, session.begin():
         assert await DocumentRepository(session).lock_stale_uploaded(older_than=timedelta(minutes=30), limit=50) == []
+    await container.close()
+
+
+async def test_stale_parsing_fails_only_after_lease_is_released(
+    session_factory: async_sessionmaker[AsyncSession], part_ids: tuple[UUID, UUID, UUID]
+) -> None:
+    from src.app.db.parsing_lease import PostgresParsingLease
+
+    _, document_id, _ = part_ids
+    container = ApplicationContainer()
+    notifier = FakeProgressNotifier()
+    lease = PostgresParsingLease(session_factory.kw["bind"])
+    recovery = PartRecovery(
+        session_factory=session_factory,
+        parts=DocumentPartRepository,
+        documents=DocumentRepository,
+        ledger=container.quota_ledger,
+        dispatcher=FakeTaskDispatcher(),
+        notifier=notifier,
+        users=UserRepository,
+        notifications=container.notification_service,
+    )
+    watchdog = Watchdog(
+        session_factory=session_factory,
+        parts=DocumentPartRepository,
+        documents=DocumentRepository,
+        recovery=recovery,
+        dispatcher=FakeTaskDispatcher(),
+        metrics=RecordingMetricsCollector(),
+        parsing_lease=lease,
+        notifier=notifier,
+    )
+    async with session_factory() as session, session.begin():
+        await DocumentRepository(session).set_status(document_id, DocumentStatus.PARSING)
+        await session.execute(
+            update(Document)
+            .where(Document.id == document_id)
+            .values(updated_at=datetime.now(UTC) - timedelta(minutes=11))
+        )
+    async with lease.acquire(document_id) as acquired:
+        assert acquired
+        assert (await watchdog.tick()).failed == 0
+    assert (await watchdog.tick()).failed == 1
+    assert (await watchdog.tick()).failed == 0
+    async with session_factory() as session:
+        document = await DocumentRepository(session).get(document_id)
+    assert document is not None and document.status is DocumentStatus.FAILED
+    assert document.error_code is DocumentErrorCode.PARSE_FAILED
+    assert notifier.error_codes[-1] is DocumentErrorCode.PARSE_FAILED
     await container.close()

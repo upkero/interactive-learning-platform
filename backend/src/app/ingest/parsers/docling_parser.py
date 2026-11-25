@@ -4,7 +4,6 @@ from threading import Lock
 
 from pypdf import PdfReader
 
-from src.app.core.settings.ingest import get_ingest_settings
 from src.app.exceptions.ingest import ParseError
 from src.app.ingest.parsers.base import DocumentParser, ExtractedImage, ParsedDocument
 
@@ -19,7 +18,7 @@ class DoclingParser(DocumentParser):
         }
     )
 
-    def __init__(self, *, images_scale: float = 2.0) -> None:
+    def __init__(self, *, images_scale: float = 2.0, artifacts_path: str | None = None) -> None:
         from docling.datamodel.base_models import InputFormat
         from docling.datamodel.pipeline_options import PdfPipelineOptions
         from docling.document_converter import DocumentConverter, PdfFormatOption
@@ -28,7 +27,7 @@ class DoclingParser(DocumentParser):
             generate_picture_images=True,
             images_scale=images_scale,
             do_ocr=False,
-            artifacts_path=get_ingest_settings().docling_artifacts_path,
+            artifacts_path=artifacts_path,
         )
         self._converter = DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=options)})
         self._conversion_lock = Lock()

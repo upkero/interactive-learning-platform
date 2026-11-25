@@ -3,16 +3,15 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from src.app.contracts.documents.topic_node import TopicNode
+from src.app.ingest.markdown_syntax import parse_markdown
 
 
 class TokenCounter(Protocol):
     def count(self, text: str) -> int: ...
 
 
-_HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*$", re.MULTILINE)
 _NUMBERED = re.compile(r"^(\d+(?:\.\d+){0,2})\.?\s+\S")
 _CHAPTER = re.compile(r"^(глава|часть|chapter|part)\s+\w+", re.IGNORECASE)
-_IMAGE = re.compile(r'::image\{id="(img_\d+)"\}')
 MAX_TREE_LEVEL = 3
 
 
@@ -56,11 +55,8 @@ def heading_level(title: str, markdown_level: int) -> int:
 def build_topic_tree(
     markdown: str, counter: TokenCounter, heading_pages: tuple[tuple[str, int], ...] = ()
 ) -> list[TopicNode]:
-    headings = [
-        (m.start(), heading_level(m.group(2), len(m.group(1))), m.group(2).strip())
-        for m in _HEADING.finditer(markdown)
-        if len(m.group(1)) <= MAX_TREE_LEVEL and not _inside_code_fence(markdown, m.start())
-    ]
+    structure = parse_markdown(markdown)
+    headings = [(item.start, heading_level(item.title, item.level), item.title) for item in structure.headings]
     roots: list[_TopicBuilder] = []
     if not headings or markdown[: headings[0][0]].strip():
         roots.append(
@@ -87,18 +83,14 @@ def build_topic_tree(
         siblings.append(node)
         stack.append(node)
     for root in roots:
-        _fill(root, markdown, counter)
+        _fill(root, markdown, counter, structure.markers)
     return [root.freeze() for root in roots]
 
 
-def _fill(node: _TopicBuilder, markdown: str, counter: TokenCounter) -> int:
+def _fill(node: _TopicBuilder, markdown: str, counter: TokenCounter, markers: tuple[tuple[int, str], ...]) -> int:
     own_end = node.children[0].start if node.children else node.end
     own_text = markdown[node.start : own_end]
     node.own_tokens = counter.count(own_text)
-    node.total_tokens = node.own_tokens + sum(_fill(child, markdown, counter) for child in node.children)
-    node.image_ids = _IMAGE.findall(own_text)
+    node.total_tokens = node.own_tokens + sum(_fill(child, markdown, counter, markers) for child in node.children)
+    node.image_ids = [ref for position, ref in markers if node.start <= position < own_end]
     return node.total_tokens
-
-
-def _inside_code_fence(markdown: str, position: int) -> bool:
-    return sum(1 for line in markdown[:position].splitlines() if line.lstrip().startswith(("```", "~~~"))) % 2 == 1

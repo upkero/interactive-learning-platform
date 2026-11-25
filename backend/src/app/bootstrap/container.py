@@ -20,6 +20,7 @@ from src.app.core.settings.storage import get_storage_settings
 from src.app.core.settings.upload import get_upload_settings
 from src.app.db.parsing_lease import PostgresParsingLease
 from src.app.db.session import build_engine, build_session_factory
+from src.app.ingest.images import ImageStore
 from src.app.ingest.parsers.base import DocumentParser as IngestDocumentParser
 from src.app.ingest.parsers.base import ParserRegistry
 from src.app.ingest.parsers.gdocs_importer import GDocsImporter
@@ -46,6 +47,7 @@ from src.app.repositories.user_repository import UserRepository
 from src.app.repositories.widget_repository import WidgetRepository
 from src.app.repositories.widget_usage_repository import WidgetUsageRepository
 from src.app.services.auth.auth_service import AuthService
+from src.app.services.documents.document_ingest_runner import DocumentIngestRunner
 from src.app.services.documents.document_ingest_service import DocumentIngestService
 from src.app.services.documents.document_query_service import DocumentQueryService
 from src.app.services.documents.file_inspector import FileInspector
@@ -78,7 +80,7 @@ from src.app.tasks.dispatcher import CeleryTaskDispatcher
 def _build_docling_parser() -> IngestDocumentParser:
     from src.app.ingest.parsers.docling_parser import DoclingParser
 
-    return DoclingParser()
+    return DoclingParser(artifacts_path=get_ingest_settings().docling_artifacts_path)
 
 
 class ApplicationContainer:
@@ -105,6 +107,16 @@ class ApplicationContainer:
     # -- services -----------------------------------------------------------
 
     @cached_property
+    def document_ingest_runner(self) -> DocumentIngestRunner:
+        return DocumentIngestRunner(
+            lease=PostgresParsingLease(self._db_engine),
+            build=lambda: self.document_ingest,
+            session_factory=self.session_factory,
+            documents=DocumentRepository,
+            notifier=self.progress_notifier,
+        )
+
+    @cached_property
     def document_ingest(self) -> DocumentIngestService:
         return DocumentIngestService(
             session_factory=self.session_factory,
@@ -114,6 +126,11 @@ class ApplicationContainer:
             registry=ParserRegistry((_build_docling_parser(), MarkdownParser())),
             gdocs=GDocsImporter(max_bytes=get_upload_settings().max_bytes),
             parsing_lease=PostgresParsingLease(self._db_engine),
+            image_store=ImageStore(self.object_storage),
+            inspector=FileInspector(get_upload_settings()),
+            counter=get_token_counter(),
+            ingest_settings=get_ingest_settings(),
+            upload_settings=get_upload_settings(),
             notifier=self.progress_notifier,
             image_describer=ImageDescriber(
                 self.cheap_llm,
@@ -147,6 +164,8 @@ class ApplicationContainer:
             recovery=self.part_recovery,
             dispatcher=self.task_dispatcher,
             metrics=self.metrics_collector,
+            parsing_lease=PostgresParsingLease(self._db_engine),
+            notifier=self.progress_notifier,
         )
 
     @cached_property
