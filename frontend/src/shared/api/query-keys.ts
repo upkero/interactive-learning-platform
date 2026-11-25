@@ -1,12 +1,15 @@
 // Base query keys
 export const qk = {
-  me: ['me'] as const,
-  quota: ['me', 'quota'] as const,
-  materials: (filter: 'mine' | 'shared' = 'mine') => ['materials', filter] as const,
-  document: (documentId: string) => ['document', documentId] as const,
-  documentTopics: (documentId: string) => ['document', documentId, 'topics'] as const,
-  documentParts: (documentId: string) => ['document', documentId, 'parts'] as const,
-  part: (partId: string) => ['part', partId] as const,
+  me: ["me"] as const,
+  quota: ["me", "quota"] as const,
+  materials: (filter: "mine" | "shared" = "mine") =>
+    ["materials", filter] as const,
+  document: (documentId: string) => ["document", documentId] as const,
+  documentTopics: (documentId: string) =>
+    ["document", documentId, "topics"] as const,
+  documentParts: (documentId: string) =>
+    ["document", documentId, "parts"] as const,
+  part: (partId: string) => ["part", partId] as const,
 } as const;
 
 // Type helpers for query key inference

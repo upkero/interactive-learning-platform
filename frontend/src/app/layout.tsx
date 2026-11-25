@@ -1,9 +1,9 @@
-import '@grasp/primitives/tokens.css';
-import '@/shared/styles/globals.css';
-import type { ReactNode } from 'react';
-import { QueryProvider } from '@/shared/api/query-provider';
+import "@grasp/primitives/tokens.css";
+import "@/shared/styles/globals.css";
+import type { ReactNode } from "react";
+import { QueryProvider } from "@/shared/api/query-provider";
 
-export const runtime = 'nodejs';
+export const runtime = "nodejs";
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

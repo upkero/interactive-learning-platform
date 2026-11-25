@@ -1,10 +1,15 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useRef } from 'react';
-import { useRouter, useSearchParams } from '@/shared/i18n/navigation-client';
-import { useDocument } from '../model/useDocument';
-import type { MaterialStatus } from './types';
-import { getRedirectForStatus, getRouteForStep, type WizardStep } from './types';
+import { useCallback, useEffect, useRef } from "react";
+import { useRouter, useSearchParams } from "@/shared/i18n/navigation-client";
+import { useDocument } from "../model/useDocument";
+import { isApiError } from "@/shared/api/errors";
+import type { MaterialStatus } from "./types";
+import {
+  getRedirectForStatus,
+  getRouteForStep,
+  type WizardStep,
+} from "./types";
 
 interface UseDocumentStatusGuardOptions {
   documentId: string;
@@ -55,7 +60,7 @@ export function useDocumentStatusGuard({
 }: UseDocumentStatusGuardOptions): UseDocumentStatusGuardResult {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const locale = searchParams.get('locale') || 'ru';
+  const locale = searchParams.get("locale") || "ru";
 
   const { data: document, isLoading, error } = useDocument(documentId);
 
@@ -91,9 +96,9 @@ export function useDocumentStatusGuard({
     useReplace,
   ]);
 
-  // Handle error states (404, 403, etc.)
-  const isNotFound = error instanceof Error && error.message.includes('Failed to load document');
-  const isForbidden = error instanceof Error && error.message.includes('403');
+  // Handle error states (404, 403, etc.) using isApiError and error.code/error.status
+  const isNotFound = isApiError(error) && error.code === "document_not_found";
+  const isForbidden = isApiError(error) && error.status === 403;
 
   return {
     status,
@@ -110,7 +115,7 @@ export function useDocumentStatusGuard({
 export function useDocumentErrorRedirect() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const locale = searchParams.get('locale') || 'ru';
+  const locale = searchParams.get("locale") || "ru";
 
   const redirectToMaterials = useCallback(() => {
     router.push(`/${locale}/materials`);

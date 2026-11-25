@@ -1,40 +1,44 @@
-'use client';
+"use client";
 
-import { useLocale, useTranslations } from 'next-intl';
-import { useRouter, useSearchParams } from '@/shared/i18n/navigation-client';
-import { type SyntheticEvent, useState } from 'react';
-import { useLogin, useRegister } from '../api';
-import { sanitizeNextUrl } from '../model/sanitizeNext';
-import { authCredentialsSchema, registerSchema } from '../model/schemas';
-import { useApiErrorMessage } from '@/shared/api';
-import styles from './LoginForm.module.css';
+import { useLocale, useTranslations } from "next-intl";
+import { useRouter, useSearchParams } from "@/shared/i18n/navigation-client";
+import { type SyntheticEvent, useState } from "react";
+import { useLogin, useRegister } from "../api";
+import { sanitizeNextUrl } from "../model/sanitizeNext";
+import { authCredentialsSchema, registerSchema } from "../model/schemas";
+import { useApiErrorMessage } from "@/shared/api";
+import styles from "./LoginForm.module.css";
 
-export function LoginForm({ mode = 'login' }: { mode?: 'login' | 'register' }) {
-  const t = useTranslations('auth');
+export function LoginForm({ mode = "login" }: { mode?: "login" | "register" }) {
+  const t = useTranslations("auth");
   const locale = useLocale();
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
   const loginMutation = useLogin();
   const registerMutation = useRegister();
 
-  const mutation = mode === 'login' ? loginMutation : registerMutation;
+  const mutation = mode === "login" ? loginMutation : registerMutation;
 
   const handleSubmit = (e: SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormError(null);
 
-    const schema = mode === 'login' ? authCredentialsSchema : registerSchema;
-    const parsed = schema.safeParse(mode === 'login' ? { email, password } : { email, password, display_name: displayName || undefined });
+    const schema = mode === "login" ? authCredentialsSchema : registerSchema;
+    const parsed = schema.safeParse(
+      mode === "login"
+        ? { email, password }
+        : { email, password, display_name: displayName || undefined }
+    );
 
     if (!parsed.success) {
       const issue = parsed.error.errors[0]?.message;
-      setFormError(issue ? t(issue) : t('validation_error'));
+      setFormError(issue ? t(issue) : t("validation_error"));
       return;
     }
 
@@ -48,7 +52,7 @@ export function LoginForm({ mode = 'login' }: { mode?: 'login' | 'register' }) {
   return (
     <form onSubmit={handleSubmit} className={styles.form} noValidate>
       <h1 className={styles.title}>
-        {mode === 'login' ? t('loginTitle') : t('registerTitle')}
+        {mode === "login" ? t("loginTitle") : t("registerTitle")}
       </h1>
 
       {formError && (
@@ -59,7 +63,7 @@ export function LoginForm({ mode = 'login' }: { mode?: 'login' | 'register' }) {
 
       <div className={styles.field}>
         <label htmlFor="email" className={styles.label}>
-          {t('emailLabel')}
+          {t("emailLabel")}
         </label>
         <input
           id="email"
@@ -77,7 +81,7 @@ export function LoginForm({ mode = 'login' }: { mode?: 'login' | 'register' }) {
 
       <div className={styles.field}>
         <label htmlFor="password" className={styles.label}>
-          {t('passwordLabel')}
+          {t("passwordLabel")}
         </label>
         <input
           id="password"
@@ -88,16 +92,16 @@ export function LoginForm({ mode = 'login' }: { mode?: 'login' | 'register' }) {
           }}
           required
           minLength={8}
-          autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+          autoComplete={mode === "login" ? "current-password" : "new-password"}
           className={styles.input}
           disabled={mutation.isPending}
         />
       </div>
 
-      {mode === 'register' && (
+      {mode === "register" && (
         <div className={styles.field}>
           <label htmlFor="displayName" className={styles.label}>
-            {t('displayNameLabel')}
+            {t("displayNameLabel")}
           </label>
           <input
             id="displayName"
@@ -114,22 +118,35 @@ export function LoginForm({ mode = 'login' }: { mode?: 'login' | 'register' }) {
         </div>
       )}
 
-      <button type="submit" disabled={mutation.isPending} className={styles.submit}>
-        {mode === 'login' ? t('loginButton') : t('registerButton')}
-        {mutation.isPending && <span className={styles.spinner} aria-hidden="true" />}
+      <button
+        type="submit"
+        disabled={mutation.isPending}
+        className={styles.submit}
+      >
+        {mode === "login" ? t("loginButton") : t("registerButton")}
+        {mutation.isPending && (
+          <span className={styles.spinner} aria-hidden="true" />
+        )}
       </button>
 
       <p className={styles.switch}>
-        {mode === 'login' ? t('noAccount') : t('hasAccount')}{' '}
+        {mode === "login" ? t("noAccount") : t("hasAccount")}{" "}
         <button
           type="button"
           onClick={() => {
-            const nextUrl = sanitizeNextUrl(searchParams.get('next'), `/${locale}/materials`);
-            router.replace(mode === 'login' ? `/${locale}/register?next=${encodeURIComponent(nextUrl)}` : `/${locale}/login?next=${encodeURIComponent(nextUrl)}`);
+            const nextUrl = sanitizeNextUrl(
+              searchParams.get("next"),
+              `/${locale}/materials`
+            );
+            router.replace(
+              mode === "login"
+                ? `/${locale}/register?next=${encodeURIComponent(nextUrl)}`
+                : `/${locale}/login?next=${encodeURIComponent(nextUrl)}`
+            );
           }}
           className={styles.switchLink}
         >
-          {mode === 'login' ? t('registerButton') : t('loginButton')}
+          {mode === "login" ? t("registerButton") : t("loginButton")}
         </button>
       </p>
     </form>

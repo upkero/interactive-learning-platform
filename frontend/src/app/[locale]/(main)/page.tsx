@@ -1,4 +1,4 @@
-import { redirect } from '@/shared/i18n/navigation';
+import { redirect } from "@/shared/i18n/navigation";
 
 export default async function LocaleIndexPage({
   params,

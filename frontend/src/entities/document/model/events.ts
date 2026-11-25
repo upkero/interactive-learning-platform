@@ -1,10 +1,16 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 /**
  * SSE event types per contract 1.7:
  * stage, part_status, part_ready, document_done, error
  */
-export const SseEventType = z.enum(['stage', 'part_status', 'part_ready', 'document_done', 'error']);
+export const SseEventType = z.enum([
+  "stage",
+  "part_status",
+  "part_ready",
+  "document_done",
+  "error",
+]);
 
 export const StageEventData = z.object({
   step: z.string(),
@@ -13,7 +19,14 @@ export const StageEventData = z.object({
 
 export const PartStatusEventData = z.object({
   part_id: z.string().uuid(),
-  status: z.enum(['queued', 'main_pass', 'resolving', 'assembling', 'published', 'failed']),
+  status: z.enum([
+    "queued",
+    "main_pass",
+    "resolving",
+    "assembling",
+    "published",
+    "failed",
+  ]),
   title: z.string().optional(),
   index: z.number().optional(),
 });
@@ -55,10 +68,14 @@ export type ErrorEventData = z.infer<typeof ErrorEventData>;
 export type SseEvent = z.infer<typeof SseEvent>;
 
 export function isFinalEvent(event: SseEvent): boolean {
-  return event.event === 'document_done' || event.event === 'error';
+  return event.event === "document_done" || event.event === "error";
 }
 
-export function parseSseEvent(raw: { event: string; data: string; id?: string }): SseEvent | null {
+export function parseSseEvent(raw: {
+  event: string;
+  data: string;
+  id?: string;
+}): SseEvent | null {
   try {
     const parsedData: unknown = JSON.parse(raw.data);
     return SseEvent.parse({

@@ -20,7 +20,10 @@
     "generationsCount": "{count, plural, one {# generation} other {# generations}}",
     "partsCount": "{count, plural, one {# part} other {# parts}}",
     "topicsCount": "{count, plural, one {# topic} other {# topics}}",
-    "materialsCount": "{count, plural, one {# material} other {# materials}}"
+    "materialsCount": "{count, plural, one {# material} other {# materials}}",
+    "navigation": "Navigation",
+    "mainNavigation": "Main navigation",
+    "mobileNavigation": "Mobile navigation"
   },
   "auth": {
     "loginTitle": "Sign in",
@@ -41,22 +44,34 @@
     "quotaTitle": "Available quota",
     "quotaRemaining": "Remaining: {count, plural, one {# generation} other {# generations}}",
     "quotaExhausted": "Generation quota exhausted",
+    "quotaPeriodEnd": "Resets: {date}",
+    "quotaProgressLabel": "Used {used} of {total}",
     "titleLabel": "Title",
+    "partsLabel": "Parts",
     "statusLabel": "Status",
+    "roleLabel": "Role",
     "createdAtLabel": "Created",
     "actionsLabel": "Actions",
     "sharedLabel": "Shared",
+    "ownerLabel": "Owner",
+    "sharedByLabel": "From {email}",
+    "shareAction": "Share",
     "deleteConfirm": "Delete material \"{title}\"? This action cannot be undone.",
     "retryAction": "Retry",
     "deleteAction": "Delete",
     "retryNotImplemented": "Retry functionality will be available later.",
     "status": {
+      "uploaded": "Uploaded",
       "parsing": "Parsing file",
-      "topics_required": "Select topics",
-      "questions_required": "Configure options",
-      "generating": "Generating",
-      "ready": "Ready",
-      "error": "Error"
+      "parsed": "Topics selected",
+      "generating": "Generating: {published}/{total}",
+      "done": "Ready",
+      "failed": "Error"
+    },
+    "empty": {
+      "all": "You don't have any materials yet. Upload your first lecture or textbook to generate an interactive study guide.",
+      "mine": "You haven't uploaded any materials of your own yet.",
+      "shared": "No materials have been shared with you yet."
     }
   },
   "upload": {
@@ -234,6 +249,7 @@
     "invalid_quiz_answer": "Answer does not match the question type.",
     "widget_not_found": "Widget not found.",
     "queue_unavailable": "Task queue is unavailable. Please try again later.",
+    "network_error": "Network error. Check your internet connection.",
     "unknown_error": "An unexpected error occurred."
   }
 }

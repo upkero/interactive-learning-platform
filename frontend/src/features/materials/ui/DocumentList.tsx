@@ -1,65 +1,122 @@
-'use client';
+"use client";
 
-import { Link } from '@/shared/i18n/navigation';
-import { useTranslations } from 'next-intl';
-import { useMaterials, useDeleteDocument, getMaterialRoute, type MaterialOut } from '@/entities/document';
-import { ApiError } from '@/shared/api/errors';
-import styles from './DocumentList.module.css';
+import { useMemo } from "react";
+import { Link } from "@/shared/i18n/navigation";
+import { useFormatter, useTranslations } from "next-intl";
+import {
+  useMaterials,
+  type MaterialOut,
+  getMaterialRoute,
+} from "@/entities/document";
+import { ApiError } from "@/shared/api/errors";
+import styles from "./DocumentList.module.css";
 
-type Scope = 'mine' | 'shared';
+type Scope = "mine" | "shared" | "all";
 
 interface DocumentListProps {
   scope?: Scope;
 }
 
-const STATUS_STYLES: Record<MaterialOut['status'], string> = {
-  uploaded: 'status-parsing',
-  parsing: 'status-parsing',
-  parsed: 'status-topics',
-  generating: 'status-generating',
-  done: 'status-ready',
-  failed: 'status-error',
+const STATUS_STYLES: Record<MaterialOut["status"], string> = {
+  uploaded: "status-parsing",
+  parsing: "status-parsing",
+  parsed: "status-topics",
+  generating: "status-generating",
+  done: "status-ready",
+  failed: "status-error",
 };
 
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString(undefined, {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+function getStatusLabel(
+  t: ReturnType<typeof useTranslations>,
+  doc: MaterialOut
+): string {
+  const { status, parts_published, parts_total } = doc;
+  if (status === "generating") {
+    return t(`status.${status}`, {
+      published: parts_published,
+      total: parts_total,
+    });
+  }
+  return t(`status.${status}`);
 }
 
-export function DocumentList({ scope = 'mine' }: DocumentListProps) {
-  const t = useTranslations('materials');
-  const tCommon = useTranslations('common');
-  const tErrors = useTranslations('errors');
-  const tEmpty = useTranslations('empty');
+function getRoleLabel(
+  t: ReturnType<typeof useTranslations>,
+  doc: MaterialOut
+): string {
+  if (doc.role === "owner") {
+    return t("ownerLabel");
+  }
+  return t("sharedByLabel", { email: doc.shared_by_email || "—" });
+}
 
-  const query = useMaterials(scope);
-  const deleteMutation = useDeleteDocument();
+export function DocumentList({ scope = "mine" }: DocumentListProps) {
+  const t = useTranslations("materials");
+  const tCommon = useTranslations("common");
+  const tErrors = useTranslations("errors");
+  const tEmpty = useTranslations("empty");
+  const format = useFormatter();
 
-  if (query.isPending) {
+  // For "all" scope, we need to fetch both mine and shared
+  const mineQuery = useMaterials("mine");
+  const sharedQuery = useMaterials("shared");
+
+  const isPending = mineQuery.isPending || sharedQuery.isPending;
+  const isError = mineQuery.isError || sharedQuery.isError;
+  const error = mineQuery.error || sharedQuery.error;
+
+  // Combine and deduplicate documents for "all" scope
+  const documents = useMemo(() => {
+    if (scope === "mine") return mineQuery.data || [];
+    if (scope === "shared") return sharedQuery.data || [];
+
+    // scope === "all"
+    const mine = mineQuery.data || [];
+    const shared = sharedQuery.data || [];
+    const seen = new Set<string>();
+    const combined: MaterialOut[] = [];
+
+    for (const doc of [...mine, ...shared]) {
+      if (!seen.has(doc.document_id)) {
+        seen.add(doc.document_id);
+        combined.push(doc);
+      }
+    }
+
+    // Sort by updated_at descending
+    combined.sort(
+      (a, b) =>
+        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    );
+    return combined;
+  }, [scope, mineQuery.data, sharedQuery.data]);
+
+  if (isPending) {
     return (
-      <div className={styles.skeletonList} role="status" aria-label={tCommon('loading')}>
+      <div
+        className={styles.skeletonList}
+        role="status"
+        aria-label={tCommon("loading")}
+      >
         {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className={styles.skeletonRow}>
-            <div className={styles.skeletonCell} style={{ width: '40%' }} />
-            <div className={styles.skeletonCell} style={{ width: '20%' }} />
-            <div className={styles.skeletonCell} style={{ width: '15%' }} />
-            <div className={styles.skeletonCell} style={{ width: '15%' }} />
+            <div className={styles.skeletonCell} style={{ width: "30%" }} />
+            <div className={styles.skeletonCell} style={{ width: "15%" }} />
+            <div className={styles.skeletonCell} style={{ width: "20%" }} />
+            <div className={styles.skeletonCell} style={{ width: "15%" }} />
+            <div className={styles.skeletonCell} style={{ width: "10%" }} />
+            <div className={styles.skeletonCell} style={{ width: "10%" }} />
           </div>
         ))}
       </div>
     );
   }
 
-  if (query.isError) {
-    const message = query.error instanceof ApiError
-      ? tErrors(query.error.code)
-      : tErrors('unknown_error');
+  if (isError) {
+    const message =
+      error instanceof ApiError
+        ? tErrors(error.code)
+        : tErrors("unknown_error");
 
     return (
       <div className={styles.errorState} role="alert">
@@ -67,26 +124,40 @@ export function DocumentList({ scope = 'mine' }: DocumentListProps) {
         <button
           type="button"
           className={styles.retryButton}
-          onClick={() => void query.refetch()}
+          onClick={() => void mineQuery.refetch()}
         >
-          {tCommon('retry')}
+          {tCommon("retry")}
         </button>
       </div>
     );
   }
 
-  const documents = query.data;
-
   if (documents.length === 0) {
-    const emptyKey = scope === 'mine' ? 'materialsMine' : 'materialsShared';
+    let emptyKey: string;
+    let actionLink: React.ReactNode | null = null;
+
+    if (scope === "shared") {
+      emptyKey = "materialsShared";
+    } else if (scope === "mine") {
+      emptyKey = "materialsMine";
+      actionLink = (
+        <Link href="/upload" className={styles.emptyAction}>
+          {t("uploadButton")}
+        </Link>
+      );
+    } else {
+      emptyKey = "materialsAll";
+      actionLink = (
+        <Link href="/upload" className={styles.emptyAction}>
+          {t("uploadButton")}
+        </Link>
+      );
+    }
+
     return (
       <div className={styles.emptyState}>
         <p className={styles.emptyText}>{tEmpty(emptyKey)}</p>
-        {scope === 'mine' && (
-          <Link href="/upload" className={styles.emptyAction}>
-            {t('uploadButton')}
-          </Link>
-        )}
+        {actionLink}
       </div>
     );
   }
@@ -96,15 +167,29 @@ export function DocumentList({ scope = 'mine' }: DocumentListProps) {
       <table className={styles.table} role="grid">
         <thead>
           <tr>
-            <th scope="col" className={styles.headerCell}>{t('title')}</th>
-            <th scope="col" className={styles.headerCell}>{t('status')}</th>
-            <th scope="col" className={styles.headerCell}>{t('createdAt')}</th>
-            <th scope="col" className={styles.headerCell}>{t('actions')}</th>
+            <th scope="col" className={styles.headerCell}>
+              {t("titleLabel")}
+            </th>
+            <th scope="col" className={styles.headerCell}>
+              {t("partsLabel")}
+            </th>
+            <th scope="col" className={styles.headerCell}>
+              {t("statusLabel")}
+            </th>
+            <th scope="col" className={styles.headerCell}>
+              {t("roleLabel")}
+            </th>
+            <th scope="col" className={styles.headerCell}>
+              {t("createdAtLabel")}
+            </th>
+            <th scope="col" className={styles.headerCell}>
+              {t("actionsLabel")}
+            </th>
           </tr>
         </thead>
         <tbody>
           {documents.map((doc) => (
-            <DocumentRow key={doc.document_id} doc={doc} deleteMutation={deleteMutation} />
+            <DocumentRow key={doc.document_id} doc={doc} format={format} />
           ))}
         </tbody>
       </table>
@@ -114,107 +199,71 @@ export function DocumentList({ scope = 'mine' }: DocumentListProps) {
 
 interface DocumentRowProps {
   doc: MaterialOut;
-  deleteMutation: ReturnType<typeof useDeleteDocument>;
+  format: ReturnType<typeof useFormatter>;
 }
 
-function DocumentRow({ doc, deleteMutation }: DocumentRowProps) {
-  const t = useTranslations('materials');
-  const tCommon = useTranslations('common');
-  const tErrors = useTranslations('errors');
+function DocumentRow({ doc, format }: DocumentRowProps) {
+  const t = useTranslations("materials");
+  const tCommon = useTranslations("common");
 
   const statusStyle = STATUS_STYLES[doc.status];
-
-  const handleClick = (e: React.MouseEvent<HTMLTableRowElement> | React.KeyboardEvent<HTMLTableRowElement>) => {
-    // Don't navigate if clicking on interactive elements (buttons)
-    if ('currentTarget' in e && 'target' in e && e.currentTarget !== e.target) return;
-
-    if (doc.status === 'failed') {
-      // For error status, stay on page - actions are inline
-      return;
-    }
-    // Navigation is handled by the Link in the title cell
-  };
-
-  const handleDelete = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation();
-    if (!window.confirm(t('deleteConfirm', { title: doc.title }))) return;
-
-    deleteMutation.mutateAsync(doc.document_id).catch((error: unknown) => {
-      const message = error instanceof ApiError
-        ? tErrors(error.code)
-        : tErrors('unknown_error');
-      alert(message);
-    });
-  };
-
-  const handleRetry = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation();
-    // For error state, we could trigger a re-parse or re-generation
-    // This would depend on the API - for now, we'll just show an alert
-    alert(t('retryNotImplemented'));
-  };
+  const route = getMaterialRoute(doc);
+  const statusLabel = getStatusLabel(t, doc);
+  const roleLabel = getRoleLabel(t, doc);
+  const formattedDate = format.dateTime(new Date(doc.updated_at), {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const isOwner = doc.role === "owner";
 
   return (
-    <tr className={styles.row} onClick={handleClick} tabIndex={0} role="button" onKeyDown={(e) => { if (e.key === 'Enter') handleClick(e); }}>
+    <tr className={styles.row}>
       <td className={styles.cell}>
-        {doc.status === 'failed' ? (
-          <span className={styles.titleText}>
-            {doc.title}
-            {doc.role === 'shared' && (
-              <span className={styles.sharedBadge} aria-label={t('sharedLabel')}>
-                {t('sharedLabel')}
-              </span>
-            )}
-          </span>
-        ) : (
-          <Link href={getMaterialRoute(doc)} className={styles.titleLink}>
-            {doc.title}
-            {doc.role === 'shared' && (
-              <span className={styles.sharedBadge} aria-label={t('sharedLabel')}>
-                {t('sharedLabel')}
-              </span>
-            )}
-          </Link>
-        )}
+        <Link href={route} className={styles.titleLink}>
+          {doc.title}
+          {doc.role === "shared" && (
+            <span className={styles.sharedBadge} aria-label={t("sharedLabel")}>
+              {t("sharedLabel")}
+            </span>
+          )}
+        </Link>
       </td>
       <td className={styles.cell}>
-        <span className={`${styles.statusBadge} ${styles[statusStyle]}`}>
-          {t(`status.${doc.status}`)}
+        <span className={styles.partsCount}>
+          {doc.parts_published}/{doc.parts_total}
         </span>
       </td>
       <td className={styles.cell}>
-        <time dateTime={doc.updated_at}>{formatDate(doc.updated_at)}</time>
+        <span className={`${styles.statusBadge} ${styles[statusStyle]}`}>
+          {statusLabel}
+        </span>
+      </td>
+      <td className={styles.cell}>
+        <span className={styles.roleBadge}>{roleLabel}</span>
+      </td>
+      <td className={styles.cell}>
+        <time dateTime={doc.updated_at}>{formattedDate}</time>
       </td>
       <td className={styles.cell}>
         <div className={styles.actions}>
-          {doc.status === 'failed' && (
-            <>
-              <button
-                type="button"
-                className={styles.actionButton}
-                onClick={handleRetry}
-              >
-                {t('retryAction')}
-              </button>
-              <button
-                type="button"
-                className={`${styles.actionButton} ${styles.danger}`}
-                onClick={handleDelete}
-                disabled={deleteMutation.isPending}
-              >
-                {deleteMutation.isPending ? tCommon('loading') : tCommon('delete')}
-              </button>
-            </>
-          )}
-          {doc.status !== 'failed' && (
-            <button
-              type="button"
-              className={styles.actionButton}
-              onClick={handleDelete}
-              disabled={deleteMutation.isPending}
+          <Link
+            href={route}
+            className={styles.actionLink}
+            aria-label={`${t("actionsLabel")}: ${doc.title}`}
+          >
+            {tCommon("next")}
+          </Link>
+          {isOwner && (
+            <Link
+              href={`/share?document=${doc.document_id}`}
+              className={styles.actionLink}
+              aria-label={`${t("shareAction")}: ${doc.title}`}
             >
-              {deleteMutation.isPending ? tCommon('loading') : tCommon('delete')}
-            </button>
+              {t("shareAction")}
+            </Link>
           )}
         </div>
       </td>

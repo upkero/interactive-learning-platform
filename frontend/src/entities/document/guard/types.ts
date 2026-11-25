@@ -1,19 +1,22 @@
-import type { MaterialOut } from '../model/useDocuments';
+import type { MaterialOut } from "../model/useDocuments";
 
 /**
  * Wizard step identifiers corresponding to routes
  */
 export type WizardStep =
-  | 'upload'           // /upload?doc=[id]
-  | 'topics'           // /documents/[id]/topics
-  | 'questions'        // /documents/[id]/questions
-  | 'progress'         // /documents/[id]/progress
-  | 'document';        // /documents/[id]
+  | "upload" // /upload?doc=[id]
+  | "topics" // /documents/[id]/topics
+  | "questions" // /documents/[id]/questions
+  | "progress" // /documents/[id]/progress
+  | "document"; // /documents/[id]
 
 /**
  * Map of wizard step to its route pattern (without locale prefix)
  */
-export const WIZARD_STEP_ROUTES: Record<WizardStep, (documentId: string) => string> = {
+export const WIZARD_STEP_ROUTES: Record<
+  WizardStep,
+  (documentId: string) => string
+> = {
   upload: (documentId) => `/upload?doc=${documentId}`,
   topics: (documentId) => `/documents/${documentId}/topics`,
   questions: (documentId) => `/documents/${documentId}/questions`,
@@ -25,7 +28,7 @@ export const WIZARD_STEP_ROUTES: Record<WizardStep, (documentId: string) => stri
  * Material statuses from the new API:
  * uploaded, parsing, parsed, generating, done, failed
  */
-export type MaterialStatus = MaterialOut['status'];
+export type MaterialStatus = MaterialOut["status"];
 
 /**
  * Allowed steps for each material status.
@@ -37,11 +40,11 @@ export type MaterialStatus = MaterialOut['status'];
  * - failed -> none allowed, stay on materials (handled elsewhere)
  */
 export const ALLOWED_STEPS_BY_STATUS: Record<MaterialStatus, WizardStep[]> = {
-  uploaded: ['upload'],
-  parsing: ['upload'],
-  parsed: ['topics'],
-  generating: ['progress'],
-  done: ['document'],
+  uploaded: ["upload"],
+  parsing: ["upload"],
+  parsed: ["topics"],
+  generating: ["progress"],
+  done: ["document"],
   failed: [],
 };
 
@@ -49,12 +52,12 @@ export const ALLOWED_STEPS_BY_STATUS: Record<MaterialStatus, WizardStep[]> = {
  * For each status, the redirect target when accessing a disallowed step.
  */
 export const REDIRECT_TARGET_BY_STATUS: Record<MaterialStatus, WizardStep> = {
-  uploaded: 'upload',
-  parsing: 'upload',
-  parsed: 'topics',
-  generating: 'progress',
-  done: 'document',
-  failed: 'document', // fallback, error handled elsewhere
+  uploaded: "upload",
+  parsing: "upload",
+  parsed: "topics",
+  generating: "progress",
+  done: "document",
+  failed: "document", // fallback, error handled elsewhere
 };
 
 /**

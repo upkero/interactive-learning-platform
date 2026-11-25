@@ -1,8 +1,9 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from "react";
 
-export type StreamConnectionStatus = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed';
+export type StreamConnectionStatus =
+  "idle" | "connecting" | "open" | "reconnecting" | "closed";
 
 export interface SseEventMessage<T = unknown> {
   id?: string;
@@ -23,8 +24,14 @@ export interface UseEventStreamOptions<T = unknown> {
  * Contract 1.7 event types:
  * stage, part_status, part_ready, document_done, error
  */
-const CONTRACT_EVENT_TYPES = ['stage', 'part_status', 'part_ready', 'document_done', 'error'] as const;
-const TERMINAL_EVENTS = ['document_done', 'error'] as const;
+const CONTRACT_EVENT_TYPES = [
+  "stage",
+  "part_status",
+  "part_ready",
+  "document_done",
+  "error",
+] as const;
+const TERMINAL_EVENTS = ["document_done", "error"] as const;
 
 export function useEventStream<T = unknown>({
   url,
@@ -34,7 +41,7 @@ export function useEventStream<T = unknown>({
   maxBackoffMs = 30_000,
   initialBackoffMs = 1_000,
 }: UseEventStreamOptions<T>) {
-  const [status, setStatus] = useState<StreamConnectionStatus>('idle');
+  const [status, setStatus] = useState<StreamConnectionStatus>("idle");
   const [lastEventId, setLastEventId] = useState<string | null>(null);
 
   const lastEventIdRef = useRef<string | null>(null);
@@ -63,11 +70,16 @@ export function useEventStream<T = unknown>({
 
     cleanup();
     isTerminalRef.current = false;
-    setStatus(retryAttemptRef.current === 0 ? 'connecting' : 'reconnecting');
+    setStatus(retryAttemptRef.current === 0 ? "connecting" : "reconnecting");
 
-    const targetUrl = new URL(url, typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
+    const targetUrl = new URL(
+      url,
+      typeof window !== "undefined"
+        ? window.location.origin
+        : "http://localhost"
+    );
     if (lastEventIdRef.current) {
-      targetUrl.searchParams.set('last_event_id', lastEventIdRef.current);
+      targetUrl.searchParams.set("last_event_id", lastEventIdRef.current);
     }
 
     // Contract 1.7: no withCredentials (relative URL, same-origin)
@@ -76,10 +88,13 @@ export function useEventStream<T = unknown>({
 
     es.onopen = () => {
       retryAttemptRef.current = 0;
-      setStatus('open');
+      setStatus("open");
     };
 
-    const handleRawEvent = (eventType: string, rawEvent: MessageEvent<unknown>) => {
+    const handleRawEvent = (
+      eventType: string,
+      rawEvent: MessageEvent<unknown>
+    ) => {
       if (rawEvent.lastEventId) {
         lastEventIdRef.current = rawEvent.lastEventId;
         setLastEventId(rawEvent.lastEventId);
@@ -98,16 +113,18 @@ export function useEventStream<T = unknown>({
         data: parsedData,
       });
 
-      if (TERMINAL_EVENTS.includes(eventType as typeof TERMINAL_EVENTS[number])) {
+      if (
+        TERMINAL_EVENTS.includes(eventType as (typeof TERMINAL_EVENTS)[number])
+      ) {
         isTerminalRef.current = true;
         cleanup();
-        setStatus('closed');
+        setStatus("closed");
       }
     };
 
     // Listen for message event (no event type)
     es.onmessage = (e) => {
-      handleRawEvent('message', e);
+      handleRawEvent("message", e);
     };
 
     // Listen for specific event types
@@ -122,13 +139,16 @@ export function useEventStream<T = unknown>({
       esRef.current = null;
 
       if (isTerminalRef.current) {
-        setStatus('closed');
+        setStatus("closed");
         return;
       }
 
-      setStatus('reconnecting');
+      setStatus("reconnecting");
       // Exponential backoff with ±20% jitter
-      const baseDelay = Math.min(maxBackoffMs, initialBackoffMs * 2 ** retryAttemptRef.current);
+      const baseDelay = Math.min(
+        maxBackoffMs,
+        initialBackoffMs * 2 ** retryAttemptRef.current
+      );
       const jitter = baseDelay * 0.2 * (Math.random() * 2 - 1); // ±20%
       const delay = Math.min(maxBackoffMs, Math.max(0, baseDelay + jitter));
       retryAttemptRef.current += 1;
@@ -142,7 +162,7 @@ export function useEventStream<T = unknown>({
   useEffect(() => {
     if (!url || !enabled) {
       cleanup();
-      setStatus('idle');
+      setStatus("idle");
       return;
     }
 

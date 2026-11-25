@@ -4,2065 +4,2121 @@
  */
 
 export interface paths {
-    "/api/v1/auth/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Login */
-        post: operations["auth_login"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+  "/api/v1/auth/login": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/auth/logout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Logout */
-        post: operations["auth_logout"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Login */
+    post: operations["auth_login"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/auth/logout": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/auth/register": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Register */
-        post: operations["auth_register"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Logout */
+    post: operations["auth_logout"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/auth/register": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/documents": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Upload Document */
-        post: operations["documents_upload"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Register */
+    post: operations["auth_register"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/documents": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/documents/import": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Import Document */
-        post: operations["documents_import"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Upload Document */
+    post: operations["documents_upload"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/documents/import": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/documents/{document_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Document */
-        get: operations["documents_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Import Document */
+    post: operations["documents_import"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/documents/{document_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/documents/{document_id}/generate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Generate Document */
-        post: operations["documents_generate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get Document */
+    get: operations["documents_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/documents/{document_id}/generate": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/documents/{document_id}/plan": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Plan Document */
-        post: operations["documents_plan"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Generate Document */
+    post: operations["documents_generate"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/documents/{document_id}/plan": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/documents/{document_id}/topics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Document Topics */
-        get: operations["documents_topics"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Plan Document */
+    post: operations["documents_plan"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/documents/{document_id}/topics": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/materials/share": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Share Material */
-        post: operations["materials_share"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get Document Topics */
+    get: operations["documents_topics"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/materials/share": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Me */
-        get: operations["me_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Patch Me */
-        patch: operations["me_patch"];
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Share Material */
+    post: operations["materials_share"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/me": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/me/materials": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Materials */
-        get: operations["me_materials"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get Me */
+    get: operations["me_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Patch Me */
+    patch: operations["me_patch"];
+    trace?: never;
+  };
+  "/api/v1/me/materials": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/me/quota": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Quota */
-        get: operations["me_quota"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** List Materials */
+    get: operations["me_materials"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/me/quota": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/parts/{part_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Part */
-        get: operations["parts_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get Quota */
+    get: operations["me_quota"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/parts/{part_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/quiz-attempts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create Attempt */
-        post: operations["quiz_attempts_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get Part */
+    get: operations["parts_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/quiz-attempts": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/widgets/{widget_id}/reports": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Report Widget */
-        post: operations["widgets_report"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Create Attempt */
+    post: operations["quiz_attempts_create"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/widgets/{widget_id}/reports": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/health/live": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Liveness */
-        get: operations["health_live"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Report Widget */
+    post: operations["widgets_report"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/health/live": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/health/ready": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Readiness */
-        get: operations["health_ready"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Liveness */
+    get: operations["health_live"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/health/ready": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
+    /** Readiness */
+    get: operations["health_ready"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: {
-        /** AuthUserOut */
-        AuthUserOut: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Display Name */
-            display_name: string | null;
-            /** Email */
-            email: string;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Locale */
-            locale: string;
-        };
-        /** Body_documents_upload */
-        Body_documents_upload: {
-            /** File */
-            file: string;
-            /** Title */
-            title?: string | null;
-        };
-        /** ChoiceOption */
-        ChoiceOption: {
-            /** Id */
-            id: string;
-            /** Text */
-            text: string;
-        };
-        /** ChoiceQuiz */
-        ChoiceQuiz: {
-            /** Key */
-            key: string;
-            /** Options */
-            options: components["schemas"]["ChoiceOption"][];
-            /** Prompt */
-            prompt: string;
-            /** Ref */
-            ref: string;
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "multiple_choice" | "single_choice";
-        };
-        /** CodeWidget */
-        CodeWidget: {
-            /** Compiled Js */
-            compiled_js?: string | null;
-            /**
-             * Kind
-             * @constant
-             */
-            kind: "code";
-            /** Labels */
-            labels?: {
-                [key: string]: string;
-            };
-            /**
-             * Status
-             * @constant
-             */
-            status: "ready";
-            /** Title */
-            title: string;
-            /**
-             * Widget Id
-             * Format: uuid
-             */
-            widget_id: string;
-        };
-        /** ConfigWidget */
-        ConfigWidget: {
-            /**
-             * Kind
-             * @constant
-             */
-            kind: "config";
-            /** Mode */
-            mode: string;
-            /** Params */
-            params: {
-                [key: string]: components["schemas"]["JsonValue"];
-            };
-            /** Primitive Id */
-            primitive_id: string;
-            /**
-             * Status
-             * @constant
-             */
-            status: "ready";
-            /** Title */
-            title: string;
-            /**
-             * Widget Id
-             * Format: uuid
-             */
-            widget_id: string;
-        };
-        /**
-         * DocumentCreatedOut
-         * @description Body of 201 after a successful upload or import.
-         */
-        DocumentCreatedOut: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "uploaded" | "parsing" | "parsed" | "generating" | "done" | "failed";
-        };
-        /**
-         * DocumentErrorCode
-         * @description Why a document ended up in ``failed`` (story 1.9, migration 0003).
-         *
-         *     Only the code is exposed: the client translates it through its
-         *     ``errors.<code>`` dictionary, while technical details (exception
-         *     text) stay in server-side diagnostics and never leave the API.
-         * @enum {string}
-         */
-        DocumentErrorCode: "parse_failed" | "gdocs_not_public" | "gdocs_import_failed" | "too_many_pages" | "empty_document" | "enqueue_failed";
-        /**
-         * DocumentImportRequest
-         * @description Body of ``POST /documents/import`` (story 1.4.4).
-         *
-         *     The link shape is validated in the service (not by a Pydantic
-         *     ``HttpUrl``) so a rejected URL answers the unified 422
-         *     ``invalid_gdocs_url`` error format.
-         */
-        DocumentImportRequest: {
-            /** Url */
-            url: string;
-        };
-        /**
-         * DocumentOut
-         * @description Body of ``GET /documents/{id}``.
-         */
-        DocumentOut: {
-            error_code?: components["schemas"]["DocumentErrorCode"] | null;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Page Count */
-            page_count: number | null;
-            /** Parts */
-            parts: components["schemas"]["PartSummaryOut"][];
-            /**
-             * Role
-             * @enum {string}
-             */
-            role: "owner" | "shared";
-            /**
-             * Shared With
-             * @description Filled only for the owner; shared users see an empty list.
-             */
-            shared_with?: components["schemas"]["SharedWithOut"][];
-            /**
-             * Source Url
-             * @description Presigned URL of the source file; for gdocs — the original link.
-             */
-            source_url: string | null;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "uploaded" | "parsing" | "parsed" | "generating" | "done" | "failed";
-            /** Title */
-            title: string;
-        };
-        /** @enum {string} */
-        ErrorCode: "request_validation_error" | "not_authenticated" | "invalid_credentials" | "email_taken" | "document_not_found" | "part_not_found" | "quiz_not_found" | "document_not_ready" | "quota_exceeded" | "processing_limit_reached" | "invalid_gdocs_url" | "empty_topic_selection" | "unknown_topic" | "recipient_not_registered" | "file_too_large" | "unsupported_file_type" | "too_many_pages" | "http_error" | "internal_server_error" | "rate_limited" | "share_with_self" | "invalid_quiz_answer" | "widget_not_found" | "queue_unavailable";
-        /** ErrorResponse */
-        ErrorResponse: {
-            /** Available */
-            available?: number | null;
-            /** Detail */
-            detail: unknown;
-            error_code: components["schemas"]["ErrorCode"];
-            /** Limit */
-            limit?: number | null;
-            reason?: components["schemas"]["DocumentErrorCode"] | null;
-            /** Requested */
-            requested?: number | null;
-            /** Status */
-            status?: string | null;
-        };
-        /** GenerateRequest */
-        GenerateRequest: {
-            answers: components["schemas"]["GenerationAnswersIn"];
-            /** Topic Ids */
-            topic_ids: string[];
-        };
-        /** GenerateResponse */
-        GenerateResponse: {
-            /** Available */
-            available: number;
-            /** Cost */
-            cost: number;
-            /**
-             * Document Id
-             * Format: uuid
-             */
-            document_id: string;
-            /** Part Ids */
-            part_ids: string[];
-        };
-        /** GenerationAnswersIn */
-        GenerationAnswersIn: {
-            /**
-             * Depth
-             * @enum {string}
-             */
-            depth: "overview" | "standard" | "deep";
-            /**
-             * Goal
-             * @enum {string}
-             */
-            goal: "exam" | "understand" | "refresh";
-            /**
-             * Level
-             * @enum {string}
-             */
-            level: "novice" | "intermediate" | "advanced";
-        };
-        /** HealthResponse */
-        HealthResponse: {
-            /**
-             * Status
-             * @constant
-             */
-            status: "ok";
-        };
-        /** ImageFallback */
-        ImageFallback: {
-            /** Image Id */
-            image_id: string;
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "image";
-        };
-        /** ImageOut */
-        ImageOut: {
-            /** Caption */
-            caption?: string | null;
-            /**
-             * Image Id
-             * Format: uuid
-             */
-            image_id: string;
-            /** Url */
-            url?: string | null;
-        };
-        JsonValue: unknown;
-        /** LastAnswersOut */
-        LastAnswersOut: {
-            /**
-             * Depth
-             * @enum {string}
-             */
-            depth: "overview" | "standard" | "deep";
-            /**
-             * Goal
-             * @enum {string}
-             */
-            goal: "exam" | "understand" | "refresh";
-            /**
-             * Level
-             * @enum {string}
-             */
-            level: "novice" | "intermediate" | "advanced";
-        };
-        /** LoginRequest */
-        LoginRequest: {
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
-            /** Password */
-            password: string;
-        };
-        /** MaterialOut */
-        MaterialOut: {
-            /**
-             * Document Id
-             * Format: uuid
-             */
-            document_id: string;
-            /** Parts Failed */
-            parts_failed: number;
-            /** Parts Published */
-            parts_published: number;
-            /** Parts Total */
-            parts_total: number;
-            /**
-             * Role
-             * @enum {string}
-             */
-            role: "owner" | "shared";
-            /** Shared By Email */
-            shared_by_email: string | null;
-            /**
-             * Source Type
-             * @enum {string}
-             */
-            source_type: "pdf" | "docx" | "md" | "gdocs";
-            /** Status */
-            status: string;
-            /** Title */
-            title: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-        };
-        /** MeOut */
-        MeOut: {
-            /** Display Name */
-            display_name: string | null;
-            /** Email */
-            email: string;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            last_answers: components["schemas"]["LastAnswersOut"] | null;
-            /**
-             * Locale
-             * @enum {string}
-             */
-            locale: "ru" | "en";
-            /** Notify Email */
-            notify_email: boolean;
-        };
-        /** MePatch */
-        MePatch: {
-            /** Display Name */
-            display_name?: string | null;
-            /** Locale */
-            locale?: ("ru" | "en") | null;
-            /** Notify Email */
-            notify_email?: boolean | null;
-        };
-        /** NumericQuiz */
-        NumericQuiz: {
-            /** Key */
-            key: string;
-            /** Prompt */
-            prompt: string;
-            /** Ref */
-            ref: string;
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "numeric";
-            /** Unit */
-            unit?: string | null;
-        };
-        /** OrderingQuiz */
-        OrderingQuiz: {
-            /** Items */
-            items: components["schemas"]["ChoiceOption"][];
-            /** Key */
-            key: string;
-            /** Prompt */
-            prompt: string;
-            /** Ref */
-            ref: string;
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "ordering";
-        };
-        /** PartContentOut */
-        PartContentOut: {
-            /** Images */
-            images?: {
-                [key: string]: components["schemas"]["ImageOut"];
-            };
-            /** Key Terms */
-            key_terms?: string[];
-            /** Markdown */
-            markdown: string;
-            /** Quizzes */
-            quizzes?: (components["schemas"]["ChoiceQuiz"] | components["schemas"]["OrderingQuiz"] | components["schemas"]["NumericQuiz"])[];
-            /**
-             * Schema Version
-             * @default 1
-             * @constant
-             */
-            schema_version: 1;
-            /** Sections */
-            sections?: components["schemas"]["SectionOut"][];
-            /** Sources */
-            sources?: {
-                [key: string]: components["schemas"]["SourceSpan"];
-            };
-            /** Title */
-            title: string;
-            /** Widgets */
-            widgets?: {
-                [key: string]: components["schemas"]["ConfigWidget"] | components["schemas"]["CodeWidget"] | components["schemas"]["PendingWidget"];
-            };
-        };
-        /** PartOut */
-        PartOut: {
-            content: components["schemas"]["PartContentOut"] | null;
-            /**
-             * Document Id
-             * Format: uuid
-             */
-            document_id: string;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Index */
-            index: number;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "queued" | "main_pass" | "resolving" | "assembling" | "published" | "failed";
-            /** Title */
-            title: string;
-        };
-        /** PartSummaryOut */
-        PartSummaryOut: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Index */
-            index: number;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "queued" | "main_pass" | "resolving" | "assembling" | "published" | "failed";
-            /** Title */
-            title: string;
-        };
-        /** PendingWidget */
-        PendingWidget: {
-            /** Fallback */
-            fallback: components["schemas"]["ImageFallback"] | components["schemas"]["TextFallback"];
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "pending" | "fallback";
-            /** Title */
-            title: string;
-        };
-        /**
-         * PlanRequest
-         * @description Body of ``POST /documents/{id}/plan`` (story 1.4.6).
-         */
-        PlanRequest: {
-            /** Topic Ids */
-            topic_ids?: string[];
-        };
-        /**
-         * PlanResponse
-         * @description Preview of the generation: parts, cost and the remaining quota.
-         *
-         *     ``cost`` is the number of parts the generation would create;
-         *     nothing is reserved by the plan call.
-         */
-        PlanResponse: {
-            /** Available */
-            available: number;
-            /** Cost */
-            cost: number;
-            /** Parts */
-            parts: components["schemas"]["PlannedPartOut"][];
-        };
-        /** PlannedPartOut */
-        PlannedPartOut: {
-            /** Index */
-            index: number;
-            /** Title */
-            title: string;
-            /** Tokens */
-            tokens: number;
-        };
-        /** QuizAttemptRequest */
-        QuizAttemptRequest: {
-            /** Answer */
-            answer: string | string[] | number;
-            /**
-             * Part Id
-             * Format: uuid
-             */
-            part_id: string;
-            /** Quiz Key */
-            quiz_key: string;
-        };
-        /** QuizAttemptResponse */
-        QuizAttemptResponse: {
-            /** Correct Answer */
-            correct_answer: string | string[] | number;
-            /** Explanation */
-            explanation: string | null;
-            /** Is Correct */
-            is_correct: boolean;
-            /** Option Explanations */
-            option_explanations: {
-                [key: string]: string;
-            } | string[] | null;
-        };
-        /** QuotaOut */
-        QuotaOut: {
-            /** Available */
-            available: number;
-            /** Monthly Limit */
-            monthly_limit: number;
-            /**
-             * Period End
-             * Format: date
-             * @description Exclusive bound: the first day of the next period.
-             */
-            period_end: string;
-            /**
-             * Period Start
-             * Format: date
-             */
-            period_start: string;
-        };
-        /** RegisterRequest */
-        RegisterRequest: {
-            /** Display Name */
-            display_name?: string | null;
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
-            /**
-             * Password
-             * @description At least 8 characters.
-             */
-            password: string;
-        };
-        /** SectionOut */
-        SectionOut: {
-            /** Anchor */
-            anchor: string;
-            /** Page */
-            page?: number | null;
-            source_span: components["schemas"]["SourceSpan"] | null;
-            /** Title */
-            title: string;
-            /** Topic Id */
-            topic_id: string | null;
-        };
-        /** SessionStatusOut */
-        SessionStatusOut: {
-            /**
-             * Status
-             * @constant
-             */
-            status: "ok";
-        };
-        /** ShareMaterialRequest */
-        ShareMaterialRequest: {
-            /**
-             * Document Id
-             * Format: uuid
-             */
-            document_id: string;
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
-        };
-        /** ShareMaterialResponse */
-        ShareMaterialResponse: {
-            /**
-             * Status
-             * @default ok
-             */
-            status: string;
-        };
-        /** SharedWithOut */
-        SharedWithOut: {
-            /** Display Name */
-            display_name: string | null;
-            /** Email */
-            email: string;
-            /**
-             * Shared At
-             * Format: date-time
-             */
-            shared_at: string;
-        };
-        /** SourceSpan */
-        SourceSpan: {
-            /** End */
-            end: number;
-            /** Start */
-            start: number;
-        };
-        /** TextFallback */
-        TextFallback: {
-            /** Text */
-            text: string;
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "text";
-        };
-        /**
-         * TopicNodeOut
-         * @description Recursive node of ``GET /documents/{id}/topics`` (story 1.4.5).
-         */
-        TopicNodeOut: {
-            /** Children */
-            children: components["schemas"]["TopicNodeOut"][];
-            /** Id */
-            id: string;
-            /** Level */
-            level: number;
-            /** Title */
-            title: string;
-            /**
-             * Tokens
-             * @description Token sum of the whole subtree.
-             */
-            tokens: number;
-        };
-        /** TopicTreeOut */
-        TopicTreeOut: {
-            /** Topics */
-            topics: components["schemas"]["TopicNodeOut"][];
-        };
-        /** WidgetReportRequest */
-        WidgetReportRequest: {
-            /** Comment */
-            comment?: string | null;
-            /** Part Id */
-            part_id?: string | null;
-            /**
-             * Reason
-             * @enum {string}
-             */
-            reason: "wrong" | "broken" | "ugly" | "other";
-        };
-        /** WidgetReportResponse */
-        WidgetReportResponse: {
-            /**
-             * Status
-             * @default ok
-             * @constant
-             */
-            status: "ok";
-        };
+  schemas: {
+    /** AuthUserOut */
+    AuthUserOut: {
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Display Name */
+      display_name: string | null;
+      /** Email */
+      email: string;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Locale */
+      locale: string;
     };
-    responses: never;
-    parameters: never;
-    requestBodies: never;
-    headers: never;
-    pathItems: never;
+    /** Body_documents_upload */
+    Body_documents_upload: {
+      /** File */
+      file: string;
+      /** Title */
+      title?: string | null;
+    };
+    /** ChoiceOption */
+    ChoiceOption: {
+      /** Id */
+      id: string;
+      /** Text */
+      text: string;
+    };
+    /** ChoiceQuiz */
+    ChoiceQuiz: {
+      /** Key */
+      key: string;
+      /** Options */
+      options: components["schemas"]["ChoiceOption"][];
+      /** Prompt */
+      prompt: string;
+      /** Ref */
+      ref: string;
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      type: "multiple_choice" | "single_choice";
+    };
+    /** CodeWidget */
+    CodeWidget: {
+      /** Compiled Js */
+      compiled_js?: string | null;
+      /**
+       * Kind
+       * @constant
+       */
+      kind: "code";
+      /** Labels */
+      labels?: {
+        [key: string]: string;
+      };
+      /**
+       * Status
+       * @constant
+       */
+      status: "ready";
+      /** Title */
+      title: string;
+      /**
+       * Widget Id
+       * Format: uuid
+       */
+      widget_id: string;
+    };
+    /** ConfigWidget */
+    ConfigWidget: {
+      /**
+       * Kind
+       * @constant
+       */
+      kind: "config";
+      /** Mode */
+      mode: string;
+      /** Params */
+      params: {
+        [key: string]: components["schemas"]["JsonValue"];
+      };
+      /** Primitive Id */
+      primitive_id: string;
+      /**
+       * Status
+       * @constant
+       */
+      status: "ready";
+      /** Title */
+      title: string;
+      /**
+       * Widget Id
+       * Format: uuid
+       */
+      widget_id: string;
+    };
+    /**
+     * DocumentCreatedOut
+     * @description Body of 201 after a successful upload or import.
+     */
+    DocumentCreatedOut: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * Status
+       * @enum {string}
+       */
+      status:
+        "uploaded" | "parsing" | "parsed" | "generating" | "done" | "failed";
+    };
+    /**
+     * DocumentErrorCode
+     * @description Why a document ended up in ``failed`` (story 1.9, migration 0003).
+     *
+     *     Only the code is exposed: the client translates it through its
+     *     ``errors.<code>`` dictionary, while technical details (exception
+     *     text) stay in server-side diagnostics and never leave the API.
+     * @enum {string}
+     */
+    DocumentErrorCode:
+      | "parse_failed"
+      | "gdocs_not_public"
+      | "gdocs_import_failed"
+      | "too_many_pages"
+      | "empty_document"
+      | "enqueue_failed";
+    /**
+     * DocumentImportRequest
+     * @description Body of ``POST /documents/import`` (story 1.4.4).
+     *
+     *     The link shape is validated in the service (not by a Pydantic
+     *     ``HttpUrl``) so a rejected URL answers the unified 422
+     *     ``invalid_gdocs_url`` error format.
+     */
+    DocumentImportRequest: {
+      /** Url */
+      url: string;
+    };
+    /**
+     * DocumentOut
+     * @description Body of ``GET /documents/{id}``.
+     */
+    DocumentOut: {
+      error_code?: components["schemas"]["DocumentErrorCode"] | null;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Page Count */
+      page_count: number | null;
+      /** Parts */
+      parts: components["schemas"]["PartSummaryOut"][];
+      /**
+       * Role
+       * @enum {string}
+       */
+      role: "owner" | "shared";
+      /**
+       * Shared With
+       * @description Filled only for the owner; shared users see an empty list.
+       */
+      shared_with?: components["schemas"]["SharedWithOut"][];
+      /**
+       * Source Url
+       * @description Presigned URL of the source file; for gdocs — the original link.
+       */
+      source_url: string | null;
+      /**
+       * Status
+       * @enum {string}
+       */
+      status:
+        "uploaded" | "parsing" | "parsed" | "generating" | "done" | "failed";
+      /** Title */
+      title: string;
+    };
+    /** @enum {string} */
+    ErrorCode:
+      | "request_validation_error"
+      | "not_authenticated"
+      | "invalid_credentials"
+      | "email_taken"
+      | "document_not_found"
+      | "part_not_found"
+      | "quiz_not_found"
+      | "document_not_ready"
+      | "quota_exceeded"
+      | "processing_limit_reached"
+      | "invalid_gdocs_url"
+      | "empty_topic_selection"
+      | "unknown_topic"
+      | "recipient_not_registered"
+      | "file_too_large"
+      | "unsupported_file_type"
+      | "too_many_pages"
+      | "http_error"
+      | "internal_server_error"
+      | "rate_limited"
+      | "share_with_self"
+      | "invalid_quiz_answer"
+      | "widget_not_found"
+      | "queue_unavailable";
+    /** ErrorResponse */
+    ErrorResponse: {
+      /** Available */
+      available?: number | null;
+      /** Detail */
+      detail: unknown;
+      error_code: components["schemas"]["ErrorCode"];
+      /** Limit */
+      limit?: number | null;
+      reason?: components["schemas"]["DocumentErrorCode"] | null;
+      /** Requested */
+      requested?: number | null;
+      /** Status */
+      status?: string | null;
+    };
+    /** GenerateRequest */
+    GenerateRequest: {
+      answers: components["schemas"]["GenerationAnswersIn"];
+      /** Topic Ids */
+      topic_ids: string[];
+    };
+    /** GenerateResponse */
+    GenerateResponse: {
+      /** Available */
+      available: number;
+      /** Cost */
+      cost: number;
+      /**
+       * Document Id
+       * Format: uuid
+       */
+      document_id: string;
+      /** Part Ids */
+      part_ids: string[];
+    };
+    /** GenerationAnswersIn */
+    GenerationAnswersIn: {
+      /**
+       * Depth
+       * @enum {string}
+       */
+      depth: "overview" | "standard" | "deep";
+      /**
+       * Goal
+       * @enum {string}
+       */
+      goal: "exam" | "understand" | "refresh";
+      /**
+       * Level
+       * @enum {string}
+       */
+      level: "novice" | "intermediate" | "advanced";
+    };
+    /** HealthResponse */
+    HealthResponse: {
+      /**
+       * Status
+       * @constant
+       */
+      status: "ok";
+    };
+    /** ImageFallback */
+    ImageFallback: {
+      /** Image Id */
+      image_id: string;
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      type: "image";
+    };
+    /** ImageOut */
+    ImageOut: {
+      /** Caption */
+      caption?: string | null;
+      /**
+       * Image Id
+       * Format: uuid
+       */
+      image_id: string;
+      /** Url */
+      url?: string | null;
+    };
+    JsonValue: unknown;
+    /** LastAnswersOut */
+    LastAnswersOut: {
+      /**
+       * Depth
+       * @enum {string}
+       */
+      depth: "overview" | "standard" | "deep";
+      /**
+       * Goal
+       * @enum {string}
+       */
+      goal: "exam" | "understand" | "refresh";
+      /**
+       * Level
+       * @enum {string}
+       */
+      level: "novice" | "intermediate" | "advanced";
+    };
+    /** LoginRequest */
+    LoginRequest: {
+      /**
+       * Email
+       * Format: email
+       */
+      email: string;
+      /** Password */
+      password: string;
+    };
+    /** MaterialOut */
+    MaterialOut: {
+      /**
+       * Document Id
+       * Format: uuid
+       */
+      document_id: string;
+      /** Parts Failed */
+      parts_failed: number;
+      /** Parts Published */
+      parts_published: number;
+      /** Parts Total */
+      parts_total: number;
+      /**
+       * Role
+       * @enum {string}
+       */
+      role: "owner" | "shared";
+      /** Shared By Email */
+      shared_by_email: string | null;
+      /**
+       * Source Type
+       * @enum {string}
+       */
+      source_type: "pdf" | "docx" | "md" | "gdocs";
+      /** Status */
+      status: string;
+      /** Title */
+      title: string;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+    };
+    /** MeOut */
+    MeOut: {
+      /** Display Name */
+      display_name: string | null;
+      /** Email */
+      email: string;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      last_answers: components["schemas"]["LastAnswersOut"] | null;
+      /**
+       * Locale
+       * @enum {string}
+       */
+      locale: "ru" | "en";
+      /** Notify Email */
+      notify_email: boolean;
+    };
+    /** MePatch */
+    MePatch: {
+      /** Display Name */
+      display_name?: string | null;
+      /** Locale */
+      locale?: ("ru" | "en") | null;
+      /** Notify Email */
+      notify_email?: boolean | null;
+    };
+    /** NumericQuiz */
+    NumericQuiz: {
+      /** Key */
+      key: string;
+      /** Prompt */
+      prompt: string;
+      /** Ref */
+      ref: string;
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      type: "numeric";
+      /** Unit */
+      unit?: string | null;
+    };
+    /** OrderingQuiz */
+    OrderingQuiz: {
+      /** Items */
+      items: components["schemas"]["ChoiceOption"][];
+      /** Key */
+      key: string;
+      /** Prompt */
+      prompt: string;
+      /** Ref */
+      ref: string;
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      type: "ordering";
+    };
+    /** PartContentOut */
+    PartContentOut: {
+      /** Images */
+      images?: {
+        [key: string]: components["schemas"]["ImageOut"];
+      };
+      /** Key Terms */
+      key_terms?: string[];
+      /** Markdown */
+      markdown: string;
+      /** Quizzes */
+      quizzes?: (
+        | components["schemas"]["ChoiceQuiz"]
+        | components["schemas"]["OrderingQuiz"]
+        | components["schemas"]["NumericQuiz"]
+      )[];
+      /**
+       * Schema Version
+       * @default 1
+       * @constant
+       */
+      schema_version: 1;
+      /** Sections */
+      sections?: components["schemas"]["SectionOut"][];
+      /** Sources */
+      sources?: {
+        [key: string]: components["schemas"]["SourceSpan"];
+      };
+      /** Title */
+      title: string;
+      /** Widgets */
+      widgets?: {
+        [key: string]:
+          | components["schemas"]["ConfigWidget"]
+          | components["schemas"]["CodeWidget"]
+          | components["schemas"]["PendingWidget"];
+      };
+    };
+    /** PartOut */
+    PartOut: {
+      content: components["schemas"]["PartContentOut"] | null;
+      /**
+       * Document Id
+       * Format: uuid
+       */
+      document_id: string;
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Index */
+      index: number;
+      /**
+       * Status
+       * @enum {string}
+       */
+      status:
+        | "queued"
+        | "main_pass"
+        | "resolving"
+        | "assembling"
+        | "published"
+        | "failed";
+      /** Title */
+      title: string;
+    };
+    /** PartSummaryOut */
+    PartSummaryOut: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Index */
+      index: number;
+      /**
+       * Status
+       * @enum {string}
+       */
+      status:
+        | "queued"
+        | "main_pass"
+        | "resolving"
+        | "assembling"
+        | "published"
+        | "failed";
+      /** Title */
+      title: string;
+    };
+    /** PendingWidget */
+    PendingWidget: {
+      /** Fallback */
+      fallback:
+        | components["schemas"]["ImageFallback"]
+        | components["schemas"]["TextFallback"];
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "pending" | "fallback";
+      /** Title */
+      title: string;
+    };
+    /**
+     * PlanRequest
+     * @description Body of ``POST /documents/{id}/plan`` (story 1.4.6).
+     */
+    PlanRequest: {
+      /** Topic Ids */
+      topic_ids?: string[];
+    };
+    /**
+     * PlanResponse
+     * @description Preview of the generation: parts, cost and the remaining quota.
+     *
+     *     ``cost`` is the number of parts the generation would create;
+     *     nothing is reserved by the plan call.
+     */
+    PlanResponse: {
+      /** Available */
+      available: number;
+      /** Cost */
+      cost: number;
+      /** Parts */
+      parts: components["schemas"]["PlannedPartOut"][];
+    };
+    /** PlannedPartOut */
+    PlannedPartOut: {
+      /** Index */
+      index: number;
+      /** Title */
+      title: string;
+      /** Tokens */
+      tokens: number;
+    };
+    /** QuizAttemptRequest */
+    QuizAttemptRequest: {
+      /** Answer */
+      answer: string | string[] | number;
+      /**
+       * Part Id
+       * Format: uuid
+       */
+      part_id: string;
+      /** Quiz Key */
+      quiz_key: string;
+    };
+    /** QuizAttemptResponse */
+    QuizAttemptResponse: {
+      /** Correct Answer */
+      correct_answer: string | string[] | number;
+      /** Explanation */
+      explanation: string | null;
+      /** Is Correct */
+      is_correct: boolean;
+      /** Option Explanations */
+      option_explanations:
+        | {
+            [key: string]: string;
+          }
+        | string[]
+        | null;
+    };
+    /** QuotaOut */
+    QuotaOut: {
+      /** Available */
+      available: number;
+      /** Monthly Limit */
+      monthly_limit: number;
+      /**
+       * Period End
+       * Format: date
+       * @description Exclusive bound: the first day of the next period.
+       */
+      period_end: string;
+      /**
+       * Period Start
+       * Format: date
+       */
+      period_start: string;
+    };
+    /** RegisterRequest */
+    RegisterRequest: {
+      /** Display Name */
+      display_name?: string | null;
+      /**
+       * Email
+       * Format: email
+       */
+      email: string;
+      /**
+       * Password
+       * @description At least 8 characters.
+       */
+      password: string;
+    };
+    /** SectionOut */
+    SectionOut: {
+      /** Anchor */
+      anchor: string;
+      /** Page */
+      page?: number | null;
+      source_span: components["schemas"]["SourceSpan"] | null;
+      /** Title */
+      title: string;
+      /** Topic Id */
+      topic_id: string | null;
+    };
+    /** SessionStatusOut */
+    SessionStatusOut: {
+      /**
+       * Status
+       * @constant
+       */
+      status: "ok";
+    };
+    /** ShareMaterialRequest */
+    ShareMaterialRequest: {
+      /**
+       * Document Id
+       * Format: uuid
+       */
+      document_id: string;
+      /**
+       * Email
+       * Format: email
+       */
+      email: string;
+    };
+    /** ShareMaterialResponse */
+    ShareMaterialResponse: {
+      /**
+       * Status
+       * @default ok
+       */
+      status: string;
+    };
+    /** SharedWithOut */
+    SharedWithOut: {
+      /** Display Name */
+      display_name: string | null;
+      /** Email */
+      email: string;
+      /**
+       * Shared At
+       * Format: date-time
+       */
+      shared_at: string;
+    };
+    /** SourceSpan */
+    SourceSpan: {
+      /** End */
+      end: number;
+      /** Start */
+      start: number;
+    };
+    /** TextFallback */
+    TextFallback: {
+      /** Text */
+      text: string;
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      type: "text";
+    };
+    /**
+     * TopicNodeOut
+     * @description Recursive node of ``GET /documents/{id}/topics`` (story 1.4.5).
+     */
+    TopicNodeOut: {
+      /** Children */
+      children: components["schemas"]["TopicNodeOut"][];
+      /** Id */
+      id: string;
+      /** Level */
+      level: number;
+      /** Title */
+      title: string;
+      /**
+       * Tokens
+       * @description Token sum of the whole subtree.
+       */
+      tokens: number;
+    };
+    /** TopicTreeOut */
+    TopicTreeOut: {
+      /** Topics */
+      topics: components["schemas"]["TopicNodeOut"][];
+    };
+    /** WidgetReportRequest */
+    WidgetReportRequest: {
+      /** Comment */
+      comment?: string | null;
+      /** Part Id */
+      part_id?: string | null;
+      /**
+       * Reason
+       * @enum {string}
+       */
+      reason: "wrong" | "broken" | "ugly" | "other";
+    };
+    /** WidgetReportResponse */
+    WidgetReportResponse: {
+      /**
+       * Status
+       * @default ok
+       * @constant
+       */
+      status: "ok";
+    };
+  };
+  responses: never;
+  parameters: never;
+  requestBodies: never;
+  headers: never;
+  pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    auth_login: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LoginRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthUserOut"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Too Many Requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
+  auth_login: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    auth_logout: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionStatusOut"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["LoginRequest"];
+      };
     };
-    auth_register: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegisterRequest"];
-            };
+        content: {
+          "application/json": components["schemas"]["AuthUserOut"];
         };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthUserOut"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Too Many Requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
         };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Unprocessable Content */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
     };
-    documents_upload: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_documents_upload"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentCreatedOut"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Content Too Large */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unsupported Media Type */
-            415: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Too Many Requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
+  };
+  auth_logout: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    documents_import: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DocumentImportRequest"];
-            };
+        content: {
+          "application/json": components["schemas"]["SessionStatusOut"];
         };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentCreatedOut"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Too Many Requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
         };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
     };
-    documents_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                document_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentOut"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
+  };
+  auth_register: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    documents_generate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                document_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GenerateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GenerateResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Payment Required */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Too Many Requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RegisterRequest"];
+      };
     };
-    documents_plan: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                document_id: string;
-            };
-            cookie?: never;
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PlanRequest"];
-            };
+        content: {
+          "application/json": components["schemas"]["AuthUserOut"];
         };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PlanResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
         };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Unprocessable Content */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
     };
-    documents_topics: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                document_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TopicTreeOut"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
+  };
+  documents_upload: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    materials_share: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ShareMaterialRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ShareMaterialResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        "multipart/form-data": components["schemas"]["Body_documents_upload"];
+      };
     };
-    me_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MeOut"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["DocumentCreatedOut"];
         };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Content Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Unprocessable Content */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
     };
-    me_patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MePatch"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MeOut"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
+  };
+  documents_import: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    me_materials: {
-        parameters: {
-            query?: {
-                filter?: "mine" | "shared";
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MaterialOut"][];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DocumentImportRequest"];
+      };
     };
-    me_quota: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["QuotaOut"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["DocumentCreatedOut"];
         };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Unprocessable Content */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
     };
-    parts_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                part_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PartOut"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
+  };
+  documents_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        document_id: string;
+      };
+      cookie?: never;
     };
-    quiz_attempts_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["QuizAttemptRequest"];
-            };
+        content: {
+          "application/json": components["schemas"]["DocumentOut"];
         };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["QuizAttemptResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
         };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Unprocessable Content */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
     };
-    widgets_report: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                widget_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WidgetReportRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WidgetReportResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
+  };
+  documents_generate: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        document_id: string;
+      };
+      cookie?: never;
     };
-    health_live: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HealthResponse"];
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["GenerateRequest"];
+      };
     };
-    health_ready: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HealthResponse"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["GenerateResponse"];
         };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Payment Required */
+      402: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Unprocessable Content */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
     };
+  };
+  documents_plan: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        document_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PlanRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PlanResponse"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Unprocessable Content */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  documents_topics: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        document_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TopicTreeOut"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Unprocessable Content */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  materials_share: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ShareMaterialRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ShareMaterialResponse"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Unprocessable Content */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  me_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MeOut"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  me_patch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MePatch"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MeOut"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Unprocessable Content */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  me_materials: {
+    parameters: {
+      query?: {
+        filter?: "mine" | "shared";
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MaterialOut"][];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Unprocessable Content */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  me_quota: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["QuotaOut"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  parts_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        part_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PartOut"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Unprocessable Content */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  quiz_attempts_create: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["QuizAttemptRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["QuizAttemptResponse"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Unprocessable Content */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  widgets_report: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        widget_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["WidgetReportRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WidgetReportResponse"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Unprocessable Content */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  health_live: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HealthResponse"];
+        };
+      };
+    };
+  };
+  health_ready: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HealthResponse"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
 }

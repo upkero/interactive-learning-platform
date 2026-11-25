@@ -1,6 +1,6 @@
-import { getTranslations } from 'next-intl/server';
-import { ActionLink, PageShell } from '@/shared/ui';
-import { MaterialsContent } from '@/features/materials';
+import { getTranslations } from "next-intl/server";
+import { ActionLink, PageShell } from "@/shared/ui";
+import { MaterialsContent } from "@/features/materials";
 
 export default async function MaterialsPage({
   params,
@@ -8,12 +8,14 @@ export default async function MaterialsPage({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  const t = await getTranslations({ locale, namespace: 'materials' });
+  const t = await getTranslations({ locale, namespace: "materials" });
 
   return (
     <PageShell
-      title={t('title')}
-      actions={<ActionLink href={`/${locale}/upload`}>{t('uploadButton')}</ActionLink>}
+      title={t("title")}
+      actions={
+        <ActionLink href={`/${locale}/upload`}>{t("uploadButton")}</ActionLink>
+      }
     >
       <MaterialsContent />
     </PageShell>

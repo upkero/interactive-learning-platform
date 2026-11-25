@@ -20,7 +20,10 @@
     "generationsCount": "{count, plural, one {# генерация} few {# генерации} many {# генераций} other {# генераций}}",
     "partsCount": "{count, plural, one {# часть} few {# части} many {# частей} other {# частей}}",
     "topicsCount": "{count, plural, one {# тема} few {# темы} many {# тем} other {# тем}}",
-    "materialsCount": "{count, plural, one {# материал} few {# материала} many {# материалов} other {# материалов}}"
+    "materialsCount": "{count, plural, one {# материал} few {# материала} many {# материалов} other {# материалов}}",
+    "navigation": "Навигация",
+    "mainNavigation": "Главная навигация",
+    "mobileNavigation": "Мобильная навигация"
   },
   "auth": {
     "loginTitle": "Вход в аккаунт",
@@ -41,22 +44,34 @@
     "quotaTitle": "Доступный лимит",
     "quotaRemaining": "Осталось: {count, plural, one {# генерация} few {# генерации} many {# генераций} other {# генераций}}",
     "quotaExhausted": "Лимит генераций исчерпан",
+    "quotaPeriodEnd": "Обновление: {date}",
+    "quotaProgressLabel": "Использовано {used} из {total}",
     "titleLabel": "Название",
+    "partsLabel": "Части",
     "statusLabel": "Статус",
+    "roleLabel": "Роль",
     "createdAtLabel": "Дата создания",
     "actionsLabel": "Действия",
     "sharedLabel": "Общий доступ",
+    "ownerLabel": "Владелец",
+    "sharedByLabel": "От {email}",
+    "shareAction": "Поделиться",
     "deleteConfirm": "Удалить материал «{title}»? Это действие нельзя отменить.",
     "retryAction": "Повторить",
     "deleteAction": "Удалить",
     "retryNotImplemented": "Функция повтора будет доступна позже.",
     "status": {
+      "uploaded": "Загружен",
       "parsing": "Разбор файла",
-      "topics_required": "Выбор тем",
-      "questions_required": "Настройка параметров",
-      "generating": "Генерация",
-      "ready": "Готов",
-      "error": "Ошибка"
+      "parsed": "Темы выбраны",
+      "generating": "Генерация: {published}/{total}",
+      "done": "Готов",
+      "failed": "Ошибка"
+    },
+    "empty": {
+      "all": "У вас пока нет материалов. Загрузите первую лекцию или учебник, чтобы создать интерактивный конспект.",
+      "mine": "Вы ещё не загрузили ни одного собственного материала.",
+      "shared": "С вами пока никто не поделился материалами."
     }
   },
   "upload": {
@@ -111,7 +126,7 @@
   },
   "progress": {
     "title": "Создаём материал",
-    "etaRemaining": "Оценка оставшегося времени: {seconds} сек.",
+    "etaRemaining": "Оценка оставшегого времени: {seconds} сек.",
     "stageLogTitle": "Журнал этапов",
     "partsTitle": "Готовность частей",
     "keyTermsTitle": "Ключевые термины",
@@ -234,6 +249,7 @@
     "invalid_quiz_answer": "Ответ не соответствует типу задания.",
     "widget_not_found": "Виджет не найден.",
     "queue_unavailable": "Очередь задач недоступна. Попробуйте повторить позже.",
+    "network_error": "Ошибка сети. Проверьте подключение к интернету.",
     "unknown_error": "Произошла непредвиденная ошибка."
   }
 }

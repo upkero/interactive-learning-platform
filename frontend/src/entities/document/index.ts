@@ -2,9 +2,8 @@ export {
   MATERIALS_QUERY_KEY,
   type MaterialOut,
   useMaterials,
-  useDeleteDocument,
   getMaterialRoute,
-} from './model/useDocuments';
+} from "./model/useDocuments";
 
 export {
   DOCUMENT_QUERY_KEY,
@@ -22,11 +21,7 @@ export {
   useDocumentTopics,
   useDocumentParts,
   usePart,
-  useUploadDocument,
-  useImportDocument,
-  useGenerateDocument,
-  usePlanDocument,
-} from './model/useDocument';
+} from "./model/useDocument";
 
 export {
   type WizardStep,
@@ -34,12 +29,12 @@ export {
   getRouteForStep,
   ALLOWED_STEPS_BY_STATUS,
   REDIRECT_TARGET_BY_STATUS,
-} from './guard/types';
+} from "./guard/types";
 
 export {
   useDocumentStatusGuard,
   useDocumentErrorRedirect,
-} from './guard/useDocumentStatusGuard';
+} from "./guard/useDocumentStatusGuard";
 
 export {
   SseEventType,
@@ -51,4 +46,4 @@ export {
   type SseEvent,
   isFinalEvent,
   parseSseEvent,
-} from './model/events';
+} from "./model/events";

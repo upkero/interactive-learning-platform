@@ -1,7 +1,7 @@
-import type { ReactNode } from 'react';
-import { SessionGate } from '@/features/auth';
-import { AppShell } from '@/widgets/app-shell';
-import styles from './layout.module.css';
+import type { ReactNode } from "react";
+import { SessionGate } from "@/features/auth";
+import { AppShell } from "@/app/_components/AppShell";
+import styles from "./layout.module.css";
 
 export default async function MainLayout({
   children,
