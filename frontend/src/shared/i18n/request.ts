@@ -5,12 +5,11 @@ import ru from './messages/ru.json';
 
 const messagesByLocale: Record<Locale, typeof ru> = { ru, en };
 
-export default getRequestConfig(async ({ requestLocale }) => {
-  const requested = await requestLocale;
-  const locale: Locale = locales.includes(requested as Locale) ? (requested as Locale) : defaultLocale;
+export default getRequestConfig(({ locale }) => {
+  const validLocale: Locale = locales.includes(locale as Locale) ? (locale as Locale) : defaultLocale;
 
   return {
-    locale,
-    messages: messagesByLocale[locale],
+    locale: validLocale,
+    messages: messagesByLocale[validLocale],
   };
 });

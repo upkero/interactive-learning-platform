@@ -20,17 +20,20 @@ export default tseslint.config(
         { type: 'entity', pattern: 'src/entities/**', capture: ['entity'] },
         { type: 'shared', pattern: 'src/shared/**' },
       ],
+      'boundaries/flag-as-external': {
+        customSourcePatterns: ['@grasp/primitives/**'],
+      },
     },
     rules: {
       ...nextPlugin.configs['core-web-vitals'].rules,
       'boundaries/element-types': ['error', {
         default: 'disallow',
         rules: [
-          { from: 'app', allow: ['app', 'widget', 'feature', 'entity', 'shared'] },
-          { from: 'widget', allow: [['widget', { widget: '${from.widget}' }], 'feature', 'entity', 'shared'] },
-          { from: 'feature', allow: ['entity', 'shared'] },
-          { from: 'entity', allow: ['entity', 'shared'] },
-          { from: 'shared', allow: ['shared'] },
+          { from: 'app', allow: ['app', 'widget', 'feature', 'entity', 'shared', 'external'] },
+          { from: 'widget', allow: [['widget', { widget: '${from.widget}' }], 'feature', 'entity', 'shared', 'external'] },
+          { from: 'feature', allow: ['entity', 'shared', 'external'] },
+          { from: 'entity', allow: ['entity', 'shared', 'external'] },
+          { from: 'shared', allow: ['shared', 'external'] },
         ],
       }],
       'boundaries/entry-point': ['error', {
@@ -40,6 +43,7 @@ export default tseslint.config(
           { target: ['app', 'shared'], allow: '**' },
         ],
       }],
+      'boundaries/no-unknown': 'error',
     },
   },
 );

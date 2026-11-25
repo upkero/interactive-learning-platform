@@ -196,6 +196,11 @@ jobs:
           cp primitives/dist/catalog.json backend/resources/catalog.json
           git diff --exit-code -- primitives/dist/catalog.json backend/resources/catalog.json
 
+      - name: Check API types freshness
+        run: |
+          pnpm --dir frontend api:gen
+          git diff --exit-code -- backend/openapi.json frontend/src/shared/api/schema.d.ts
+
       - name: Build packages
         run: pnpm -r build
 

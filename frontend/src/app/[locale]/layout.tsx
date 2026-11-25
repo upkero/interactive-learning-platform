@@ -1,7 +1,7 @@
-import '@/shared/styles/tokens.css';
+import '@grasp/primitives/tokens.css';
 import '@/shared/styles/globals.css';
 import { NextIntlClientProvider } from 'next-intl';
-import { getMessages, setRequestLocale } from 'next-intl/server';
+import { getMessages } from 'next-intl/server';
 import type { ReactNode } from 'react';
 import { QueryProvider } from '@/shared/api/query-provider';
 
@@ -13,7 +13,6 @@ export default async function LocaleLayout({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  setRequestLocale(locale);
   const messages = await getMessages({ locale });
 
   return (
