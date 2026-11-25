@@ -32,6 +32,7 @@ from src.app.ingest.parsers.gdocs_importer import GDocsImporter
 from src.app.ingest.parsers.markdown_parser import MarkdownParser
 from src.app.ingest.tokens import TokenCounter
 from src.app.interfaces.llm.llm_client import LLMClient
+from src.app.interfaces.services.ingest import ImageDescriberProtocol
 from src.app.interfaces.storage.object_storage_client import StorageBucket
 from src.app.observability.progress_notifier import RedisProgressNotifier
 from src.app.repositories.document_repository import DocumentRepository
@@ -40,11 +41,17 @@ from src.app.repositories.user_repository import UserRepository
 from src.app.services.documents.document_ingest_runner import DocumentIngestRunner
 from src.app.services.documents.document_ingest_service import DocumentIngestService
 from src.app.services.documents.file_inspector import FileInspector
-from src.app.services.documents.topic_segmenter import TopicSegmenter
+from src.app.services.documents.topic_segmenter import Section, Sections, TopicSegmenter
 from src.app.storage.object_keys import parsed_markdown_key
 from tests.support.fakes.services.progress_notifier import FakeProgressNotifier
 from tests.support.fakes.storage.object_storage_client import FakeObjectStorageClient
 from tests.support.fixtures.documents import docx_bomb_bytes
+
+
+def _png_data_url(size: int, color: str) -> str:
+    output = BytesIO()
+    Image.new("RGB", (size, size), color).save(output, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(output.getvalue()).decode()
 
 
 @pytest.mark.integration
@@ -155,16 +162,11 @@ async def test_concurrent_delivery_does_not_replace_active_parse(
 async def test_image_refs_match_database_after_filtering(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    def image(size: int, color: str) -> str:
-        output = BytesIO()
-        Image.new("RGB", (size, size), color).save(output, format="PNG")
-        return base64.b64encode(output.getvalue()).decode()
-
-    red = image(100, "red")
+    red = _png_data_url(100, "red")
     source = (
         "# Images\n\n"
         + "\n\n".join(
-            f"![picture](data:image/png;base64,{value})" for value in (red, image(20, "blue"), image(120, "green"), red)
+            f"![picture]({value})" for value in (red, _png_data_url(20, "blue"), _png_data_url(120, "green"), red)
         )
     ).encode()
     async with session_factory() as session, session.begin():
@@ -220,6 +222,84 @@ async def test_image_refs_match_database_after_filtering(
     assert {key for bucket, key, _, _ in storage.put_object_calls if bucket == "images"} == {
         item.object_key for item in images
     }
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+@pytest.mark.parametrize("layout", ["inline", "table"])
+async def test_segmentation_keeps_images_in_their_source_topic(
+    session_factory: async_sessionmaker[AsyncSession], monkeypatch: pytest.MonkeyPatch, layout: str
+) -> None:
+    pictures = (
+        f"![diagram]({_png_data_url(64, 'red')}) "
+        f"![detail]({_png_data_url(80, 'blue')}) "
+        f"![tiny]({_png_data_url(8, 'white')})"
+    )
+    content = f"Paragraph about a diagram {pictures}."
+    if layout == "table":
+        content = f"Caption | Pictures\n--- | ---\nProcess | {pictures}"
+    source = f"{content}\n\nAnother subject.\n".encode()
+    async with session_factory() as session, session.begin():
+        user = await UserRepository(session).create(email=f"{uuid4()}@example.com", password_hash="x", monthly_limit=20)
+        document = await DocumentRepository(session).create(
+            owner_id=user.id,
+            title="Topics",
+            source_type=SourceType.UPLOAD,
+            object_key="topics.md",
+            mime_type="text/markdown",
+            size_bytes=len(source),
+            checksum="a" * 64,
+        )
+    storage = FakeObjectStorageClient(objects={("documents", "topics.md"): source})
+    segment = AsyncMock(
+        return_value=Sections(
+            sections=[Section(title="Diagrams", first_paragraph=1), Section(title="Other", first_paragraph=2)]
+        )
+    )
+    monkeypatch.setattr("src.app.services.documents.topic_segmenter.call_structured", segment)
+    vision = AsyncMock(spec=ImageDescriberProtocol)
+    vision.describe.return_value = {}
+    counter = TokenCounter()
+    service = DocumentIngestService(
+        session_factory=session_factory,
+        documents=DocumentRepository,
+        images=ImageRepository,
+        storage=storage,
+        registry=ParserRegistry((MarkdownParser(),)),
+        notifier=FakeProgressNotifier(),
+        gdocs=GDocsImporter(max_bytes=1024),
+        parsing_lease=PostgresParsingLease(session_factory.kw["bind"]),
+        image_store=ImageStore(storage),
+        inspector=FileInspector(UploadSettings()),
+        counter=counter,
+        ingest_settings=IngestSettings(),
+        upload_settings=UploadSettings(),
+        topic_segmenter=TopicSegmenter(AsyncMock(spec=LLMClient), counter=counter),
+        image_describer=vision,
+    )
+    await service.parse(document.id)
+
+    segment.assert_awaited_once()
+    assert segment.await_args is not None
+    model_input = segment.await_args.args[1].messages[0].content
+    assert isinstance(model_input, str)
+    assert "[p2] Another subject." in model_input
+    assert '::image{id="img_3"}' not in model_input
+    async with session_factory() as session:
+        result = await DocumentRepository(session).get(document.id)
+        images = await ImageRepository(session).list_by_document(document.id)
+    assert result is not None and result.status is DocumentStatus.PARSED
+    assert result.topic_tree is not None
+    first, second = result.topic_tree
+    assert (first.title, first.image_ids) == ("Diagrams", ("img_1", "img_2"))
+    assert (second.title, second.image_ids) == ("Other", ())
+    assert len(images) == 2 and all(image.topic_id == first.id for image in images)
+    saved_markdown = (
+        await storage.get_object(bucket="documents", key=parsed_markdown_key(user.id, document.id))
+    ).decode()
+    assert saved_markdown[second.start : second.end].startswith("## Other\n\nAnother subject.")
+    vision.describe.assert_awaited_once()
+    assert vision.describe.await_args.kwargs["topic_titles"] == {"img_1": "Diagrams", "img_2": "Diagrams"}
 
 
 @pytest.mark.integration
@@ -283,20 +363,15 @@ async def test_segmentation_failure_keeps_document_parsed(
 @pytest.mark.integration
 @pytest.mark.asyncio
 @pytest.mark.parametrize("scenario", ["empty", "filtered_image", "pages", "private", "parser"])
-async def test_known_ingest_errors(session_factory: async_sessionmaker[AsyncSession], scenario: str) -> None:
+async def test_known_ingest_errors(
+    session_factory: async_sessionmaker[AsyncSession], monkeypatch: pytest.MonkeyPatch, scenario: str
+) -> None:
     class TestParser(DocumentParser):
         supported_mime_types = frozenset({"text/plain"})
 
         def parse(self, data: bytes, *, filename: str) -> ParsedDocument:
             if scenario == "parser":
                 raise RuntimeError("internal parser detail")
-            if scenario == "filtered_image":
-                buffer = BytesIO()
-                Image.new("RGB", (8, 8), "white").save(buffer, format="PNG")
-                return ParsedDocument(
-                    markdown='::image{id="img_1"}\n',
-                    images=(ExtractedImage(ref="img_1", data=buffer.getvalue(), media_type="image/png"),),
-                )
             return ParsedDocument(
                 markdown="" if scenario == "empty" else "Text", page_count=301 if scenario == "pages" else 1
             )
@@ -318,22 +393,27 @@ async def test_known_ingest_errors(session_factory: async_sessionmaker[AsyncSess
             size_bytes=1,
             checksum="d" * 64,
         )
-    storage = FakeObjectStorageClient(objects={("documents", "test.txt"): b"x"})
+    source = f"![tiny]({_png_data_url(8, 'white')})".encode() if scenario == "filtered_image" else b"x"
+    storage = FakeObjectStorageClient(objects={("documents", "test.txt"): source})
     notifier = FakeProgressNotifier()
+    segment = AsyncMock(return_value=Sections(sections=[]))
+    monkeypatch.setattr("src.app.services.documents.topic_segmenter.call_structured", segment)
+    counter = TokenCounter()
     service = DocumentIngestService(
         session_factory=session_factory,
         documents=DocumentRepository,
         images=ImageRepository,
         storage=storage,
-        registry=ParserRegistry((TestParser(),)),
+        registry=ParserRegistry((MarkdownParser(),) if scenario == "filtered_image" else (TestParser(),)),
         notifier=notifier,
         gdocs=PrivateDocs(),
         parsing_lease=PostgresParsingLease(session_factory.kw["bind"]),
         image_store=ImageStore(storage),
         inspector=FileInspector(UploadSettings()),
-        counter=TokenCounter(),
+        counter=counter,
         ingest_settings=IngestSettings(),
         upload_settings=UploadSettings(),
+        topic_segmenter=TopicSegmenter(AsyncMock(spec=LLMClient), counter=counter),
     )
     await service.parse(document.id)
     async with session_factory() as session:
@@ -351,6 +431,7 @@ async def test_known_ingest_errors(session_factory: async_sessionmaker[AsyncSess
     )
     assert notifier.error_codes[-1] is result.error_code
     assert not storage.put_object_calls
+    segment.assert_not_awaited()
 
 
 @pytest.mark.integration

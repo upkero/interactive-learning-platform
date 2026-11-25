@@ -1,13 +1,14 @@
 """Bounded model windows and lossless topic boundaries at Markdown blocks."""
 
 import re
+from dataclasses import replace
 
 from pydantic import BaseModel
 
 from src.app.contracts.llm.llm_message import LLMMessage
 from src.app.contracts.llm.llm_request import LLMRequest
 from src.app.contracts.llm.system_block import SystemBlock
-from src.app.ingest.markdown_syntax import MarkdownStructure, parse_markdown
+from src.app.ingest.markdown_syntax import Block, MarkdownStructure, parse_markdown
 from src.app.ingest.tokens import TokenCounter
 from src.app.ingest.topic_tree import build_topic_tree, heading_level
 from src.app.interfaces.llm.llm_client import LLMClient
@@ -35,11 +36,26 @@ class TopicSegmenter:
         self._max_tokens = max_tokens
 
     def _blocks(self, markdown: str, structure: MarkdownStructure) -> list[tuple[int, int]]:
+        marker_refs = dict(structure.markers)
+        grouped: list[Block] = []
+        for block in structure.blocks:
+            ref = marker_refs.get(block.start)
+            if (
+                grouped
+                and ref is not None
+                and markdown[block.start : block.end].rstrip("\r\n") == f'::image{{id="{ref}"}}'
+            ):
+                # Embedded images are emitted after their source block.
+                # Keep that block and all its trailing markers indivisible.
+                grouped[-1] = replace(grouped[-1], end=block.end, plain_text=False)
+            else:
+                grouped.append(block)
+
         blocks: list[tuple[int, int]] = []
         split_at = min(self._max_tokens // 2, 10000)
-        for index, block in enumerate(structure.blocks):
+        for index, block in enumerate(grouped):
             start = block.start if index else 0
-            end = structure.blocks[index + 1].start if index + 1 < len(structure.blocks) else len(markdown)
+            end = grouped[index + 1].start if index + 1 < len(grouped) else len(markdown)
             if not block.plain_text or self._counter.count(markdown[start:end]) <= split_at:
                 blocks.append((start, end))
                 continue

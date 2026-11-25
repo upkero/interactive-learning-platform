@@ -117,30 +117,6 @@ class DocumentIngestService:
                 raise IngestFailure(DocumentErrorCode.EMPTY_DOCUMENT, "Document is empty")
             if parsed.page_count is not None and parsed.page_count > self._upload_settings.max_pages:
                 raise IngestFailure(DocumentErrorCode.TOO_MANY_PAGES, "Document has too many pages")
-            structure = parse_markdown(parsed.markdown)
-            initial_tree = build_topic_tree(parsed.markdown, self._counter, parsed.heading_pages, structure=structure)
-            segment_needed = not structure.headings or (
-                len(initial_tree) == 1
-                and not initial_tree[0].children
-                and initial_tree[0].total_tokens > self._ingest_settings.segment_max_tokens
-            )
-            if self._topic_segmenter is not None and segment_needed:
-                try:
-                    segmented = await self._topic_segmenter.segment(parsed.markdown)
-                except Exception as exc:
-                    logger.warning("Topic segmentation skipped", extra={"document_id": str(document_id)}, exc_info=True)
-                    logging.getLogger("grasp.decisions").warning(
-                        "Topic segmentation skipped",
-                        extra={"event": "ingest.segmentation_skipped", "reason": type(exc).__name__},
-                    )
-                else:
-                    parsed = ParsedDocument(
-                        markdown=segmented,
-                        images=parsed.images,
-                        page_count=parsed.page_count,
-                        title=parsed.title,
-                        heading_pages=parsed.heading_pages,
-                    )
             await self._store_result(document, parsed)
         except GDocsImportError as exc:
             await self._fail(document_id, exc.code, str(exc))
@@ -155,7 +131,7 @@ class DocumentIngestService:
         markdown, saved = await self._image_store.save(document_id, parsed.markdown, parsed.images)
         if not markdown.strip():
             raise IngestFailure(DocumentErrorCode.EMPTY_DOCUMENT, "Document is empty")
-        tree = build_topic_tree(markdown, self._counter, parsed.heading_pages)
+        markdown, tree = await self._build_topics(document_id, markdown, parsed.heading_pages)
         await self._storage.put_object(
             bucket="documents",
             key=parsed_markdown_key(document.owner_id, document_id),
@@ -199,6 +175,35 @@ class DocumentIngestService:
             )
             await self._documents(session).update_source(document_id, object_key=key, page_count=parsed.page_count)
             await self._documents(session).set_status(document_id, DocumentStatus.PARSED)
+
+    async def _build_topics(
+        self, document_id: UUID, markdown: str, heading_pages: tuple[tuple[str, int], ...]
+    ) -> tuple[str, list[TopicNode]]:
+        structure = parse_markdown(markdown)
+        tree = build_topic_tree(markdown, self._counter, heading_pages, structure=structure)
+        segmenter = self._topic_segmenter
+        if segmenter is None:
+            return markdown, tree
+
+        segment_needed = not structure.headings or (
+            len(tree) == 1 and not tree[0].children and tree[0].total_tokens > self._ingest_settings.segment_max_tokens
+        )
+        if not segment_needed:
+            return markdown, tree
+
+        try:
+            segmented = await segmenter.segment(markdown)
+            if not segmented.strip():
+                raise ValueError("Topic segmentation returned empty Markdown")
+            if segmented != markdown:
+                return segmented, build_topic_tree(segmented, self._counter, heading_pages)
+        except Exception as exc:
+            logger.warning("Topic segmentation skipped", extra={"document_id": str(document_id)}, exc_info=True)
+            logging.getLogger("grasp.decisions").warning(
+                "Topic segmentation skipped",
+                extra={"event": "ingest.segmentation_skipped", "reason": type(exc).__name__},
+            )
+        return markdown, tree
 
     async def _fail(self, document_id: UUID, code: DocumentErrorCode, detail: str) -> None:
         await mark_document_failed(

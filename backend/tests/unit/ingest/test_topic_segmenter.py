@@ -145,3 +145,16 @@ async def test_working_token_limit_keeps_large_table_and_indented_code_intact(
     before = [source[item.start : item.end] for item in parse_markdown(source).blocks if item.kind == kind]
     after = [result[item.start : item.end] for item in parse_markdown(result).blocks if item.kind == kind]
     assert before == after == [block]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_oversized_paragraph_with_image_is_not_split(monkeypatch: pytest.MonkeyPatch) -> None:
+    call = AsyncMock(return_value=Sections(sections=[]))
+    monkeypatch.setattr("src.app.services.documents.topic_segmenter.call_structured", call)
+    counter = TokenCounter()
+    source = "word " * 15000 + '\n\n::image{id="img_1"}\n'
+    assert counter.count(source) > 20000
+    with pytest.raises(ValueError, match="exceeds the model window"):
+        await TopicSegmenter(AsyncMock(spec=LLMClient), counter=counter).segment(source)
+    call.assert_not_awaited()
