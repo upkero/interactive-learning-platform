@@ -1,0 +1,114 @@
+{
+  "measured_on": "2026-11-26",
+  "story": "1.9.4",
+  "model": "anthropic/claude-sonnet-4.6",
+  "provider": "Anthropic via OpenRouter",
+  "endpoint": "POST https://openrouter.ai/api/v1/messages",
+  "method": "Input usage from a one-output-token request. The request allows only Anthropic and disables provider fallbacks. This is a billed inference measurement.",
+  "method_validation": {
+    "text": "В идеальном газе при постоянной температуре давление обратно пропорционально объёму.",
+    "messages_usage_input_tokens": 36,
+    "generation_native_tokens_prompt": 36,
+    "generation_tokens_prompt": 40,
+    "provider": "Anthropic"
+  },
+  "encoding": "o200k_base",
+  "percentile": 95,
+  "percentile_method": "Nearest-rank percentile of provider_input_tokens / tiktoken_tokens, rounded up to four decimal places.",
+  "tokens_calibration": 1.4143,
+  "measured_documents_covered": 10,
+  "corpus": "Five English and five Russian MDN JavaScript guide articles. Entire UTF-8 Markdown files including front matter.",
+  "command": "python -m evals.calibrate_tokens --openrouter-usage FILE ...",
+  "documents": [
+    {
+      "file": "en-functions.md",
+      "language": "en",
+      "source": "https://raw.githubusercontent.com/mdn/content/42994d9657fd9771d5c45579521d947ba5babc05/files/en-us/web/javascript/guide/functions/index.md",
+      "sha256": "11e59a5c148dd61a3e629c5792b7999a7ccce4a21ccb296dd91509b685a52ba9",
+      "tiktoken_tokens": 6179,
+      "provider_input_tokens": 6878,
+      "ratio": 1.1131
+    },
+    {
+      "file": "en-indexed_collections.md",
+      "language": "en",
+      "source": "https://raw.githubusercontent.com/mdn/content/42994d9657fd9771d5c45579521d947ba5babc05/files/en-us/web/javascript/guide/indexed_collections/index.md",
+      "sha256": "19f95bdda640bdc9775cc0adfcf5c4ce6128fabd89b2de60f315d61392a0e409",
+      "tiktoken_tokens": 7421,
+      "provider_input_tokens": 8255,
+      "ratio": 1.1124
+    },
+    {
+      "file": "en-loops_and_iteration.md",
+      "language": "en",
+      "source": "https://raw.githubusercontent.com/mdn/content/42994d9657fd9771d5c45579521d947ba5babc05/files/en-us/web/javascript/guide/loops_and_iteration/index.md",
+      "sha256": "1c7fc419ee4f6db4e9b3a8574e5723cbba1492c8b242dfd746e4563f43c2d154",
+      "tiktoken_tokens": 3534,
+      "provider_input_tokens": 3908,
+      "ratio": 1.1058
+    },
+    {
+      "file": "en-grammar_and_types.md",
+      "language": "en",
+      "source": "https://raw.githubusercontent.com/mdn/content/42994d9657fd9771d5c45579521d947ba5babc05/files/en-us/web/javascript/guide/grammar_and_types/index.md",
+      "sha256": "0fa7023008fb32cdc670d5138be2b21b64d90e0fc458a47fc6cf05b33433588a",
+      "tiktoken_tokens": 7997,
+      "provider_input_tokens": 9005,
+      "ratio": 1.126
+    },
+    {
+      "file": "en-working_with_objects.md",
+      "language": "en",
+      "source": "https://raw.githubusercontent.com/mdn/content/42994d9657fd9771d5c45579521d947ba5babc05/files/en-us/web/javascript/guide/working_with_objects/index.md",
+      "sha256": "38b9a6a92a0513ac6e8770b820f01b1b948da08b97864636395d9d135599ba85",
+      "tiktoken_tokens": 5558,
+      "provider_input_tokens": 6331,
+      "ratio": 1.1391
+    },
+    {
+      "file": "ru-functions.md",
+      "language": "ru",
+      "source": "https://raw.githubusercontent.com/mdn/translated-content/a6a8f79451e5845611e9096aecf276b1e714de3c/files/ru/web/javascript/guide/functions/index.md",
+      "sha256": "99cba0583906c1958f23dcadc2c9ac19e1365984c4b31a3d6a93ed6b01c29498",
+      "tiktoken_tokens": 7346,
+      "provider_input_tokens": 10204,
+      "ratio": 1.3891
+    },
+    {
+      "file": "ru-indexed_collections.md",
+      "language": "ru",
+      "source": "https://raw.githubusercontent.com/mdn/translated-content/a6a8f79451e5845611e9096aecf276b1e714de3c/files/ru/web/javascript/guide/indexed_collections/index.md",
+      "sha256": "a53f6e45eb7de34b5ba5ac9c3e150b1bf6e4dd7842b00e918b18ec31d59df03e",
+      "tiktoken_tokens": 5902,
+      "provider_input_tokens": 8011,
+      "ratio": 1.3573
+    },
+    {
+      "file": "ru-loops_and_iteration.md",
+      "language": "ru",
+      "source": "https://raw.githubusercontent.com/mdn/translated-content/a6a8f79451e5845611e9096aecf276b1e714de3c/files/ru/web/javascript/guide/loops_and_iteration/index.md",
+      "sha256": "5e39044145c050a2d5d4d3a5fd1548e10bb863c927f83cd43bc2e39e6a20ec9f",
+      "tiktoken_tokens": 3674,
+      "provider_input_tokens": 4969,
+      "ratio": 1.3525
+    },
+    {
+      "file": "ru-grammar_and_types.md",
+      "language": "ru",
+      "source": "https://raw.githubusercontent.com/mdn/translated-content/a6a8f79451e5845611e9096aecf276b1e714de3c/files/ru/web/javascript/guide/grammar_and_types/index.md",
+      "sha256": "77bb3b83798edea3aa60a9d749a5c5e8d52ed7ce5e9a375d38175eb1f3890a39",
+      "tiktoken_tokens": 7527,
+      "provider_input_tokens": 10148,
+      "ratio": 1.3482
+    },
+    {
+      "file": "ru-working_with_objects.md",
+      "language": "ru",
+      "source": "https://raw.githubusercontent.com/mdn/translated-content/a6a8f79451e5845611e9096aecf276b1e714de3c/files/ru/web/javascript/guide/working_with_objects/index.md",
+      "sha256": "52ee51ec790362f8792d46782fb94fb2a43c42a6010b0eeb368d57d0c9cbaead",
+      "tiktoken_tokens": 6387,
+      "provider_input_tokens": 9033,
+      "ratio": 1.4143
+    }
+  ]
+}

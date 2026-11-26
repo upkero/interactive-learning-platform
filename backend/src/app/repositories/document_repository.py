@@ -50,6 +50,16 @@ class DocumentRepository(DocumentRepositoryProtocol):
         row = await self._session.get(Document, document_id)
         return self._to_record(row) if row is not None else None
 
+    async def begin_parsing(self, document_id: UUID) -> DocumentRecord | None:
+        stmt = (
+            update(Document)
+            .where(Document.id == document_id, Document.status.in_(["uploaded", "parsing", "failed"]))
+            .values(status="parsing", error_code=None, error_detail=None)
+            .returning(Document)
+        )
+        row = (await self._session.scalars(stmt)).first()
+        return self._to_record(row) if row is not None else None
+
     async def refresh_status(self, document_id: UUID) -> None:
         """Finish a generation when all parts are terminal; any publication makes it done."""
         stmt = select(Document).where(Document.id == document_id).with_for_update()
@@ -80,8 +90,57 @@ class DocumentRepository(DocumentRepositoryProtocol):
         )
         return [self._to_record(row) for row in (await self._session.scalars(stmt)).all()]
 
+    async def stale_parsing(self, *, older_than: timedelta, limit: int) -> list[DocumentRecord]:
+        stmt = (
+            select(Document)
+            .where(Document.status == DocumentStatus.PARSING.value, Document.updated_at < func.now() - older_than)
+            .order_by(Document.updated_at, Document.id)
+            .limit(limit)
+        )
+        return [self._to_record(row) for row in (await self._session.scalars(stmt)).all()]
+
+    async def fail_stale_parsing(self, document_id: UUID, *, older_than: timedelta) -> bool:
+        stmt = (
+            update(Document)
+            .where(
+                Document.id == document_id,
+                Document.status == DocumentStatus.PARSING.value,
+                Document.updated_at < func.now() - older_than,
+            )
+            .values(
+                status=DocumentStatus.FAILED.value,
+                error_code=DocumentErrorCode.PARSE_FAILED.value,
+                error_detail="Worker lost while parsing",
+            )
+            .returning(Document.id)
+        )
+        return (await self._session.scalar(stmt)) is not None
+
     async def touch(self, document_id: UUID) -> None:
         await self._session.execute(update(Document).where(Document.id == document_id).values(updated_at=func.now()))
+
+    async def update_source(
+        self,
+        document_id: UUID,
+        *,
+        object_key: str,
+        title: str | None = None,
+        page_count: int | None = None,
+        mime_type: str | None = None,
+        size_bytes: int | None = None,
+    ) -> None:
+        row = await self._session.get(Document, document_id)
+        if row is not None:
+            row.object_key = object_key
+            if title:
+                row.title = title
+            if page_count is not None:
+                row.page_count = page_count
+            if mime_type is not None:
+                row.mime_type = mime_type
+            if size_bytes is not None:
+                row.size_bytes = size_bytes
+            await self._session.flush()
 
     async def get_owned(self, document_id: UUID, owner_id: UUID) -> DocumentRecord | None:
         row = (

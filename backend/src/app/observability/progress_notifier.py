@@ -7,6 +7,7 @@ from uuid import UUID
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
+from src.app.contracts.documents.statuses import DocumentErrorCode
 from src.app.contracts.progress import ProgressEvent, ProgressEventType
 from src.app.contracts.progress.stream import stream_key
 from src.app.core.settings.progress import ProgressSettings
@@ -54,6 +55,7 @@ class RedisProgressNotifier:
         part_id: UUID | None = None,
         stage: str | None = None,
         message: str = "",
+        error_code: DocumentErrorCode | None = None,
     ) -> str | None:
         return await self.publish(
             ProgressEvent(
@@ -62,5 +64,6 @@ class RedisProgressNotifier:
                 part_id=part_id,
                 stage=stage,
                 message=message,
+                error_code=error_code,
             )
         )

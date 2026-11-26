@@ -1,14 +1,16 @@
-from collections.abc import Iterable
+from collections.abc import AsyncIterator, Iterable
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import cast
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents.part_record import PartRecord
 from src.app.contracts.documents.recovery_outcome import RecoveryOutcome
-from src.app.contracts.documents.statuses import PartStatus
+from src.app.contracts.documents.statuses import DocumentStatus, PartStatus
 from src.app.contracts.progress import ProgressEvent, ProgressEventType
 from src.app.contracts.quota import LedgerOp
 from src.app.services.solver.pipeline.watchdog import Watchdog
@@ -163,3 +165,41 @@ async def test_watchdog_ignores_published_part() -> None:
     report = await watchdog.tick()
     assert report.requeued == report.failed == report.lost == 0
     assert len(case.ledger.entries) == 1 and case.dispatcher.calls == []
+
+
+async def test_watchdog_dispatches_parts_and_continues_after_a_parsing_lease_failure() -> None:
+    case = await build_recovery(PartStatus.MAIN_PASS, 1)
+    age(case, 11)
+    original = await case.documents.get(case.part.document_id)
+    assert original is not None
+    poisoned = replace(
+        original, id=uuid4(), status=DocumentStatus.PARSING, updated_at=datetime.now(UTC) - timedelta(minutes=20)
+    )
+    healthy = replace(poisoned, id=uuid4(), updated_at=poisoned.updated_at + timedelta(minutes=1))
+    case.documents.store_record(poisoned)
+    case.documents.store_record(healthy)
+
+    class ParsingLease:
+        @asynccontextmanager
+        async def acquire(self, document_id: UUID) -> AsyncIterator[bool]:
+            assert case.dispatcher.calls == [("enqueue_part", (case.part.id, False))]
+            if document_id == poisoned.id:
+                raise RuntimeError("lease unavailable for one document")
+            yield True
+
+    metrics = RecordingMetricsCollector()
+    watchdog = Watchdog(
+        session_factory=cast(async_sessionmaker[AsyncSession], lambda: case.session),
+        parts=lambda _: case.parts,
+        documents=lambda _: case.documents,
+        recovery=case.recovery,
+        dispatcher=case.dispatcher,
+        metrics=metrics,
+        parsing_lease=ParsingLease(),
+    )
+    report = await watchdog.tick()
+    assert report.requeued == report.failed == 1
+    assert (await case.documents.get(poisoned.id)) == poisoned
+    recovered = await case.documents.get(healthy.id)
+    assert recovered is not None and recovered.status is DocumentStatus.FAILED
+    assert ("watchdog_actions_total", {"action": "error"}, 1) in metrics.labeled_counters

@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import NotRequired, TypedDict
 from uuid import UUID
 
+from src.app.contracts.documents.statuses import DocumentErrorCode
 from src.app.contracts.progress.event_type import ProgressEventType
 
 
@@ -15,6 +16,7 @@ class ProgressPayload(TypedDict):
     ts: str
     part_id: NotRequired[str]
     stage: NotRequired[str]
+    error_code: NotRequired[str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +28,7 @@ class ProgressEvent:
     part_id: UUID | None = None
     stage: str | None = None
     message: str = ""
+    error_code: DocumentErrorCode | None = None
     ts: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_payload(self) -> ProgressPayload:
@@ -38,6 +41,8 @@ class ProgressEvent:
             payload["part_id"] = str(self.part_id)
         if self.stage is not None:
             payload["stage"] = self.stage
+        if self.error_code is not None:
+            payload["error_code"] = self.error_code.value
         return payload
 
     def to_json(self) -> str:

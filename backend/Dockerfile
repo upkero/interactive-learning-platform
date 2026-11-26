@@ -8,13 +8,22 @@ COPY pyproject.toml uv.lock ./
 
 RUN uv sync --frozen --no-dev --no-install-project
 
+ENV HF_HOME="/app/.cache/huggingface" \
+    TIKTOKEN_CACHE_DIR="/app/.cache/tiktoken"
+RUN mkdir -p "$TIKTOKEN_CACHE_DIR" /app/artifacts && \
+    .venv/bin/docling-tools models download --output-dir /app/artifacts layout tableformer && \
+    .venv/bin/python -c 'import tiktoken; tiktoken.get_encoding("o200k_base")'
+
 FROM python:3.12-slim AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH="/app" \
     PATH="/app/.venv/bin:$PATH" \
-    HF_HOME="/app/.cache/huggingface"
+    HF_HOME="/app/.cache/huggingface" \
+    HF_HUB_OFFLINE=1 \
+    TIKTOKEN_CACHE_DIR="/app/.cache/tiktoken" \
+    INGEST_DOCLING_ARTIFACTS_PATH="/app/artifacts"
 
 RUN groupadd --gid 1001 appgroup && \
     useradd --uid 1001 --gid appgroup --no-create-home appuser && \
@@ -24,6 +33,8 @@ RUN groupadd --gid 1001 appgroup && \
 WORKDIR /app
 
 COPY --from=builder --chown=appuser:appgroup /app/.venv .venv
+COPY --from=builder --chown=appuser:appgroup /app/.cache /app/.cache
+COPY --from=builder --chown=appuser:appgroup /app/artifacts /app/artifacts
 COPY --chown=appuser:appgroup alembic.ini ./
 COPY --chown=appuser:appgroup migrations/ migrations/
 COPY --chown=appuser:appgroup src/ src/
