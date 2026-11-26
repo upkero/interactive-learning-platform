@@ -21,15 +21,18 @@ from src.app.contracts.documents import (
     DocumentRecord,
     DocumentStatus,
     MaterialRole,
+    ReadableDocument,
     SourceType,
     TopicNode,
 )
+from src.app.contracts.documents.readable_document import RunOutcome
 from src.app.exceptions.documents import DocumentNotFoundError, DocumentNotReadyError
 from src.app.interfaces.repositories.documents import (
     DocumentPartRepositoryProtocol,
     DocumentRepositoryProtocol,
     UserMaterialRepositoryProtocol,
 )
+from src.app.interfaces.repositories.users import UserRepositoryProtocol
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 
 # statuses from which the topic tree is readable; the parse result of
@@ -46,12 +49,38 @@ class DocumentQueryService:
         materials: Callable[[AsyncSession], UserMaterialRepositoryProtocol],
         parts: Callable[[AsyncSession], DocumentPartRepositoryProtocol],
         storage: ObjectStorageClient,
+        users: Callable[[AsyncSession], UserRepositoryProtocol],
     ) -> None:
         self._session_factory = session_factory
         self._documents = documents
         self._materials = materials
         self._parts = parts
         self._storage = storage
+        self._users = users
+
+    async def get_readable(self, *, user_id: UUID, document_id: UUID) -> ReadableDocument:
+        """Cheap authorization, owner locale and current run outcome for the SSE stream.
+
+        The outcome is computed from the parts of the latest run
+        (``index >= generation_start_index``), so the synthetic
+        ``document_done`` sent after a lost Redis Stream matches the
+        ``document_done`` that a worker would have published.
+        """
+        async with self._session_factory() as session:
+            if await self._materials(session).get_role(user_id, document_id) is None:
+                raise DocumentNotFoundError()
+            document = await self._documents(session).get(document_id)
+            if document is None:
+                raise DocumentNotFoundError()
+            # Narrow existence check: the SSE handshake must not load every
+            # part's source_markdown and generated content just to learn one bit.
+            published = await self._parts(session).has_published_since(document_id, document.generation_start_index)
+            run_outcome: RunOutcome = "ready" if published else "failed"
+            return ReadableDocument(
+                document,
+                await self._users(session).get_locale_by_document(document.id),
+                run_outcome,
+            )
 
     async def get_document(self, *, user_id: UUID, document_id: UUID) -> DocumentDetails:
         async with self._session_factory() as session:
@@ -98,6 +127,8 @@ class DocumentQueryService:
         the human text.
         """
         if document.status is DocumentStatus.FAILED:
+            if document.error_code is None and document.topic_tree:
+                return
             reason = document.error_code.value if document.error_code is not None else None
             raise DocumentNotReadyError(
                 detail="Document processing failed.", extra={"status": "failed", "reason": reason}

@@ -7,6 +7,7 @@ from src.app.contracts.documents.image_record import ImageRecord
 from src.app.contracts.documents.material_record import MaterialRecord
 from src.app.contracts.documents.part_draft import PartDraft
 from src.app.contracts.documents.part_record import PartRecord
+from src.app.contracts.documents.readable_document import ReadableDocument
 from src.app.contracts.documents.recovery_outcome import RecoveryOutcome
 from src.app.contracts.documents.shared_user_info import SharedUserInfo
 from src.app.contracts.documents.statuses import (
@@ -30,6 +31,7 @@ __all__ = [
     "PartDraft",
     "PartRecord",
     "PartStatus",
+    "ReadableDocument",
     "RecoveryOutcome",
     "SharedUserInfo",
     "SourceType",

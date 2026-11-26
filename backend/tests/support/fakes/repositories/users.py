@@ -16,9 +16,19 @@ class FakeUserRepository(UserRepositoryProtocol):
 
     def __init__(self) -> None:
         self._users: dict[UUID, UserRecord] = {}
+        self._document_owners: dict[UUID, UUID] = {}
+
+    def attach_document(self, document_id: UUID, owner_id: UUID) -> None:
+        """Register the document owner used by the repository's JOIN fake."""
+        self._document_owners[document_id] = owner_id
 
     async def get(self, user_id: UUID) -> UserRecord | None:
         return self._users.get(user_id)
+
+    async def get_locale_by_document(self, document_id: UUID) -> str:
+        owner_id = self._document_owners.get(document_id)
+        user = self._users.get(owner_id) if owner_id is not None else None
+        return user.locale if user is not None else "ru"
 
     async def get_by_email(self, email: str) -> UserRecord | None:
         return next((u for u in self._users.values() if u.email == email), None)

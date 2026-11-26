@@ -1,0 +1,100 @@
+.card {
+  background: var(--g-color-bg-elevated);
+  border: var(--g-hairline) solid var(--g-color-border);
+  border-radius: var(--g-radius-lg);
+  padding: var(--g-space-4);
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 280px;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: var(--g-space-3);
+}
+
+.title {
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-semibold);
+  color: var(--g-color-text);
+}
+
+.value {
+  font-size: var(--g-text-xl);
+  font-weight: var(--g-font-bold);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--g-font-mono);
+  color: var(--g-color-primary);
+}
+
+.value.exhausted {
+  color: var(--g-color-error);
+}
+
+.progressWrapper {
+  height: 8px;
+  background: var(--g-color-border);
+  border-radius: var(--g-radius-full);
+  overflow: hidden;
+  margin-bottom: var(--g-space-3);
+}
+
+.progressBar {
+  height: 100%;
+  background: var(--g-color-primary);
+  border-radius: var(--g-radius-full);
+  transition: width var(--g-duration-normal) var(--g-easing);
+}
+
+.progressBar.exhausted {
+  background: var(--g-color-error);
+}
+
+.meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--g-text-xs);
+  color: var(--g-color-text-muted);
+}
+
+.errorMessage {
+  font-size: var(--g-text-sm);
+  color: var(--g-color-error);
+  margin: var(--g-space-2) 0;
+}
+
+.retry {
+  display: inline-flex;
+  align-items: center;
+  height: var(--g-control-min-height);
+  padding: 0 var(--g-space-2);
+  border: none;
+  border-radius: var(--g-radius-sm);
+  background: transparent;
+  color: var(--g-color-error);
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-semibold);
+  cursor: pointer;
+  transition:
+    background-color var(--g-duration-fast) var(--g-easing),
+    color var(--g-duration-fast) var(--g-easing);
+}
+
+.retry:hover {
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.retry:focus-visible {
+  outline: 2px solid var(--g-focus-color);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressBar,
+  .retry {
+    transition: none;
+  }
+}

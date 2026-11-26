@@ -25,6 +25,7 @@
     background-color var(--g-duration-fast) var(--g-easing),
     color var(--g-duration-fast) var(--g-easing);
   white-space: nowrap;
+  overflow: visible;
 }
 
 .button:hover {
@@ -60,6 +61,8 @@
 @media (min-width: 1024px) {
   .label {
     display: inline;
+    overflow: visible;
+    text-overflow: clip;
   }
 }
 

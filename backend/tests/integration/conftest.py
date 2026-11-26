@@ -120,7 +120,10 @@ def dispatcher() -> FakeTaskDispatcher:
 
 @pytest.fixture
 def recovery(
-    session_factory: async_sessionmaker[AsyncSession], ledger: QuotaLedger, dispatcher: FakeTaskDispatcher
+    session_factory: async_sessionmaker[AsyncSession],
+    ledger: QuotaLedger,
+    dispatcher: FakeTaskDispatcher,
+    container: ApplicationContainer,
 ) -> PartRecovery:
     return PartRecovery(
         session_factory=session_factory,
@@ -129,6 +132,8 @@ def recovery(
         ledger=ledger,
         dispatcher=dispatcher,
         notifier=FakeProgressNotifier(),
+        users=UserRepository,
+        notifications=container.notification_service,
     )
 
 

@@ -8,12 +8,14 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.app.contracts.documents.statuses import ACTIVE_PART_STATUSES, PartStatus
-from src.app.contracts.progress import ProgressEvent
+from src.app.contracts.documents.statuses import ACTIVE_PART_STATUSES, DocumentErrorCode, PartStatus
+from src.app.contracts.progress import ProgressEvent, ProgressEventType
 from src.app.exceptions.tasks import TaskDispatchError
 from src.app.interfaces.observability.metrics_collector import MetricsCollector
 from src.app.interfaces.repositories.documents import DocumentPartRepositoryProtocol, DocumentRepositoryProtocol
+from src.app.interfaces.services.ingest import ParsingLease
 from src.app.interfaces.services.part_recovery import PartRecoveryProtocol
+from src.app.interfaces.services.progress_notifier import ProgressNotifier
 from src.app.interfaces.services.task_dispatcher import TaskDispatcher
 
 logger = logging.getLogger(__name__)
@@ -39,6 +41,8 @@ class Watchdog:
         recovery: PartRecoveryProtocol,
         dispatcher: TaskDispatcher,
         metrics: MetricsCollector,
+        parsing_lease: ParsingLease | None = None,
+        notifier: ProgressNotifier | None = None,
         stuck_after: timedelta = timedelta(minutes=10),
         lost_after: timedelta = timedelta(minutes=30),
     ) -> None:
@@ -50,6 +54,8 @@ class Watchdog:
         self._stuck_after = stuck_after
         self._lost_after = lost_after
         self._metrics = metrics
+        self._parsing_lease = parsing_lease
+        self._notifier = notifier
 
     async def tick(self) -> WatchdogReport:
         retry: list[UUID] = []
@@ -112,6 +118,43 @@ class Watchdog:
                 await self._dispatcher.enqueue_parse(document_id)
             except TaskDispatchError:
                 logger.exception("watchdog.enqueue_document_failed", extra={"document_id": str(document_id)})
+        # A killed prefork child can ACK its late-ack message. The PostgreSQL
+        # connection (and advisory lease) dies with it; fail the abandoned row
+        # so it no longer holds the user's processing slot. Never fail a live
+        # parse, even when a large PDF runs longer than the stale threshold.
+        if self._parsing_lease is not None:
+            try:
+                async with self._session_factory() as session:
+                    abandoned = await self._documents(session).stale_parsing(
+                        older_than=self._stuck_after, limit=BATCH_SIZE
+                    )
+            except Exception:
+                errors += 1
+                abandoned = []
+                logger.exception("watchdog.find_stale_parsing_failed")
+            for document in abandoned:
+                try:
+                    async with self._parsing_lease.acquire(document.id) as acquired:
+                        if not acquired:
+                            continue
+                        async with self._session_factory() as session, session.begin():
+                            recovered = await self._documents(session).fail_stale_parsing(
+                                document.id, older_than=self._stuck_after
+                            )
+                        if not recovered:
+                            continue
+                        failed += 1
+                        if self._notifier is not None:
+                            await self._notifier.emit(
+                                document.id,
+                                ProgressEventType.ERROR,
+                                stage="parsing",
+                                message="Document parsing failed",
+                                error_code=DocumentErrorCode.PARSE_FAILED,
+                            )
+                except Exception:
+                    errors += 1
+                    logger.exception("watchdog.recover_parsing_failed", extra={"document_id": str(document.id)})
         lost = len(lost_parts) + len(lost_documents)
         for action, count in (("requeued", len(retry)), ("failed", failed), ("lost", lost), ("error", errors)):
             if count:

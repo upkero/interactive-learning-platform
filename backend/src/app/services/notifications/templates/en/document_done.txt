@@ -1,0 +1,5 @@
+{{ title }}
+{% if outcome == 'ready' %}Material ready, parts: {{ ready }}{% elif outcome == 'partial' %}{{ ready }} of {{ total }} ready. Generations for {{ total - ready }} parts have been returned; you can retry them.{% else %}Could not prepare your material. Generations have been returned; please try again.{% endif %}
+
+Open: {{ material_url }}
+Disable notifications: {{ profile_url }}

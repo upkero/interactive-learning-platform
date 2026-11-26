@@ -4,7 +4,7 @@ Produces the data needed to open the demo screens without running the
 generation pipeline (story 1.2.8):
 
 - Alice and Bob (password from ``SEED_PASSWORD``);
-- a document in the ``parsed`` status with a topic tree;
+- a document in the ``parsed`` status with a topic tree and no queued parts;
 - a document in the ``done`` status with one published part whose
   content comes from a fixture;
 - 5-10 config widgets with text descriptions.
@@ -16,8 +16,10 @@ compose profile mounts them into the runtime image.
 import asyncio
 import json
 from collections.abc import Sequence
+from hashlib import sha256
 from pathlib import Path
 from typing import Any, Final
+from uuid import uuid4
 
 from pwdlib import PasswordHash
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -31,6 +33,7 @@ from src.app.contracts.users.user_record import UserRecord
 from src.app.contracts.widgets import UsageStatus, WidgetKind, WidgetUsageDraft
 from src.app.core.fixtures import PUBLISHED_PART_FIXTURE
 from src.app.core.settings.quota import get_quota_settings
+from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
 from src.app.repositories.image_repository import ImageRepository
@@ -42,9 +45,10 @@ from src.app.repositories.widget_usage_repository import WidgetUsageRepository
 from src.app.seed.embeddings import fake_embedding
 from src.app.seed.primitives_seed import seed_primitives_from_catalog
 from src.app.services.quota.quota_ledger import QuotaLedger
+from src.app.storage.object_keys import image_key, parsed_markdown_key, source_key
 
-ALICE_EMAIL: Final[str] = "alice@grasp.local"
-BOB_EMAIL: Final[str] = "bob@grasp.local"
+ALICE_EMAIL: Final[str] = "alice@example.com"
+BOB_EMAIL: Final[str] = "bob@example.com"
 
 # backend/src/app/seed -> backend; fixtures live under backend/tests/support.
 # In the runtime image the seed compose profile mounts them at the same path.
@@ -162,7 +166,7 @@ async def _seed_users(session: AsyncSession, password_hash: str) -> tuple[UserRe
 
 
 async def _seed_documents(
-    session: AsyncSession, alice: UserRecord, bob: UserRecord, ledger: QuotaLedger
+    session: AsyncSession, alice: UserRecord, bob: UserRecord, ledger: QuotaLedger, storage: ObjectStorageClient
 ) -> tuple[DocumentRecord, list[PartRecord]]:
     """Create the parsed and the done document, both with a topic tree."""
     document_repository = DocumentRepository(session)
@@ -170,62 +174,35 @@ async def _seed_documents(
     part_repository = DocumentPartRepository(session)
 
     # Screen E1: a document parsed into parts, ready for generation.
+    overview_id = uuid4()
+    introduction = await asyncio.to_thread((FIXTURES_DIR / "introduction.md").read_bytes)
     doc_overview = await document_repository.create(
+        id=overview_id,
         owner_id=alice.id,
         title="Introduction to adaptive learning",
         source_type=SourceType.UPLOAD,
-        object_key="docs/demo/introduction.md",
+        object_key=source_key(alice.id, overview_id, "md"),
         mime_type="text/markdown",
-        size_bytes=4096,
-        checksum="d" * 64,
+        size_bytes=len(introduction),
+        checksum=sha256(introduction).hexdigest(),
     )
     parsed = await document_repository.set_status(doc_overview.id, DocumentStatus.PARSED)
     if parsed is None:  # pragma: no cover - impossible on a fresh row
         raise RuntimeError("Fresh document not found after create")
     await document_repository.set_topic_tree(parsed.id, TOPIC_TREE)
-    overview_quota = await ledger.reserve(session, user_id=alice.id, document_id=parsed.id, parts=3)
-    overview_parts = await part_repository.add_many(
-        parsed.id,
-        [
-            PartDraft(
-                index=0,
-                title="What adaptive learning is",
-                topic_ids=["topic-adaptive", "topic-chunking"],
-                source_markdown="# What adaptive learning is\nContent of part one.",
-                token_count=142,
-                quota_period_start=overview_quota.period.start,
-                profile={"difficulty": "beginner"},
-            ),
-            PartDraft(
-                index=1,
-                title="Topic tree and semantic chunks",
-                topic_ids=["topic-chunking", "topic-tree"],
-                source_markdown="# Topic tree and semantic chunks\nContent of part two.",
-                token_count=178,
-                quota_period_start=overview_quota.period.start,
-                profile={"difficulty": "beginner"},
-            ),
-            PartDraft(
-                index=2,
-                title="Quota and generation pipeline",
-                topic_ids=["topic-quota"],
-                source_markdown="# Quota and generation pipeline\nContent of part three.",
-                token_count=96,
-                quota_period_start=overview_quota.period.start,
-                profile={"difficulty": "intermediate"},
-            ),
-        ],
-    )
 
     # Screen E6: a fully generated document with one published part.
+    networks_id = uuid4()
+    networks_source = await asyncio.to_thread((FIXTURES_DIR / "neural-networks.md").read_bytes)
     doc_networks = await document_repository.create(
+        id=networks_id,
         owner_id=bob.id,
         title="Neural networks basics",
         source_type=SourceType.GDOCS,
-        object_key="docs/demo/neural-networks",
-        mime_type="text/html",
-        size_bytes=1024 * 1024,
-        checksum="f" * 64,
+        object_key=source_key(bob.id, networks_id, "md"),
+        mime_type="text/markdown",
+        size_bytes=len(networks_source),
+        checksum=sha256(networks_source).hexdigest(),
         source_uri="https://docs.google.com/document/d/demo",
     )
     done = await document_repository.set_status(doc_networks.id, DocumentStatus.DONE)
@@ -268,25 +245,36 @@ async def _seed_documents(
     image_repository = ImageRepository(session)
     await image_repository.add_many(
         done.id,
-        [ImageDraft(object_key="images/demo/figure-neuron.png", width=640, height=480)],
+        [ImageDraft(object_key=image_key(done.id, 1), width=640, height=480)],
     )
-    return parsed, overview_parts
+    # Network operations precede commit: failure leaves no committed demo rows.
+    for document, data in ((parsed, introduction), (done, networks_source)):
+        await storage.put_object(bucket="documents", key=document.object_key, data=data, content_type="text/markdown")
+        await storage.put_object(
+            bucket="documents",
+            key=parsed_markdown_key(document.owner_id, document.id),
+            data=data,
+            content_type="text/markdown",
+        )
+    image = await asyncio.to_thread((FIXTURES_DIR / "figure-neuron.png").read_bytes)
+    await storage.put_object(bucket="images", key=image_key(done.id, 1), data=image, content_type="image/png")
+    return parsed, [part]
 
 
 async def _seed_widgets(
     session: AsyncSession,
-    overview_parts: Sequence[PartRecord],
+    published_parts: Sequence[PartRecord],
     *,
     fake_embeddings: bool,
 ) -> int:
-    """Create config widgets with descriptions and usages on the parsed document."""
+    """Create config widgets on Bob's published document."""
     widget_specs: list[dict[str, Any]] = await _load_fixture("widgets.json")
     widget_repository = WidgetRepository(session)
     description_repository = WidgetDescriptionRepository(session)
     usage_repository = WidgetUsageRepository(session)
 
     for index, spec in enumerate(widget_specs):
-        part = overview_parts[index % len(overview_parts)]
+        part = published_parts[index % len(published_parts)]
         widget = await widget_repository.create(
             kind=WidgetKind(spec["kind"]),
             primitive_id=spec.get("primitive_id"),
@@ -323,6 +311,7 @@ async def seed_dev(
     *,
     password: str,
     ledger: QuotaLedger,
+    storage: ObjectStorageClient,
     fake_embeddings: bool = False,
 ) -> str:
     """Fill the database with demo data; safe to run repeatedly.
@@ -340,12 +329,12 @@ async def seed_dev(
 
         primitives_count = await _seed_primitives(session)
         alice, bob = await _seed_users(session, password_hash)
-        doc_parsed, overview_parts = await _seed_documents(session, alice, bob, ledger)
-        widgets_count = await _seed_widgets(session, overview_parts, fake_embeddings=fake_embeddings)
+        doc_parsed, published_parts = await _seed_documents(session, alice, bob, ledger, storage)
+        widgets_count = await _seed_widgets(session, published_parts, fake_embeddings=fake_embeddings)
 
     summary = (
         f"seeded: {primitives_count} primitives, 2 users, 2 documents, "
-        f"{len(overview_parts)} queued parts (doc {doc_parsed.id}), {widgets_count} widgets"
+        f"0 queued parts (parsed doc {doc_parsed.id}), {len(published_parts)} published part, {widgets_count} widgets"
     )
     if not fake_embeddings:
         summary += " (widget descriptions skipped without --fake-embeddings)"

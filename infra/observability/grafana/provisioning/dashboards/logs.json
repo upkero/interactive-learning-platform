@@ -1,0 +1,14 @@
+{
+  "uid":"grasp-logs", "title":"Логи", "schemaVersion":39, "version":1,
+  "templating":{"list":[
+    {"name":"service","type":"query","datasource":{"type":"loki","uid":"loki"},"query":"label_values(service)","includeAll":true,"multi":true},
+    {"name":"level","type":"query","datasource":{"type":"loki","uid":"loki"},"query":"label_values(level)","includeAll":true,"multi":true},
+    {"name":"logger","type":"query","datasource":{"type":"loki","uid":"loki"},"query":"label_values(logger)","includeAll":true,"multi":true},
+    {"name":"request_id","type":"textbox","query":""},
+    {"name":"part_id","type":"textbox","query":""}
+  ]},
+  "panels":[
+    {"id":1,"type":"logs","title":"Логи сервиса","gridPos":{"x":0,"y":0,"w":24,"h":12},"datasource":{"type":"loki","uid":"loki"},"targets":[{"refId":"A","expr":"{service=~\"$service\",level=~\"$level\",logger=~\"$logger\"} | json | request_id=~\".*${request_id}.*\" | part_id=~\".*${part_id}.*\""}]},
+    {"id":2,"type":"logs","title":"Журнал решений","gridPos":{"x":0,"y":12,"w":24,"h":12},"datasource":{"type":"loki","uid":"loki"},"targets":[{"refId":"A","expr":"{logger=\"grasp.decisions\"} | json"}]}
+  ]
+}

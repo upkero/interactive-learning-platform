@@ -65,6 +65,14 @@ def test_histograms_and_gauges_are_supported() -> None:
     assert REGISTRY.get_sample_value(gauge) == 3
 
 
+def test_gauge_uses_livesum_mode() -> None:
+    from src.app.observability.prometheus_metrics_collector import _GAUGES
+
+    name = unique("gauge_livesum")
+    PrometheusMetricsCollector().set_gauge(name, 1)
+    assert _GAUGES[name]._multiprocess_mode == "livesum"
+
+
 def test_histogram_fixes_labels_and_buckets_on_first_call() -> None:
     name = unique("histogram")
     collector = PrometheusMetricsCollector()

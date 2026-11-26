@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import styles from './SummaryList.module.css';
+import type { ReactNode } from "react";
+import styles from "./SummaryList.module.css";
 
 export interface SummaryItem {
   term: ReactNode;

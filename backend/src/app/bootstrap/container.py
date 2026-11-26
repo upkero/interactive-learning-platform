@@ -1,5 +1,5 @@
 import inspect
-from functools import cached_property
+from functools import cached_property, lru_cache
 from logging import getLogger
 
 import redis.asyncio as aioredis
@@ -9,14 +9,23 @@ from src.app.core.clock import SystemClock
 from src.app.core.settings.app import get_app_settings
 from src.app.core.settings.auth import AuthSettings, get_auth_settings
 from src.app.core.settings.celery import get_celery_settings
+from src.app.core.settings.ingest import get_ingest_settings
 from src.app.core.settings.llm import CheapLLMSettings, LLMSettings, get_cheap_llm_settings, get_llm_settings
 from src.app.core.settings.processing import ProcessingSettings, get_processing_settings
 from src.app.core.settings.progress import get_progress_settings
 from src.app.core.settings.quota import QuotaSettings, get_quota_settings
 from src.app.core.settings.reports import ReportsSettings, get_reports_settings
+from src.app.core.settings.smtp import get_smtp_settings
 from src.app.core.settings.storage import get_storage_settings
 from src.app.core.settings.upload import get_upload_settings
+from src.app.db.parsing_lease import PostgresParsingLease
 from src.app.db.session import build_engine, build_session_factory
+from src.app.ingest.images import ImageStore
+from src.app.ingest.parsers.base import DocumentParser as IngestDocumentParser
+from src.app.ingest.parsers.base import ParserRegistry
+from src.app.ingest.parsers.gdocs_importer import GDocsImporter
+from src.app.ingest.parsers.markdown_parser import MarkdownParser
+from src.app.ingest.tokens import get_token_counter
 from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.interfaces.observability.metrics_collector import MetricsCollector
 from src.app.interfaces.services.part_pipeline import PartPipeline
@@ -24,7 +33,7 @@ from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.llm.factory import create_llm_client
 from src.app.llm.instrumented_llm_client import InstrumentedLLMClient
 from src.app.observability.decision_log import DecisionLog
-from src.app.observability.noop_metrics_collector import NoopMetricsCollector
+from src.app.observability.notification_claims import RedisNotificationClaims
 from src.app.observability.progress_notifier import RedisProgressNotifier
 from src.app.observability.prometheus_metrics_collector import PrometheusMetricsCollector
 from src.app.repositories.document_part_repository import DocumentPartRepository
@@ -38,16 +47,22 @@ from src.app.repositories.user_repository import UserRepository
 from src.app.repositories.widget_repository import WidgetRepository
 from src.app.repositories.widget_usage_repository import WidgetUsageRepository
 from src.app.services.auth.auth_service import AuthService
-from src.app.services.documents.document_parser import DocumentParser
+from src.app.services.documents.document_ingest_runner import DocumentIngestRunner
+from src.app.services.documents.document_ingest_service import DocumentIngestService
 from src.app.services.documents.document_query_service import DocumentQueryService
 from src.app.services.documents.file_inspector import FileInspector
 from src.app.services.documents.generation_service import GenerationService
+from src.app.services.documents.image_describer import ImageDescriber
 from src.app.services.documents.import_service import ImportService
 from src.app.services.documents.material_query_service import MaterialQueryService
 from src.app.services.documents.part_query_service import PartQueryService
 from src.app.services.documents.quiz_check_service import QuizCheckService
 from src.app.services.documents.topic_per_part_planner import TopicPerPartPlanner
+from src.app.services.documents.topic_segmenter import TopicSegmenter
 from src.app.services.documents.upload_service import UploadService
+from src.app.services.notifications.email_sender import EmailSender
+from src.app.services.notifications.notification_service import NotificationService
+from src.app.services.progress.progress_reader import ProgressReader
 from src.app.services.quota.quota_ledger import QuotaLedger
 from src.app.services.quota.quota_service import QuotaService
 from src.app.services.reports.report_service import ReportService
@@ -59,6 +74,13 @@ from src.app.services.solver.pipeline.watchdog import Watchdog
 from src.app.services.users.profile_service import ProfileService
 from src.app.storage.s3_object_storage_client import S3ObjectStorageClient, build_ping_client, build_s3_client
 from src.app.tasks.dispatcher import CeleryTaskDispatcher
+
+
+@lru_cache(maxsize=1)
+def _build_docling_parser() -> IngestDocumentParser:
+    from src.app.ingest.parsers.docling_parser import DoclingParser
+
+    return DoclingParser(artifacts_path=get_ingest_settings().docling_artifacts_path)
 
 
 class ApplicationContainer:
@@ -85,8 +107,40 @@ class ApplicationContainer:
     # -- services -----------------------------------------------------------
 
     @cached_property
-    def document_parser(self) -> DocumentParser:
-        return DocumentParser()
+    def document_ingest_runner(self) -> DocumentIngestRunner:
+        return DocumentIngestRunner(
+            lease=PostgresParsingLease(self._db_engine),
+            build=lambda: self.document_ingest,
+            session_factory=self.session_factory,
+            documents=DocumentRepository,
+            notifier=self.progress_notifier,
+        )
+
+    @cached_property
+    def document_ingest(self) -> DocumentIngestService:
+        return DocumentIngestService(
+            session_factory=self.session_factory,
+            documents=DocumentRepository,
+            images=ImageRepository,
+            storage=self.object_storage,
+            registry=ParserRegistry((_build_docling_parser(), MarkdownParser())),
+            gdocs=GDocsImporter(max_bytes=get_upload_settings().max_bytes),
+            parsing_lease=PostgresParsingLease(self._db_engine),
+            image_store=ImageStore(self.object_storage),
+            inspector=FileInspector(get_upload_settings()),
+            counter=get_token_counter(),
+            ingest_settings=get_ingest_settings(),
+            upload_settings=get_upload_settings(),
+            notifier=self.progress_notifier,
+            image_describer=ImageDescriber(
+                self.cheap_llm,
+                max_images=get_ingest_settings().max_images,
+                concurrency=get_ingest_settings().image_concurrency,
+            ),
+            topic_segmenter=TopicSegmenter(
+                self.cheap_llm, counter=get_token_counter(), max_tokens=get_ingest_settings().segment_max_tokens
+            ),
+        )
 
     @cached_property
     def part_recovery(self) -> PartRecovery:
@@ -97,6 +151,8 @@ class ApplicationContainer:
             ledger=self.quota_ledger,
             dispatcher=self.task_dispatcher,
             notifier=self.progress_notifier,
+            users=UserRepository,
+            notifications=self.notification_service,
         )
 
     @cached_property
@@ -108,6 +164,8 @@ class ApplicationContainer:
             recovery=self.part_recovery,
             dispatcher=self.task_dispatcher,
             metrics=self.metrics_collector,
+            parsing_lease=PostgresParsingLease(self._db_engine),
+            notifier=self.progress_notifier,
         )
 
     @cached_property
@@ -118,6 +176,9 @@ class ApplicationContainer:
             documents=DocumentRepository,
             ledger=self.quota_ledger,
             notifier=self.progress_notifier,
+            users=UserRepository,
+            notifications=self.notification_service,
+            metrics=self.metrics_collector,
         )
 
     @cached_property
@@ -194,6 +255,7 @@ class ApplicationContainer:
             materials=UserMaterialRepository,
             parts=DocumentPartRepository,
             storage=self.object_storage,
+            users=UserRepository,
         )
 
     @cached_property
@@ -209,6 +271,8 @@ class ApplicationContainer:
             ledger=self.quota_ledger,
             dispatcher=self.task_dispatcher,
             settings=self.processing_settings,
+            notification_claims=self.notification_claims,
+            progress_notifier=self.progress_notifier,
         )
 
     @cached_property
@@ -238,7 +302,7 @@ class ApplicationContainer:
             reports=ReportRepository,
             usages=WidgetUsageRepository,
             widgets=WidgetRepository,
-            decision_log=DecisionLog(metrics=NoopMetricsCollector()),
+            decision_log=DecisionLog(metrics=self.metrics_collector),
             settings=self.reports_settings,
         )
 
@@ -297,12 +361,35 @@ class ApplicationContainer:
 
     @cached_property
     def progress_redis(self) -> aioredis.Redis:
-        client: aioredis.Redis = aioredis.Redis.from_url(str(get_progress_settings().url))
+        client: aioredis.Redis = aioredis.Redis.from_url(
+            str(get_progress_settings().url), socket_timeout=get_progress_settings().socket_timeout
+        )
         return client
+
+    @cached_property
+    def progress_reader(self) -> ProgressReader:
+        return ProgressReader(self.progress_redis)
+
+    @cached_property
+    def notification_claims(self) -> RedisNotificationClaims:
+        return RedisNotificationClaims(self.progress_redis)
 
     @cached_property
     def progress_notifier(self) -> RedisProgressNotifier:
         return RedisProgressNotifier(self.progress_redis, get_progress_settings())
+
+    @cached_property
+    def notification_service(self) -> NotificationService:
+        return NotificationService(
+            session_factory=self.session_factory,
+            users=UserRepository,
+            documents=DocumentRepository,
+            parts=DocumentPartRepository,
+            claims=self.notification_claims,
+            sender=EmailSender(get_smtp_settings()),
+            app_settings=get_app_settings(),
+            smtp_settings=get_smtp_settings(),
+        )
 
     @cached_property
     def task_dispatcher(self) -> CeleryTaskDispatcher:

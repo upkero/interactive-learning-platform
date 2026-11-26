@@ -1,1 +1,1 @@
-export { LocaleSwitch } from './ui/LocaleSwitch';
+export { LocaleSwitch } from "./ui/LocaleSwitch";

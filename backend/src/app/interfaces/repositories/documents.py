@@ -30,6 +30,8 @@ class DocumentRepositoryProtocol(Protocol):
 
     async def get(self, document_id: UUID) -> DocumentRecord | None: ...
 
+    async def begin_parsing(self, document_id: UUID) -> DocumentRecord | None: ...
+
     async def get_owned(self, document_id: UUID, owner_id: UUID) -> DocumentRecord | None: ...
 
     async def create(
@@ -66,9 +68,26 @@ class DocumentRepositoryProtocol(Protocol):
 
     async def refresh_status(self, document_id: UUID) -> None: ...
 
+    async def set_generation_start(self, document_id: UUID, index: int) -> None: ...
+
     async def lock_stale_uploaded(self, *, older_than: timedelta, limit: int) -> list[DocumentRecord]: ...
 
+    async def stale_parsing(self, *, older_than: timedelta, limit: int) -> list[DocumentRecord]: ...
+
+    async def fail_stale_parsing(self, document_id: UUID, *, older_than: timedelta) -> bool: ...
+
     async def touch(self, document_id: UUID) -> None: ...
+
+    async def update_source(
+        self,
+        document_id: UUID,
+        *,
+        object_key: str,
+        title: str | None = None,
+        page_count: int | None = None,
+        mime_type: str | None = None,
+        size_bytes: int | None = None,
+    ) -> None: ...
 
 
 class DocumentPartRepositoryProtocol(Protocol):
@@ -87,6 +106,14 @@ class DocumentPartRepositoryProtocol(Protocol):
     async def touch(self, part_id: UUID) -> None: ...
 
     async def list_by_document(self, document_id: UUID) -> list[PartRecord]: ...
+
+    async def has_published_since(self, document_id: UUID, start_index: int) -> bool:
+        """Whether any part with ``index >= start_index`` is published.
+
+        A narrow ``SELECT EXISTS`` for the SSE handshake: it must not load
+        ``source_markdown`` or the generated ``content`` of every part.
+        """
+        ...
 
     async def add_many(self, document_id: UUID, parts: Sequence[PartDraft]) -> list[PartRecord]: ...
 
@@ -112,6 +139,10 @@ class ImageRepositoryProtocol(Protocol):
     async def list_by_document(self, document_id: UUID) -> list[ImageRecord]: ...
 
     async def add_many(self, document_id: UUID, images: Sequence[ImageDraft]) -> list[ImageRecord]: ...
+
+    async def delete_by_document(self, document_id: UUID) -> list[ImageRecord]: ...
+
+    async def update_descriptions(self, document_id: UUID, descriptions: Mapping[str, str | None]) -> None: ...
 
 
 class UserMaterialRepositoryProtocol(Protocol):

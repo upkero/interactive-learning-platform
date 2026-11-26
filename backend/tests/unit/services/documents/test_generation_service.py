@@ -8,18 +8,23 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.app.contracts.documents import DocumentStatus, MaterialRole, PartDraft, SourceType
+from src.app.contracts.documents import DocumentStatus, MaterialRole, PartDraft, PartStatus, SourceType
 from src.app.contracts.documents.generation import GenerationAnswers, GenerationCommand
+from src.app.core.settings.app import AppSettings
 from src.app.core.settings.processing import ProcessingSettings
+from src.app.core.settings.smtp import SMTPSettings
 from src.app.exceptions.documents import DocumentNotFoundError, DocumentNotReadyError
 from src.app.exceptions.quota import QuotaExceededError
 from src.app.exceptions.tasks import TaskDispatchError
 from src.app.interfaces.storage.object_storage_client import StorageBucket
 from src.app.services.documents.generation_service import GenerationService
 from src.app.services.documents.topic_per_part_planner import TopicPerPartPlanner
+from src.app.services.notifications.notification_service import NotificationService
 from src.app.services.quota.quota_ledger import QuotaLedger
 from tests.support.fakes.core.clock import FixedClock
 from tests.support.fakes.db.session import FakeSession
+from tests.support.fakes.notifications.claims import FakeNotificationClaims
+from tests.support.fakes.notifications.email_sender import FakeEmailSender
 from tests.support.fakes.repositories.documents import (
     FakeDocumentPartRepository,
     FakeDocumentRepository,
@@ -27,6 +32,7 @@ from tests.support.fakes.repositories.documents import (
 )
 from tests.support.fakes.repositories.quota import FakeGenerationLedgerRepository
 from tests.support.fakes.repositories.users import FakeUserRepository
+from tests.support.fakes.services.progress_notifier import FakeProgressNotifier
 from tests.support.fakes.services.task_dispatcher import FakeTaskDispatcher
 from tests.support.fakes.storage.object_storage_client import FakeObjectStorageClient
 
@@ -116,6 +122,8 @@ def _service() -> tuple[
         ledger=_ledger(users, ledger_repo),
         dispatcher=FakeTaskDispatcher(),
         settings=ProcessingSettings(max_active_documents=2),
+        notification_claims=FakeNotificationClaims(),
+        progress_notifier=FakeProgressNotifier(),
     )
     return service, documents, materials, parts, ledger_repo, users
 
@@ -268,6 +276,8 @@ async def test_start_reserves_and_dispatches_after_commit() -> None:
         ledger=_ledger(users, ledger_repo),
         dispatcher=dispatcher,
         settings=ProcessingSettings(max_active_documents=2),
+        notification_claims=FakeNotificationClaims(),
+        progress_notifier=FakeProgressNotifier(),
     )
     started = await service.start(
         GenerationCommand(
@@ -374,6 +384,8 @@ async def test_queue_failure_keeps_committed_parts_and_reservation() -> None:
         ledger=_ledger(users, ledger_repo),
         dispatcher=FakeTaskDispatcher(fail_with=TaskDispatchError()),
         settings=ProcessingSettings(max_active_documents=2),
+        notification_claims=FakeNotificationClaims(),
+        progress_notifier=FakeProgressNotifier(),
     )
     with pytest.raises(TaskDispatchError):
         await service.start(
@@ -406,6 +418,8 @@ async def test_start_rejects_insufficient_quota_without_writes() -> None:
         ledger=_ledger(users, ledger_repo),
         dispatcher=dispatcher,
         settings=ProcessingSettings(max_active_documents=2),
+        notification_claims=FakeNotificationClaims(),
+        progress_notifier=FakeProgressNotifier(),
     )
     with pytest.raises(QuotaExceededError) as error:
         await service.start(
@@ -451,6 +465,8 @@ async def test_start_requires_owner_even_when_processing_limit_is_full() -> None
         ledger=_ledger(users, ledger_repo),
         dispatcher=FakeTaskDispatcher(),
         settings=ProcessingSettings(max_active_documents=2),
+        notification_claims=FakeNotificationClaims(),
+        progress_notifier=FakeProgressNotifier(),
     )
     with pytest.raises(DocumentNotFoundError):
         await service.start(
@@ -463,3 +479,101 @@ async def test_start_requires_owner_even_when_processing_limit_is_full() -> None
         )
     assert (await documents.get(document_id)).owner_id == owner  # type: ignore[union-attr]
     assert ledger_repo._entries == []
+
+
+async def test_two_generations_send_two_emails_but_duplicate_completion_sends_one_each() -> None:
+    _unused, documents, materials, parts, ledger_repo, users = _service()
+    owner, document_id = await _parsed_document(users, documents, materials, parts)
+    claims = FakeNotificationClaims()
+    sender = FakeEmailSender()
+    progress_notifier = FakeProgressNotifier()
+    service = GenerationService(
+        session_factory=_factory(FakeSession()),
+        documents=lambda _: documents,
+        materials=lambda _: materials,
+        parts=lambda _: parts,
+        users=lambda _: users,
+        planner=TopicPerPartPlanner(),
+        storage=_ParsedStorage(),
+        ledger=_ledger(users, ledger_repo),
+        dispatcher=FakeTaskDispatcher(),
+        settings=ProcessingSettings(),
+        notification_claims=claims,
+        progress_notifier=progress_notifier,
+    )
+    mail = NotificationService(
+        session_factory=_factory(FakeSession()),
+        users=lambda _: users,
+        documents=lambda _: documents,
+        parts=lambda _: parts,
+        claims=claims,
+        sender=sender,
+        app_settings=AppSettings(),
+        smtp_settings=SMTPSettings(enabled=True, host="localhost"),
+    )
+    command = GenerationCommand(
+        user_id=owner,
+        document_id=document_id,
+        topic_ids=("topic-adaptive",),
+        answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+    )
+    for iteration in range(2):
+        started = await service.start(command)
+        for part_id in started.part_ids:
+            await parts.transition(part_id, frozenset({PartStatus.QUEUED}), PartStatus.PUBLISHED)
+        await documents.set_status(document_id, DocumentStatus.DONE)
+        await mail.on_document_finished(document_id)
+        await mail.on_document_finished(document_id)
+        assert len(sender.sent) == iteration + 1
+    assert claims.reset_calls == [document_id, document_id]
+    assert progress_notifier.reset_calls == [document_id, document_id]
+
+
+async def test_notification_reset_outage_does_not_prevent_dispatch(caplog: pytest.LogCaptureFixture) -> None:
+    _unused, documents, materials, parts, ledger_repo, users = _service()
+    owner, document_id = await _parsed_document(users, documents, materials, parts)
+    claims = FakeNotificationClaims()
+    claims.fail_reset = True
+    dispatcher = FakeTaskDispatcher()
+    service = GenerationService(
+        session_factory=_factory(FakeSession()),
+        documents=lambda _: documents,
+        materials=lambda _: materials,
+        parts=lambda _: parts,
+        users=lambda _: users,
+        planner=TopicPerPartPlanner(),
+        storage=_ParsedStorage(),
+        ledger=_ledger(users, ledger_repo),
+        dispatcher=dispatcher,
+        settings=ProcessingSettings(),
+        notification_claims=claims,
+        progress_notifier=FakeProgressNotifier(),
+    )
+    result = await service.start(
+        GenerationCommand(
+            user_id=owner,
+            document_id=document_id,
+            topic_ids=("topic-adaptive",),
+            answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+        )
+    )
+    assert dispatcher.calls == [("enqueue_part", (result.part_ids[0], True))]
+    assert "notification.reset_failed" in caplog.text
+
+
+async def test_failed_generation_can_be_retried_from_parsed_topics() -> None:
+    service, documents, materials, parts, _ledger, users = _service()
+    owner, document_id = await _parsed_document(users, documents, materials, parts)
+    await documents.set_status(document_id, DocumentStatus.FAILED)
+    preview, _ = await service.plan(user_id=owner, document_id=document_id, topic_ids=["topic-adaptive"])
+    started = await service.start(
+        GenerationCommand(
+            user_id=owner,
+            document_id=document_id,
+            topic_ids=("topic-adaptive",),
+            answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+        )
+    )
+    assert started.cost == len(preview.parts) == 1
+    saved = await documents.get(document_id)
+    assert saved is not None and saved.status is DocumentStatus.GENERATING

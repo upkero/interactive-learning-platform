@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.app.contracts.documents.image_draft import ImageDraft
 from src.app.contracts.documents.part_draft import PartDraft
 from src.app.contracts.documents.part_record import PartRecord
-from src.app.contracts.documents.statuses import DocumentStatus, MaterialRole, SourceType
+from src.app.contracts.documents.statuses import DocumentStatus, MaterialRole, PartStatus, SourceType
 from src.app.contracts.quizzes import QuizAttemptRecord
 from src.app.contracts.quota import LedgerOp
 from src.app.contracts.users import UserRecord
@@ -164,6 +164,38 @@ async def test_document_part_repository_roundtrip(session_factory: SessionFactor
     assert created[0].topic_ids == ("t",)
     assert listed[0].id == created[1].id
     assert content_type is None
+
+
+async def test_document_part_has_published_since(session_factory: SessionFactory) -> None:
+    """The SSE handshake asks only whether the current run published anything."""
+    _, document_id = await _new_document(session_factory)
+    async with session_factory() as session, session.begin():
+        repository = DocumentPartRepository(session)
+        previous, current, queued = await repository.add_many(
+            document_id,
+            [
+                PartDraft(
+                    index=0, title="old", topic_ids=[], source_markdown="x", token_count=1, quota_period_start=None
+                ),
+                PartDraft(
+                    index=1, title="new", topic_ids=[], source_markdown="x", token_count=1, quota_period_start=None
+                ),
+                PartDraft(
+                    index=2, title="queued", topic_ids=[], source_markdown="x", token_count=1, quota_period_start=None
+                ),
+            ],
+        )
+        assert await repository.has_published_since(document_id, 0) is False
+
+        await repository.transition(previous.id, frozenset({PartStatus.QUEUED}), PartStatus.PUBLISHED)
+        assert await repository.has_published_since(document_id, 0) is True
+        assert await repository.has_published_since(document_id, 1) is False
+
+        await repository.transition(current.id, frozenset({PartStatus.QUEUED}), PartStatus.PUBLISHED)
+        assert await repository.has_published_since(document_id, 1) is True
+        assert await repository.has_published_since(document_id, 2) is False
+        assert await repository.has_published_since(uuid4(), 0) is False
+        assert queued.index == 2
 
 
 async def test_image_repository_roundtrip(session_factory: SessionFactory) -> None:

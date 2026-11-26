@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import styles from './PageShell.module.css';
+import type { ReactNode } from "react";
+import styles from "./PageShell.module.css";
 
 export interface PageShellProps {
   title: string;
@@ -8,13 +8,20 @@ export interface PageShellProps {
   children?: ReactNode;
 }
 
-export function PageShell({ title, description, actions, children }: PageShellProps) {
+export function PageShell({
+  title,
+  description,
+  actions,
+  children,
+}: PageShellProps) {
   return (
     <section className={styles.page}>
       <header className={styles.header}>
         <div className={styles.heading}>
           <h1 className={styles.title}>{title}</h1>
-          {description ? <p className={styles.description}>{description}</p> : null}
+          {description ? (
+            <p className={styles.description}>{description}</p>
+          ) : null}
         </div>
         {actions ? <div className={styles.actions}>{actions}</div> : null}
       </header>

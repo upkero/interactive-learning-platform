@@ -31,6 +31,9 @@ class ObjectStorageClient(ABC):
     async def delete_object(self, *, bucket: StorageBucket, key: str) -> None: ...
 
     @abstractmethod
+    async def delete_prefix(self, *, bucket: StorageBucket, prefix: str) -> None: ...
+
+    @abstractmethod
     def presign_get_url(
         self,
         *,

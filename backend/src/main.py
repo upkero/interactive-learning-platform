@@ -5,14 +5,17 @@ import uvicorn
 from fastapi import FastAPI
 
 from src.app.api.v1.exception_handlers import register_exception_handlers
+from src.app.api.v1.middleware.metrics import register_metrics
 from src.app.api.v1.middleware.rate_limit import register_rate_limit
 from src.app.api.v1.middleware.request_id import register_request_id_middleware
 from src.app.api.v1.router import api_router
 from src.app.api.v1.routers.health import router as health_router
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.core.logging import setup_logging
+from src.app.core.settings.app import get_app_settings
 from src.app.core.settings.auth import get_auth_settings
 from src.app.core.settings.logging import get_logging_settings
+from src.app.core.settings.smtp import get_smtp_settings, validate_smtp_config
 
 
 @asynccontextmanager
@@ -30,6 +33,7 @@ def create_app() -> FastAPI:
 
     # Validate required secrets at startup (DoD 1.1.4)
     get_auth_settings()
+    validate_smtp_config(get_app_settings().environment, get_smtp_settings())
 
     app = FastAPI(
         title="Grasp API",
@@ -50,6 +54,7 @@ def create_app() -> FastAPI:
     )
 
     register_request_id_middleware(app)
+    register_metrics(app)
     register_rate_limit(app)
     register_exception_handlers(app)
 

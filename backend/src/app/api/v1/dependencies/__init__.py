@@ -5,6 +5,7 @@ from src.app.api.v1.dependencies.container import ContainerDep, get_container
 from src.app.api.v1.dependencies.db import DBSessionDep, get_db_session
 from src.app.api.v1.dependencies.documents import ImageUrlResolverDep, get_image_url_resolver
 from src.app.api.v1.dependencies.llm import LLMClientDep, get_llm_client
+from src.app.api.v1.dependencies.progress import ProgressReaderDep, get_progress_reader
 from src.app.api.v1.dependencies.services import (
     DocumentQueryServiceDep,
     GenerationServiceDep,
@@ -45,6 +46,7 @@ __all__ = [
     "ObjectStorageClientDep",
     "PartQueryServiceDep",
     "ProfileServiceDep",
+    "ProgressReaderDep",
     "QuizCheckServiceDep",
     "QuotaServiceDep",
     "ReportServiceDep",
@@ -63,6 +65,7 @@ __all__ = [
     "get_object_storage",
     "get_part_query_service",
     "get_profile_service",
+    "get_progress_reader",
     "get_quiz_check_service",
     "get_quota_service",
     "get_report_service",

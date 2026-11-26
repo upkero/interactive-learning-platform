@@ -7,7 +7,7 @@ result as is. ``total_tokens`` is what the client sees as
 """
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any
 
 
@@ -23,6 +23,10 @@ class TopicNode:
     page: int | None = None
     image_ids: tuple[str, ...] = ()
     children: tuple["TopicNode", ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize this contract for JSON storage."""
+        return asdict(self)
 
     @classmethod
     def from_raw(cls, raw: Mapping[str, Any]) -> "TopicNode":
