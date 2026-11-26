@@ -27,7 +27,7 @@ from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.repositories.widgets import FakePrimitiveRepository
 from tests.support.fixtures.main_pass import build_injections, build_input, build_primitives
 
-pytestmark = pytest.mark.live
+pytestmark = [pytest.mark.live, pytest.mark.timeout(600)]
 
 
 def _live_settings() -> LLMSettings:

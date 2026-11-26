@@ -55,7 +55,7 @@ async def test_runner_writes_snapshots_and_reports_failures(tmp_path: Path) -> N
         async def run(self, payload: MainPassInput) -> SimpleNamespace:
             case = next(item for item in cases if item.payload.part_id == payload.part_id)
             if case.id == "ru_stack":
-                raise RuntimeError("provider unavailable")
+                raise RuntimeError("provider unavailable") from ConnectionError("private transport detail")
             state = "violations" if case.id == "neurons" else "clean"
             widgets = (
                 [
@@ -96,6 +96,7 @@ async def test_runner_writes_snapshots_and_reports_failures(tmp_path: Path) -> N
     assert summary["first_answer_alternation_fraction"] == 0.25
     assert summary["schema_retry_case_fraction"] == 0.2
     assert "ru_stack" in summary["failures"]
+    assert summary["failure_causes"] == {"ru_stack": {"type": "ConnectionError"}}
     assert not (output / "ru_stack.json").exists()
     snapshot = json.loads((output / "neurons.json").read_text(encoding="utf-8"))
     assert snapshot["first_answer"] == "violations"

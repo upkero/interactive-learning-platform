@@ -33,7 +33,12 @@ does not count as a completed terminology snapshot. These files contain model
 responses and should be handled accordingly. Existing snapshots do not contain
 the first answer and cannot establish which original rule was violated.
 
-The checked-in `outputs_sonnet55/` contains the latest Sonnet 5.5 run and is
-the terminology checker default. `outputs/` and `outputs_round2/` preserve
-the earlier Sonnet 4.6 runs, including their observed failures. These are
-single runs with different prompt versions, not a controlled model benchmark.
+`outputs_sonnet55/` contains the saved Sonnet 5.5 drafts used by the
+terminology checker. `outputs/` and `outputs_round2/` preserve earlier
+Sonnet 4.6 runs, including their observed failures. Each is a single run
+with its own prompt version.
+
+`live_acceptance_v1.json` records the new `main-pass-v1` check on the commit
+and prompt hash listed there. Its five reference requests failed before a
+draft could be recorded. The earlier drafts and `live_acceptance.json`
+remain historical evidence for their recorded prompt hashes.

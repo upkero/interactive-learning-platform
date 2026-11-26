@@ -183,6 +183,7 @@ async def run_cases(
 ) -> dict[str, Any]:
     _prepare_outputs(outputs)
     failures: dict[str, str] = {}
+    failure_causes: dict[str, dict[str, str | int]] = {}
     schema_retry_cases = 0
     alternation_violations = 0
     recorded_first_answers = 0
@@ -210,6 +211,13 @@ async def run_cases(
             )
         except Exception as exc:
             failures[case.id] = type(exc).__name__
+            if exc.__cause__ is not None:
+                cause = exc.__cause__
+                diagnostic: dict[str, str | int] = {"type": type(cause).__name__}
+                status = getattr(cause, "status_code", None)
+                if isinstance(status, int):
+                    diagnostic["http_status"] = status
+                failure_causes[case.id] = diagnostic
         finally:
             schema_retry_cases += int(recorder.schema_retry)
             if recorder.first_draft is not None:
@@ -244,6 +252,7 @@ async def run_cases(
         "clean_first_cases": clean_first_cases,
         "completed": len(cases) - len(failures),
         "failures": failures,
+        "failure_causes": failure_causes,
         "first_schema_valid_answers": len(metrics.answers),
         "first_answer_violations": violations,
         "first_answer_violation_fraction": violations / len(metrics.answers) if metrics.answers else None,
