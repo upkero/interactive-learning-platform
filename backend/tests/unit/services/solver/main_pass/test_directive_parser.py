@@ -342,3 +342,42 @@ def test_shared_directive_fixtures(name: str, markers: list[str], issues: int, c
     cleaned = sanitize_draft(draft(source, []), max_widgets=6)
     assert extract_markers(cleaned.markdown) == ([], [])
     assert [token.content for token in MarkdownIt().parse(cleaned.markdown) if token.type == "code_block"] == code
+
+
+@pytest.mark.parametrize(("name", "count"), [("inline-syntax", 2), ("preserved-urls", 1)])
+def test_shared_inline_cleanup(name: str, count: int) -> None:
+    fixture = _SHARED_MARKDOWN.read_text(encoding="utf-8")
+    section = fixture.split(f"<!-- case: {name} -->\n", 1)[1].split("\n<!-- case: ", 1)[0].strip("\n")
+    source, expected = section.split("\n<!-- cleaned -->\n")
+    assert len(extract_markers(source)[1]) == count
+    assert sanitize_draft(draft(source, []), max_widgets=6).markdown == expected + "\n" + "filler " * 40
+    assert extract_markers(expected) == ([], [])
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+def test_inline_attribute_spans_inside_a_quote(newline: str) -> None:
+    source = newline.join(["> Keep :quiz[one", "> two]{", "> title='a } b' .help", "> } and this."])
+    cleaned = sanitize_draft(draft(source, []), max_widgets=6)
+    assert cleaned.markdown.startswith("> Keep  and this.\n")
+
+
+def test_inline_syntax_ignores_escapes_and_reference_urls() -> None:
+    source = r"Keep \:quiz, :quiz-extra and [the link][guide]." + "\n\n[guide]: /guide/:quiz[example]"
+    assert extract_markers(source) == ([], [])
+    assert sanitize_draft(draft(source, []), max_widgets=6).markdown.startswith(source)
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("Keep :quiz:widget[label] here.", r"Keep \:quiz here."),
+        ("Keep :qui:widget[label]z here.", r"Keep \:quiz here."),
+        (r"Keep \::quiz here.", r"Keep \: here."),
+        ('[Study :quiz](/guide/:quiz[example] ":quiz")', '[Study ](/guide/:quiz[example] ":quiz")'),
+    ],
+)
+def test_inline_cleanup_preserves_adjacent_literal_text_and_link_metadata(source: str, expected: str) -> None:
+    assert len(extract_markers(source)[1]) == 1
+    cleaned = sanitize_draft(draft(source, []), max_widgets=6)
+    assert cleaned.markdown.startswith(expected + "\n")
+    assert extract_markers(cleaned.markdown) == ([], [])

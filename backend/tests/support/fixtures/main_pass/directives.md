@@ -96,3 +96,24 @@ Keep this explanation too.
 
 ::::::::image{id="img_1"}
 Keep this explanation until the end of the page.
+
+<!-- case: inline-syntax -->
+
+Refer to :quiz.
+
+Paragraph :quiz[first [nested]
+second]{ title="x } y" } after.
+<!-- cleaned -->
+Refer to .
+
+Paragraph  after.
+
+<!-- case: preserved-urls -->
+
+[lesson](/guide/:quiz[example]) and <https://example.com/:quiz[ok]>.
+
+Paragraph :quiz[remove] after.
+<!-- cleaned -->
+[lesson](/guide/:quiz[example]) and <https://example.com/:quiz[ok]>.
+
+Paragraph  after.

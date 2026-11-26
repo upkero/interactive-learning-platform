@@ -56,3 +56,26 @@ for (const [name, nodes] of Object.entries(expected)) {
     assert.deepEqual(actual, nodes);
   });
 }
+
+function links(node) {
+  return [...(node.type === "link" ? [node.url] : []), ...(node.children ?? []).flatMap(links)];
+}
+
+for (const [name, count, urls] of [
+  ["inline-syntax", 2, []],
+  ["preserved-urls", 1, ["/guide/:quiz[example]", "https://example.com/:quiz[ok]"]],
+]) {
+  test("remark validates the shared cleanup example " + name, () => {
+    const [source, cleaned] = cases.get(name).split("\n<!-- cleaned -->\n");
+    const before = parser.parse(source);
+    const after = parser.parse(cleaned);
+    const originalNodes = [];
+    const cleanedNodes = [];
+    collect(before, originalNodes);
+    collect(after, cleanedNodes);
+    assert.deepEqual(originalNodes, Array.from({ length: count }, () => ["textDirective", "quiz"]));
+    assert.deepEqual(cleanedNodes, []);
+    assert.deepEqual(links(before), urls);
+    assert.deepEqual(links(after), urls);
+  });
+}

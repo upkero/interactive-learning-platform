@@ -458,3 +458,19 @@ async def test_container_repair_keeps_its_prose_and_following_code(width: int) -
     assert len(llm.requests) == 2
     assert result.draft.markdown == original + f"\n{prose}\n\n{code}"
     assert [token.type for token in MarkdownIt().parse(result.draft.markdown)].count("code_block") == 1
+
+
+async def test_inline_repair_keeps_link_destinations_and_autolinks() -> None:
+    links = "[lesson](/guide/:quiz[example]) and <https://example.com/:quiz[ok]>."
+    text = "body " * 50 + "\n\n" + links
+    clean = PageDraft(markdown=text, key_terms=["body"] * 5)
+    broken = PageDraft(
+        markdown=text + '\n\nRefer to :quiz[first\nsecond]{title="x } y"} or :quiz.', key_terms=["body"] * 5
+    )
+    llm = FakeLLMClient(structured=[clean, broken, broken])
+    service = _service(llm=llm, primitives=await _primitive_repo())
+
+    assert (await service.run(build_input())).draft.markdown == text
+    assert len(llm.requests) == 1
+    assert (await service.run(build_input())).draft.markdown == text + "\n\nRefer to  or ."
+    assert len(llm.requests) == 3

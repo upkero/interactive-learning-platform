@@ -1,6 +1,7 @@
 """Parse and validate the supported remark-directive subset."""
 
 import re
+from bisect import bisect_right
 from collections.abc import Collection, Iterator, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -18,7 +19,13 @@ from src.app.services.solver.main_pass.directives import Directive, RecoveredPag
 
 _DIRECTIVE = re.compile(r'^::(widget|image|quiz)\{(ref|id)="([^"]+)"\}[ \t]*$')
 _CANDIDATE = re.compile(r"^[ \t]*(?:(?:>[ \t]*|(?:[-+*]|[0-9]{1,9}[.)])[ \t]+))*(:{2,}(?:widget|image|quiz)\b)")
-_INLINE = re.compile(r"(?<![\\:]):(?:widget|image|quiz)(?:\[[^\]\r\n]*\](?:\{[^}\r\n]*\})?|\{[^}\r\n]*\})")
+_INLINE_NAME = re.compile(r":(?:widget|image|quiz)(?![\w:-])")
+_INLINE_PREFIX = re.compile(r"(?<![\\:]):[a-z]{0,6}\Z")
+_ATTRIBUTE_VALUE = r"""(?:"[^"]*"|'[^']*'|[^ \t\n"'<>={`}}]+)"""
+_ATTRIBUTES = re.compile(
+    r"\{(?>[ \t\n]*(?:[.#][^ \t\n.#\"'<>={`}}]+"
+    rf"|[\w:-][\w.:-]*(?:[ \t\n]*=[ \t\n]*{_ATTRIBUTE_VALUE})?))*[ \t\n]*\}}"
+)
 _BLOCK = re.compile(
     r"(:{2,})([^\W_](?:[\w-]*[^\W_])?)"
     r"(?:\[(?:\\.|[^\\\[\]]|\[[^]]*\])*\])?"
@@ -82,12 +89,81 @@ def _backtick_with_offsets(state: StateInline, silent: bool) -> bool:
     return matched
 
 
+def _label_end(source: str, start: int) -> int:
+    depth = 1
+    pos = start + 1
+    while pos < len(source):
+        char = source[pos]
+        if char == "\\" and source[pos + 1 : pos + 2] in {"\\", "[", "]"}:
+            pos += 2
+            continue
+        if char == "[":
+            depth += 1
+        elif char == "]":
+            depth -= 1
+            if depth == 0:
+                return pos + 1
+        pos += 1
+    return start
+
+
+def _inline_directive(state: StateInline, silent: bool) -> bool:
+    start = state.pos
+    match = _INLINE_NAME.match(state.src, start, state.posMax)
+    if not match:
+        return False
+    if start and state.src[start - 1] == ":":
+        escape = start - 2
+        while escape >= 0 and state.src[escape] == "\\":
+            escape -= 1
+        if (start - 2 - escape) % 2 == 0:
+            return False
+    source = state.src[: state.posMax]
+    end = match.end()
+    if source[end : end + 1] == "[":
+        end = _label_end(source, end)
+    attributes = _ATTRIBUTES.match(source, end)
+    if attributes:
+        end = attributes.end()
+    if not silent:
+        token = state.push("solver_inline_directive", "", 0)
+        token.meta["source_span"] = (start, end)
+    state.pos = end
+    return True
+
+
+def _inline_removals(token: Token, lines: list[str], offsets: list[int]) -> list[tuple[int, int, int]]:
+    """Map directive spans from the inline buffer to the original Markdown."""
+    if not token.map or not token.children:
+        return []
+    spans = [child.meta["source_span"] for child in token.children if child.type == "solver_inline_directive"]
+    if not spans:
+        return []
+    positions: list[tuple[int, int, int]] = []
+    cursor = 0
+    for number, content in enumerate(token.content.split("\n"), token.map[0]):
+        # Leading indentation may include spaces synthesized from tabs.
+        plain = content.lstrip(" ")
+        column = lines[number].replace("\x00", "\ufffd").rfind(plain)
+        if column >= 0:
+            positions.append((cursor + len(content) - len(plain), offsets[number] + column, number))
+        cursor += len(content) + 1
+    result: list[tuple[int, int, int]] = []
+    for start, end in spans:
+        first = bisect_right(positions, start, key=lambda point: point[0]) - 1
+        last = bisect_right(positions, end - 1, key=lambda point: point[0]) - 1
+        inline_start, original_start, number = positions[first]
+        inline_end, original_end, _ = positions[last]
+        result.append((original_start + start - inline_start, original_end + end - inline_end, number))
+    return result
+
+
 def _mask_inline_code(token: Token, lines: list[str], masked: list[str]) -> None:
     """Map CommonMark code spans back to source lines, including container prefixes."""
     if not token.map or not token.children:
         return
     content = token.content
-    spans = [child.meta["source_span"] for child in token.children if "source_span" in child.meta]
+    spans = [child.meta["source_span"] for child in token.children if child.type == "code_inline"]
     if not spans:
         return
     pieces: list[str] = []
@@ -109,13 +185,18 @@ def _mask_inline_code(token: Token, lines: list[str], masked: list[str]) -> None
             masked[number] = lines[number][:start] + hidden + lines[number][start + len(plain) :]
 
 
-def _markdown_context(markdown: str, lines: list[str]) -> tuple[set[int], dict[int, int], list[str]]:
+def _markdown_context(
+    markdown: str, lines: list[str], offsets: list[int]
+) -> tuple[set[int], dict[int, int], list[str], list[tuple[int, int, int]]]:
     parser = MarkdownIt("commonmark")
     parser.block.ruler.before("paragraph", "solver_directive", _directive_block, {"alt": ["paragraph"]})
     parser.inline.ruler.at("backticks", _backtick_with_offsets)
+    parser.inline.add_terminator_char(":")
+    parser.inline.ruler.before("text", "solver_inline_directive", _inline_directive)
     code: set[int] = set()
     directives: dict[int, int] = {}
     masked = lines.copy()
+    inline_removals: list[tuple[int, int, int]] = []
     for token in parser.parse(markdown):
         if token.map is None:
             continue
@@ -126,7 +207,8 @@ def _markdown_context(markdown: str, lines: list[str]) -> tuple[set[int], dict[i
             directives[number] = len(lines[number]) - len(token.content)
         elif token.type == "inline":
             _mask_inline_code(token, lines, masked)
-    return code, directives, masked
+            inline_removals.extend(_inline_removals(token, lines, offsets))
+    return code, directives, masked, inline_removals
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,13 +251,15 @@ def _scan(markdown: str) -> tuple[list[Marker], list[Violation], list[tuple[int,
     removals: list[tuple[int, int]] = []
     source = list(_source_lines(markdown))
     lines = [raw.rstrip("\r\n") for raw in source]
-    code_lines, block_directives, masked = _markdown_context(markdown, lines)
+    offsets: list[int] = []
     offset = 0
-    for index, raw in enumerate(source):
-        number = index + 1
-        line = lines[index]
-        start = offset
+    for raw in source:
+        offsets.append(offset)
         offset += len(raw)
+    code_lines, block_directives, masked, inline_removals = _markdown_context(markdown, lines, offsets)
+    for index, line in enumerate(lines):
+        number = index + 1
+        start = offsets[index]
         if index in code_lines:
             continue
         column = block_directives.get(index)
@@ -195,14 +279,14 @@ def _scan(markdown: str) -> tuple[list[Marker], list[Violation], list[tuple[int,
                     )
                 )
                 removals.append((start + column, start + len(line)))
-            continue
-        for inline in _INLINE.finditer(masked[index]):
-            issues.append(
-                Violation(
-                    ViolationCode.INLINE_DIRECTIVE, f"line {number}: inline directives are not supported", line=number
-                )
+    for start, end, index in inline_removals:
+        number = index + 1
+        issues.append(
+            Violation(
+                ViolationCode.INLINE_DIRECTIVE, f"line {number}: inline directives are not supported", line=number
             )
-            removals.append((start + inline.start(), start + inline.end()))
+        )
+        removals.append((start, end))
     return markers, issues, removals
 
 
@@ -392,7 +476,15 @@ def sanitize_draft(
             previous_widget = entry
         kept.append(entry)
     markdown = draft.markdown
-    for start, end in sorted(removed, reverse=True):
+    # A malformed block can overlap an inline directive found by CommonMark.
+    merged: list[tuple[int, int]] = []
+    for start, end in sorted(removed):
+        if merged and start < merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    for index in reversed(range(len(merged))):
+        start, end = merged[index]
         # Remove the colons of a newly exposed marker; keep whitespace and surrounding text.
         following = re.match(r"([ \t]*)::", markdown[end:])
         replacement = ""
@@ -400,6 +492,13 @@ def sanitize_draft(
             whitespace = following.group(1)
             end += len(whitespace) + 2
             replacement = whitespace
+        # Removing an inline directive can expose a literal name on its left,
+        # for example :quiz:widget[label]. Keep that literal escaped.
+        previous_end = merged[index - 1][1] if index else 0
+        prefix = _INLINE_PREFIX.search(markdown, max(previous_end, start - 8), start)
+        if prefix and _INLINE_NAME.match(prefix[0] + replacement + markdown[end : end + 8]):
+            start = prefix.start()
+            replacement = "\\" + prefix[0] + replacement
         markdown = markdown[:start] + replacement + markdown[end:]
     try:
         return RecoveredPageDraft.model_validate(
