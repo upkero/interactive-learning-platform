@@ -42,6 +42,31 @@ def test_large_fence_remains_intact_with_following_image(nested: bool) -> None:
     assert all(plan.tokens <= maximum for plan in plans)
 
 
+def test_fence_in_blockquote_remains_whole() -> None:
+    code = "> ```python\n" + ("> print('hello world')\n>\n") * 1800 + "> ```\n"
+    markdown = code + "\n" + PARAGRAPH * 1300
+    maximum = COUNTER.count(code) + 1
+    tree = build_topic_tree(markdown, COUNTER)
+    assert tree[0].total_tokens > maximum
+    plans = split_document(tree, {"0"}, markdown, COUNTER, SplitLimits(maximum // 2, maximum))
+    assert "".join(plan.markdown for plan in plans) == markdown
+    assert sum(code in part.markdown for part in plans) == 1
+    assert all(part.tokens <= maximum for part in plans)
+
+
+def test_many_short_code_blocks_split_in_under_one_second() -> None:
+    block = "Explanation for this example.\n\n```python\nprint('hello')\n```\n\n"
+    markdown = block * round(30_000_000 / COUNTER.count(block * 100))
+    tree = build_topic_tree(markdown, COUNTER)
+    assert 295_000 < tree[0].total_tokens < 305_000
+    started = perf_counter()
+    plans = split_document(tree, {"0"}, markdown, COUNTER, DEFAULT_LIMITS)
+    elapsed = perf_counter() - started
+    assert elapsed < 1, f"{elapsed:.3f}s to split {tree[0].total_tokens} tokens"
+    assert "".join(part.markdown for part in plans) == markdown
+    assert all(part.tokens <= DEFAULT_LIMITS.maximum for part in plans)
+
+
 def test_selected_child_keeps_the_chapter_id_and_parent_selection_deduplicates() -> None:
     markdown = "# Root\n\nText.\n\n## Child\n\nMore text."
     tree = build_topic_tree(markdown, COUNTER)

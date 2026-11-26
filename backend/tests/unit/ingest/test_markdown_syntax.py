@@ -43,3 +43,12 @@ def test_data_image_inside_table_keeps_table_delimiters_and_inline_code_unchange
     structure = parse_markdown(parsed.markdown)
     assert structure.blocks[0].kind == "table_open"
     assert len(structure.markers) == 1
+
+
+def test_protected_blocks_match_full_parser_for_repeated_fences() -> None:
+    from src.app.ingest.markdown_syntax import parse_markdown, protected_markdown_blocks
+
+    text = ("Explanation.\n\n```python\nprint('hello')\n```\n\n" * 10) + (
+        "Other explanation.\n\n~~~~\nline\n```\n~~~~\n\n"
+    )
+    assert protected_markdown_blocks(text) == parse_markdown(text).protected_blocks

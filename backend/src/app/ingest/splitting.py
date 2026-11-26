@@ -1,16 +1,17 @@
 """Deterministic, model-free packing of parsed topics into generation parts."""
 
 import re
+from bisect import bisect_left
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from itertools import pairwise
 
 from src.app.contracts.documents import TopicNode
 from src.app.contracts.documents.part_plan import PartPlan
-from src.app.ingest.markdown_syntax import parse_markdown
+from src.app.ingest.markdown_syntax import parse_markdown, protected_markdown_blocks
 from src.app.ingest.tokens import TokenCounting
 
-_MARKDOWN_BLOCK = re.compile(r"^(?:[ \t]*(?:`{3,}|~{3,}|::image)|(?: {4}|\t)\S)|\|", re.MULTILINE)
+_MARKDOWN_BLOCK = re.compile(r"`{3,}|~{3,}|::image|\||^(?: {4}|\t)\S", re.MULTILINE)
 _BLANK_LINES = re.compile(r"\n(?:[ \t]*\r?\n)+")
 _HEADING_AND_GAP = re.compile(
     r"(?:[ \t]*#{1,6}(?:[ \t]+[^\n]*|[ \t]*)|[^\n]+\n[ \t]*(?:=+|-+)[ \t]*\r?)"
@@ -248,7 +249,18 @@ def _paragraph_units(markdown: str, start: int, end: int, counter: TokenCounting
         spans = (
             [_Span(paragraph_start, paragraph_end, tokens)]
             if tokens <= limits.maximum
-            else _split_large(markdown, paragraph_start, paragraph_end, counter, limits.maximum, paragraph.protected)
+            else _split_large(
+                markdown,
+                paragraph_start,
+                paragraph_end,
+                counter,
+                limits.maximum,
+                tuple(
+                    (left, right)
+                    for left, right in paragraph.protected
+                    if counter.count(markdown[left:right]) <= limits.maximum
+                ),
+            )
         )
         for span in spans:
             if current and size + span.tokens > limits.target:
@@ -273,15 +285,14 @@ def _paragraph_spans(markdown: str, start: int, end: int, counter: TokenCounting
     markers: set[int] = set()
     atomic_blocks: dict[int, int] = {}
     if _MARKDOWN_BLOCK.search(text):
-        structure = parse_markdown(text)
-        for block in structure.protected_blocks:
-            if block.kind in {"fence", "code_block", "table_open"}:
-                atomic_blocks[block.start] = block.end
-                boundaries.difference_update(
-                    boundary.end() for boundary in _BLANK_LINES.finditer(text, block.start, block.end)
-                )
-                boundaries.update((block.start, block.end))
-        markers = {offset for offset, _ in structure.markers}
+        for block in protected_markdown_blocks(text):
+            atomic_blocks[block.start] = block.end
+            boundaries.difference_update(
+                boundary.end() for boundary in _BLANK_LINES.finditer(text, block.start, block.end)
+            )
+            boundaries.update((block.start, block.end))
+        if "::image" in text:
+            markers = {offset for offset, _ in parse_markdown(text).markers}
     # Consecutive headings belong to the first body paragraph. An image
     # paragraph belongs to the preceding content even across blank lines.
     heading_end = _heading_end(text)
@@ -301,20 +312,19 @@ def _paragraph_spans(markdown: str, start: int, end: int, counter: TokenCounting
         else:
             spans.append((start + left, start + right))
         left = right
-    return [
-        _Paragraph(
-            left,
-            right,
-            tuple(
-                (start + block_start, start + block_end)
-                for block_start, block_end in atomic_blocks.items()
-                if start + block_start >= left
-                and start + block_end <= right
-                and counter.count(markdown[start + block_start : start + block_end]) <= maximum
-            ),
+    blocks = sorted(atomic_blocks.items())
+    block_starts = [block_start for block_start, _ in blocks]
+    paragraphs: list[_Paragraph] = []
+    for left, right in spans:
+        first = bisect_left(block_starts, left - start)
+        last = bisect_left(block_starts, right - start)
+        protected = tuple(
+            (start + block_start, start + block_end)
+            for block_start, block_end in blocks[first:last]
+            if start + block_end <= right
         )
-        for left, right in spans
-    ]
+        paragraphs.append(_Paragraph(left, right, protected))
+    return paragraphs
 
 
 def _split_large(
