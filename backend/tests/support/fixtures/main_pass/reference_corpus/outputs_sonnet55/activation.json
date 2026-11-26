@@ -1,40 +1,50 @@
 {
   "model": "anthropic/claude-sonnet-5.5",
-  "prompt_version": "sha256:4d348b2d921fab7d72d00a479d9133fd3611e94fe544637b926a5842319acc62",
-  "generated_at": "2026-11-26T10:53:15.059424+00:00",
+  "prompt_version": "sha256:41a4c3df095a52afa00a08e7363e0acacded190389777308973a00b307d0142d",
+  "generated_at": "2026-11-26T16:28:34.131002+00:00",
   "first_answer": "clean",
   "first_schema_valid_draft": {
-    "markdown": "## Activation functions\n\nAn **activation function** decides how strong a neuron's output is. Think of it as a small rule that takes the number a neuron has computed and turns it into the number the neuron actually passes on.\n\nTwo common rules appear in this part:\n\n- A rectified linear unit (ReLU) passes positive values unchanged and turns negative values into zero. So an input of 3 stays 3, while an input of -2 becomes 0.\n- The sigmoid squeezes the output into a bounded range between zero and one. However large or small the input is, the result stays in that range.\n\n::image{id=\"img_1\"}\n\nThe figure shows both rules as curves: ReLU looks like a hinge line, and the sigmoid is an S-shaped curve.\n\n::widget{ref=\"w1\"}\n\n### Why a network needs them\n\nA network with only linear layers is still one linear transformation, whatever its depth. In other words, stacking many linear layers gives you nothing more than a single linear layer would.\n\nThe non-linear activation between layers is what lets a deep network represent curved decision boundaries. Without it, depth would add no power.\n\n::quiz{ref=\"q1\"}\n",
+    "markdown": "## Activation functions\n\nA neuron takes some numbers in, combines them, and produces an output. The **activation function** is the rule that decides how strong that output is. It is a small step applied to the neuron's result before it is passed on.\n\nTwo common choices show the idea:\n\n- A **rectified linear unit (ReLU)** passes positive values unchanged and turns negative values into zero. So if the input is positive, the output is the same number. If the input is negative, the output is zero.\n- The **sigmoid** squeezes the output into a bounded range between zero and one. Whatever number goes in, the result stays between those two limits.\n\n::image{id=\"img_1\"}\n\nIn the figure, ReLU looks like a hinge: a flat line that then bends upward. The sigmoid looks like a smooth S-shaped curve.\n\n::quiz{ref=\"q1\"}\n\n### Why a non-linear activation matters\n\nA network with only linear layers is still one linear transformation, whatever its depth. In plain language: stacking linear layers on top of each other does not give you anything more powerful than a single linear layer. Depth alone adds nothing.\n\nThe **non-linear** activation between layers is what changes this. It is what lets a deep network represent curved **decision boundaries**, that is, the curved lines that separate one group of inputs from another. Without it, the network could only draw straight boundaries.\n\n::widget{ref=\"w1\"}\n\n::quiz{ref=\"q2\"}\n",
     "directives": [
       {
         "ref": "img_1",
         "kind": "image",
-        "intent": "Show the ReLU curve (a hinge line, flat at zero for negative inputs and rising for positive ones) next to the sigmoid curve (an S-shape bounded between zero and one).",
+        "intent": "Show the ReLU and sigmoid curves side by side: ReLU as a hinge-shaped line that is zero for negative inputs and rises for positive ones, sigmoid as an S-shaped curve bounded between zero and one.",
         "primitive_hint": null,
         "mode_hint": null,
         "params_hint": null,
         "image_id": "img_1",
-        "source_span": "ReLU and sigmoid curves"
-      },
-      {
-        "ref": "w1",
-        "kind": "widget",
-        "intent": "Let the learner watch an input value pass through ReLU and through the sigmoid, predict each output, then see the result: negative values become zero under ReLU, and the sigmoid stays between zero and one.",
-        "primitive_hint": "three-frame",
-        "mode_hint": "predict",
-        "params_hint": "ReLU: positive values unchanged, negative values become zero. Sigmoid: output bounded between zero and one.",
-        "image_id": null,
         "source_span": "A rectified linear unit (ReLU) passes positive values unchanged and turns negative values into zero."
       },
       {
         "ref": "q1",
         "kind": "quiz",
-        "intent": "Check that the learner understands why a network of only linear layers is still one linear transformation, and what the non-linear activation adds.",
+        "intent": "Check that the reader can say what ReLU does to negative and positive inputs and what range the sigmoid output stays in.",
         "primitive_hint": null,
         "mode_hint": null,
         "params_hint": null,
         "image_id": null,
-        "source_span": "A network with only linear layers is still one linear transformation,"
+        "source_span": "The sigmoid squeezes the output into a bounded range between zero and one."
+      },
+      {
+        "ref": "w1",
+        "kind": "widget",
+        "intent": "Three-frame demonstration: a network with only linear layers gives a straight decision boundary, the learner predicts what adding a non-linear activation does, and the result shows a curved decision boundary.",
+        "primitive_hint": "three-frame",
+        "mode_hint": "predict",
+        "params_hint": null,
+        "image_id": null,
+        "source_span": "The non-linear activation between layers is what lets a deep network represent curved decision boundaries."
+      },
+      {
+        "ref": "q2",
+        "kind": "quiz",
+        "intent": "Check that the reader understands that a network with only linear layers is still one linear transformation, and that a non-linear activation is needed for curved decision boundaries.",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": null,
+        "source_span": "A network with only linear layers is still one linear transformation, whatever its depth."
       }
     ],
     "key_terms": [
@@ -44,8 +54,8 @@
       "sigmoid",
       "linear layers",
       "linear transformation",
-      "non-linear activation",
-      "curved decision boundaries"
+      "non-linear",
+      "decision boundaries"
     ]
   },
   "first_answer_issues": {
@@ -54,33 +64,43 @@
   },
   "schema_errors_before_first": 0,
   "draft": {
-    "markdown": "## Activation functions\n\nAn **activation function** decides how strong a neuron's output is. Think of it as a small rule that takes the number a neuron has computed and turns it into the number the neuron actually passes on.\n\nTwo common rules appear in this part:\n\n- A rectified linear unit (ReLU) passes positive values unchanged and turns negative values into zero. So an input of 3 stays 3, while an input of -2 becomes 0.\n- The sigmoid squeezes the output into a bounded range between zero and one. However large or small the input is, the result stays in that range.\n\n::image{id=\"img_1\"}\n\nThe figure shows both rules as curves: ReLU looks like a hinge line, and the sigmoid is an S-shaped curve.\n\n::widget{ref=\"w1\"}\n\n### Why a network needs them\n\nA network with only linear layers is still one linear transformation, whatever its depth. In other words, stacking many linear layers gives you nothing more than a single linear layer would.\n\nThe non-linear activation between layers is what lets a deep network represent curved decision boundaries. Without it, depth would add no power.\n\n::quiz{ref=\"q1\"}\n",
+    "markdown": "## Activation functions\n\nA neuron takes some numbers in, combines them, and produces an output. The **activation function** is the rule that decides how strong that output is. It is a small step applied to the neuron's result before it is passed on.\n\nTwo common choices show the idea:\n\n- A **rectified linear unit (ReLU)** passes positive values unchanged and turns negative values into zero. So if the input is positive, the output is the same number. If the input is negative, the output is zero.\n- The **sigmoid** squeezes the output into a bounded range between zero and one. Whatever number goes in, the result stays between those two limits.\n\n::image{id=\"img_1\"}\n\nIn the figure, ReLU looks like a hinge: a flat line that then bends upward. The sigmoid looks like a smooth S-shaped curve.\n\n::quiz{ref=\"q1\"}\n\n### Why a non-linear activation matters\n\nA network with only linear layers is still one linear transformation, whatever its depth. In plain language: stacking linear layers on top of each other does not give you anything more powerful than a single linear layer. Depth alone adds nothing.\n\nThe **non-linear** activation between layers is what changes this. It is what lets a deep network represent curved **decision boundaries**, that is, the curved lines that separate one group of inputs from another. Without it, the network could only draw straight boundaries.\n\n::widget{ref=\"w1\"}\n\n::quiz{ref=\"q2\"}\n",
     "directives": [
       {
         "ref": "img_1",
         "kind": "image",
-        "intent": "Show the ReLU curve (a hinge line, flat at zero for negative inputs and rising for positive ones) next to the sigmoid curve (an S-shape bounded between zero and one).",
-        "source_span": "ReLU and sigmoid curves",
+        "intent": "Show the ReLU and sigmoid curves side by side: ReLU as a hinge-shaped line that is zero for negative inputs and rises for positive ones, sigmoid as an S-shaped curve bounded between zero and one.",
+        "source_span": "A rectified linear unit (ReLU) passes positive values unchanged and turns negative values into zero.",
         "primitive_hint": null,
         "mode_hint": null,
         "params_hint": null,
         "image_id": "img_1"
       },
       {
-        "ref": "w1",
-        "kind": "widget",
-        "intent": "Let the learner watch an input value pass through ReLU and through the sigmoid, predict each output, then see the result: negative values become zero under ReLU, and the sigmoid stays between zero and one.",
-        "source_span": "A rectified linear unit (ReLU) passes positive values unchanged and turns negative values into zero.",
-        "primitive_hint": "three-frame",
-        "mode_hint": "predict",
-        "params_hint": "ReLU: positive values unchanged, negative values become zero. Sigmoid: output bounded between zero and one.",
+        "ref": "q1",
+        "kind": "quiz",
+        "intent": "Check that the reader can say what ReLU does to negative and positive inputs and what range the sigmoid output stays in.",
+        "source_span": "The sigmoid squeezes the output into a bounded range between zero and one.",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
         "image_id": null
       },
       {
-        "ref": "q1",
+        "ref": "w1",
+        "kind": "widget",
+        "intent": "Three-frame demonstration: a network with only linear layers gives a straight decision boundary, the learner predicts what adding a non-linear activation does, and the result shows a curved decision boundary.",
+        "source_span": "The non-linear activation between layers is what lets a deep network represent curved decision boundaries.",
+        "primitive_hint": "three-frame",
+        "mode_hint": "predict",
+        "params_hint": null,
+        "image_id": null
+      },
+      {
+        "ref": "q2",
         "kind": "quiz",
-        "intent": "Check that the learner understands why a network of only linear layers is still one linear transformation, and what the non-linear activation adds.",
-        "source_span": "A network with only linear layers is still one linear transformation,",
+        "intent": "Check that the reader understands that a network with only linear layers is still one linear transformation, and that a non-linear activation is needed for curved decision boundaries.",
+        "source_span": "A network with only linear layers is still one linear transformation, whatever its depth.",
         "primitive_hint": null,
         "mode_hint": null,
         "params_hint": null,
@@ -94,8 +114,8 @@
       "sigmoid",
       "linear layers",
       "linear transformation",
-      "non-linear activation",
-      "curved decision boundaries"
+      "non-linear",
+      "decision boundaries"
     ]
   }
 }

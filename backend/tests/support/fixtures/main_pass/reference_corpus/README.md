@@ -30,15 +30,19 @@ and other semantic violations. The summary reports alternation separately and
 counts cases with a schema retry before that first valid draft. If a later step
 fails, the first draft is saved in `<case-id>.first.json`; that partial file
 does not count as a completed terminology snapshot. These files contain model
-responses and should be handled accordingly. Existing snapshots do not contain
-the first answer and cannot establish which original rule was violated.
+responses and should be handled accordingly. Older snapshots without a first
+draft cannot establish which rule the original answer violated.
 
-`outputs_sonnet55/` contains the saved Sonnet 5.5 drafts used by the
-terminology checker. `outputs/` and `outputs_round2/` preserve earlier
+`outputs_sonnet55/` contains the latest Sonnet 5.5 drafts and is the default
+for the terminology checker. `live_reference_acceptance_v1.json` records the
+source commit, prompt hash, verdicts and one transport retry for
+`ru_water_injection`. That retry followed a connection error before any
+model answer was received.
+
+`outputs/` and `outputs_round2/` preserve earlier
 Sonnet 4.6 runs, including their observed failures. Each is a single run
 with its own prompt version.
 
-`live_acceptance_v1.json` records the new `main-pass-v1` check on the commit
-and prompt hash listed there. Its five reference requests failed before a
-draft could be recorded. The earlier drafts and `live_acceptance.json`
-remain historical evidence for their recorded prompt hashes.
+`live_acceptance_v1.json` records the previous `main-pass-v1` run. Its
+injection and cache checks passed and its reference requests failed before a
+draft was recorded. `live_acceptance.json` records an older prompt hash.
