@@ -1,12 +1,14 @@
-# Заглушка до реализации Эпика 3.5 (хост изолированных iframe-виджетов).
-# В alpine:3.20 applet httpd отсутствует (вынесен в busybox-extras),
-# поэтому используем busybox:1.36, где httpd есть в базовом комплекте.
-# nginx в prod резолвит upstream на старте, поэтому заглушка обязана
-# реально слушать порт 80, иначе контейнер nginx не поднимется.
-# Раздаём только /www (индексную страницу), а не корень файловой системы.
-FROM busybox:1.36
+FROM node:22-bookworm AS build
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+COPY pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY primitives/package.json primitives/package.json
+COPY widget-host/package.json widget-host/package.json
+RUN pnpm install --frozen-lockfile
+COPY primitives/src primitives/src
+COPY widget-host widget-host
+RUN pnpm --filter widget-host build
 
-RUN mkdir -p /www && \
-    printf '<!DOCTYPE html><html><body>Grasp widget-host stub</body></html>\n' > /www/index.html
-
-CMD ["httpd", "-f", "-p", "80", "-h", "/www"]
+FROM nginx:1.27-alpine
+COPY --from=build /app/widget-host/dist /usr/share/nginx/html
+COPY widget-host/nginx.conf /etc/nginx/conf.d/default.conf

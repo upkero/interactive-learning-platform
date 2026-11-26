@@ -2,6 +2,7 @@ import inspect
 from functools import cached_property, lru_cache
 from logging import getLogger
 
+import httpx
 import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
@@ -15,6 +16,7 @@ from src.app.core.settings.processing import ProcessingSettings, get_processing_
 from src.app.core.settings.progress import get_progress_settings
 from src.app.core.settings.quota import QuotaSettings, get_quota_settings
 from src.app.core.settings.reports import ReportsSettings, get_reports_settings
+from src.app.core.settings.sandbox import SandboxSettings, get_sandbox_settings
 from src.app.core.settings.smtp import get_smtp_settings
 from src.app.core.settings.storage import get_storage_settings
 from src.app.core.settings.upload import get_upload_settings
@@ -30,6 +32,7 @@ from src.app.ingest.splitting import SplitLimits
 from src.app.ingest.tokens import get_token_counter
 from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.interfaces.observability.metrics_collector import MetricsCollector
+from src.app.interfaces.sandbox.sandbox import Sandbox
 from src.app.interfaces.services.part_pipeline import PartPipeline
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.llm.factory import create_llm_client
@@ -48,6 +51,8 @@ from src.app.repositories.user_material_repository import UserMaterialRepository
 from src.app.repositories.user_repository import UserRepository
 from src.app.repositories.widget_repository import WidgetRepository
 from src.app.repositories.widget_usage_repository import WidgetUsageRepository
+from src.app.sandbox.http_sandbox_client import HttpSandboxClient
+from src.app.sandbox.instrumented_sandbox import InstrumentedSandbox
 from src.app.services.auth.auth_service import AuthService
 from src.app.services.documents.document_ingest_runner import DocumentIngestRunner
 from src.app.services.documents.document_ingest_service import DocumentIngestService
@@ -108,6 +113,10 @@ class ApplicationContainer:
     @cached_property
     def quota_settings(self) -> QuotaSettings:
         return get_quota_settings()
+
+    @cached_property
+    def sandbox_settings(self) -> SandboxSettings:
+        return get_sandbox_settings()
 
     # -- services -----------------------------------------------------------
 
@@ -327,6 +336,15 @@ class ApplicationContainer:
     @cached_property
     def metrics_collector(self) -> MetricsCollector:
         return PrometheusMetricsCollector()
+
+    @cached_property
+    def sandbox(self) -> Sandbox:
+        settings = self.sandbox_settings
+        return InstrumentedSandbox(
+            client=HttpSandboxClient(client=httpx.AsyncClient(base_url=settings.url, timeout=settings.timeout_seconds)),
+            logger=getLogger("grasp.sandbox"),
+            metrics=self.metrics_collector,
+        )
 
     @cached_property
     def main_llm(self) -> LLMClient:

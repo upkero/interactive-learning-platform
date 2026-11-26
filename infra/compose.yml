@@ -141,7 +141,9 @@ services:
       LOG_FORMAT: json
     tmpfs:
       - /tmp/prom:uid=1001,gid=1001,mode=0700
-    depends_on: *backend-deps
+    depends_on:
+      <<: *backend-deps
+      sandbox: { condition: service_healthy }
     networks:
       - default
       - sandbox_net
@@ -204,6 +206,24 @@ services:
       context: ..
       dockerfile: sandbox/Dockerfile
     mem_limit: 1g
+    cpus: 1.5
+    pids_limit: 512
+    read_only: true
+    tmpfs: ["/tmp:size=256m"]
+    environment:
+      HOME: /tmp
+      SANDBOX_ORIGIN: http://127.0.0.1:3001
+    # Playwright's default Docker seccomp blocks unprivileged user namespaces.
+    # Use their versioned profile; never launch Chromium with --no-sandbox.
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:./playwright-seccomp.json
+    init: true
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     networks:
       - sandbox_net
 
