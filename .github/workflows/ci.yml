@@ -154,7 +154,7 @@ jobs:
         run: uv run ruff check . && uv run ruff format --check .
 
       - name: Mypy type check
-        run: uv run mypy src tests
+        run: uv run mypy src tests evals
 
       - name: Verify OpenAPI snapshot
         run: |

@@ -1,4 +1,4 @@
-"""Decision events and metrics for widget moderation."""
+"""Decision events and metrics for the learning pipeline."""
 
 import logging
 from typing import Literal
@@ -16,6 +16,19 @@ class DecisionLog:
 
     def part_summary(self, summary: PartSummary) -> None:
         self._logger.info("Part summary.", extra={"event": "part.summary", **summary.to_dict()})
+
+    def main_pass_first_draft(
+        self, *, prompt_version: str, violation_count: int, alternation_violation_count: int
+    ) -> None:
+        self._logger.info(
+            "Main pass checked the first schema-valid draft.",
+            extra={
+                "event": "main_pass.first_draft_checked",
+                "prompt_version": prompt_version,
+                "violation_count": violation_count,
+                "alternation_violation_count": alternation_violation_count,
+            },
+        )
 
     def widget_excluded(self, *, widget_id: str, reporters: int, threshold: int) -> None:
         self._metrics.increment_counter("widgets.excluded")

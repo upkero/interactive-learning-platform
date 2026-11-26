@@ -1,0 +1,85 @@
+{
+  "model": "anthropic/claude-sonnet-4.6",
+  "prompt_version": "sha256:be7a871fbdd987e45065f8d07df4cf2498fb3973c2e48064071fb0804be8bf29",
+  "generated_at": "2026-11-26T10:38:52.123802+00:00",
+  "first_answer": "violations",
+  "draft": {
+    "markdown": "## From neurons to layers\n\nA **neuron** is the basic building block of a neural network. It does a simple calculation in three steps:\n\n1. Each **input** is multiplied by a number called its **weight**.\n2. All those products are added together.\n3. A fixed number called the **bias** is added to the total.\n\nThe result then passes through an **activation function**, which introduces a non-linear twist — meaning the output is *not* just a straight-line rescaling of the input. This non-linearity is what gives neural networks their power.\n\n::image{id=\"img_1\"}\n\n::widget{ref=\"w1\"}\n\n---\n\n### Stacking neurons into a layer\n\nA **layer** is a collection of many neurons that all read the same **input vector** (a list of numbers). Because every neuron has its *own* set of weights, each one picks up a different pattern from the same inputs. The layer as a whole produces one output number per neuron.\n\nThe key insight: a stack of layers with activation functions is far more expressive than a single **linear transformation** (a plain multiply-and-add with no non-linearity). Without activation functions, stacking layers would collapse into one giant multiply — the activations prevent that.\n\n::image{id=\"img_2\"}\n\nIn a **fully connected layer**, every neuron reads every output of the previous layer. This means the number of **weights** grows as the product of the sizes of the two layers. For example, connecting a layer of 100 neurons to a layer of 200 neurons requires 100 × 200 = 20 000 weights. That is why **wider layers** (more neurons) cost more to train.\n\n::quiz{ref=\"q1\"}\n\n---\n\n## Activation functions\n\nThe **activation function** decides how strong a neuron's output signal is after the weighted sum is computed.\n\n- **ReLU** (Rectified Linear Unit): passes positive values through unchanged, and turns any negative value into zero. It is the most widely used activation today.\n- **sigmoid**: squeezes the output into a bounded range (between 0 and 1), which is useful when you need a probability-like output.\n\n::widget{ref=\"w2\"}\n\n::quiz{ref=\"q2\"}",
+    "directives": [
+      {
+        "ref": "img_1",
+        "kind": "image",
+        "intent": "Show a diagram of a single neuron with three inputs: three arrows entering a circle, each labelled with a weight, and one arrow leaving the circle labelled as the output after the activation function.",
+        "source_span": "A neuron computes a weighted sum of its inputs: each input is multiplied by its weight, the products are added, and a bias is added to the total.",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": "img_1"
+      },
+      {
+        "ref": "w1",
+        "kind": "widget",
+        "intent": "Let the learner watch how changing the weights and bias of a single neuron changes the weighted sum and the output, before and after the activation function.",
+        "source_span": "A neuron computes a weighted sum of its inputs: each input is multiplied by its weight, the products are added, and a bias is added to the total. The result then goes through a non-linear activation function.",
+        "primitive_hint": "three-frame",
+        "mode_hint": "watch",
+        "params_hint": "Single neuron: inputs [x1, x2, x3], weights [w1, w2, w3], bias b. Frame 1: inputs shown. Frame 2: weighted sum computed. Frame 3: activation function applied and output shown.",
+        "image_id": null
+      },
+      {
+        "ref": "img_2",
+        "kind": "image",
+        "intent": "Show a diagram of two layers of neurons connected by arrows, illustrating how outputs of one layer feed into every neuron of the next layer.",
+        "source_span": "A layer stacks many neurons that read the same input vector. Each neuron has its own weights, so one layer produces one output value per neuron.",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": "img_2"
+      },
+      {
+        "ref": "q1",
+        "kind": "quiz",
+        "intent": "Check that the learner understands what a fully connected layer is and why wider layers cost more to train (weights grow as the product of the two layer sizes).",
+        "source_span": "In a fully connected layer every neuron reads every output of the previous layer. The number of weights therefore grows as the product of the two layer sizes, which is why wider layers cost more to train.",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": null
+      },
+      {
+        "ref": "w2",
+        "kind": "widget",
+        "intent": "Show a side-by-side comparison of ReLU and sigmoid activation functions: display what happens to a range of input values as they pass through each function, highlighting that ReLU zeroes out negatives while sigmoid squeezes values into a bounded range.",
+        "source_span": "A rectified linear unit (ReLU) passes positive values unchanged and turns negative values into zero. Other activations, such as the sigmoid, squeeze the output into a bounded range.",
+        "primitive_hint": "three-frame",
+        "mode_hint": "steps",
+        "params_hint": "Frame 1: a set of input values including negatives and positives. Frame 2: ReLU applied — negatives become zero, positives unchanged. Frame 3: sigmoid applied — all values squeezed into (0,1) range.",
+        "image_id": null
+      },
+      {
+        "ref": "q2",
+        "kind": "quiz",
+        "intent": "Ask the learner to identify what ReLU does to a negative input value, and what range the sigmoid function outputs, to confirm understanding of activation functions.",
+        "source_span": "The activation decides how strong the neuron's output is. A rectified linear unit (ReLU) passes positive values unchanged and turns negative values into zero. Other activations, such as the sigmoid, squeeze the output into a bounded range.",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": null
+      }
+    ],
+    "key_terms": [
+      "neuron",
+      "input",
+      "weight",
+      "bias",
+      "activation function",
+      "layer",
+      "input vector",
+      "linear transformation",
+      "fully connected layer",
+      "weights",
+      "ReLU",
+      "sigmoid"
+    ]
+  }
+}

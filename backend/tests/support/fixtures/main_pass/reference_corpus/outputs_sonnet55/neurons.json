@@ -1,0 +1,143 @@
+{
+  "model": "anthropic/claude-sonnet-5.5",
+  "prompt_version": "sha256:41a4c3df095a52afa00a08e7363e0acacded190389777308973a00b307d0142d",
+  "generated_at": "2026-11-26T16:28:27.006435+00:00",
+  "first_answer": "clean",
+  "first_schema_valid_draft": {
+    "markdown": "## From neurons to layers\n\nA neural network is built from small units called neurons. A **neuron** computes a weighted sum of its inputs. Each input is multiplied by its weight (a number that says how much that input matters), the products are added, and a bias (an extra number added to the total) is added as well. The result then goes through a non-linear activation function, which reshapes the number before the neuron passes it on.\n\n::image{id=\"img_1\"}\n\nA layer stacks many neurons that read the same input vector (the list of input numbers). Each neuron has its own weights, so one layer produces one output value per neuron. The activation is what makes a stack of layers more expressive than a single linear transformation. Without it, stacking layers would add nothing, because a chain of linear steps is still just one linear step.\n\n::image{id=\"img_2\"}\n\nIn a fully connected layer every neuron reads every output of the previous layer. The number of weights therefore grows as the product of the two layer sizes, which is why wider layers cost more to train.\n\n::quiz{ref=\"q1\"}\n\n## Activation functions\n\nThe activation decides how strong the neuron's output is. A rectified linear unit (ReLU) passes positive values unchanged and turns negative values into zero. Other activations, such as the sigmoid, squeeze the output into a bounded range.\n\n::widget{ref=\"w1\"}\n\n::quiz{ref=\"q2\"}\n",
+    "directives": [
+      {
+        "ref": "img_1",
+        "kind": "image",
+        "intent": "Show a single neuron: three input arrows entering a circle and one output arrow leaving it.",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": "img_1",
+        "source_span": "A neuron computes a weighted sum of its inputs"
+      },
+      {
+        "ref": "img_2",
+        "kind": "image",
+        "intent": "Show layers of neurons as two columns of circles connected by arrows, so the reader sees that each neuron in one layer links to the next.",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": "img_2",
+        "source_span": "A layer stacks many neurons that read the same input vector."
+      },
+      {
+        "ref": "q1",
+        "kind": "quiz",
+        "intent": "Check that the reader understands what a neuron computes, what a layer outputs, and how weights grow in a fully connected layer.",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": null,
+        "source_span": "The number of weights therefore grows as the product of the two layer sizes"
+      },
+      {
+        "ref": "w1",
+        "kind": "widget",
+        "intent": "Let the learner try input values and see how ReLU passes positive values and turns negative ones into zero, compared with a sigmoid that squeezes output into a bounded range.",
+        "primitive_hint": "three-frame",
+        "mode_hint": "predict",
+        "params_hint": "ReLU: positive values unchanged, negative values become zero. Sigmoid: output squeezed into a bounded range.",
+        "image_id": null,
+        "source_span": "A rectified linear unit (ReLU) passes positive values unchanged and turns negative"
+      },
+      {
+        "ref": "q2",
+        "kind": "quiz",
+        "intent": "Ask what ReLU outputs for a negative input and what a sigmoid does to the output range.",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": null,
+        "source_span": "Other activations, such as the sigmoid, squeeze the"
+      }
+    ],
+    "key_terms": [
+      "neuron",
+      "weighted sum",
+      "bias",
+      "activation function",
+      "layer",
+      "input vector",
+      "fully connected layer",
+      "rectified linear unit (ReLU)",
+      "sigmoid"
+    ]
+  },
+  "first_answer_issues": {
+    "alternation": [],
+    "other": []
+  },
+  "schema_errors_before_first": 0,
+  "draft": {
+    "markdown": "## From neurons to layers\n\nA neural network is built from small units called neurons. A **neuron** computes a weighted sum of its inputs. Each input is multiplied by its weight (a number that says how much that input matters), the products are added, and a bias (an extra number added to the total) is added as well. The result then goes through a non-linear activation function, which reshapes the number before the neuron passes it on.\n\n::image{id=\"img_1\"}\n\nA layer stacks many neurons that read the same input vector (the list of input numbers). Each neuron has its own weights, so one layer produces one output value per neuron. The activation is what makes a stack of layers more expressive than a single linear transformation. Without it, stacking layers would add nothing, because a chain of linear steps is still just one linear step.\n\n::image{id=\"img_2\"}\n\nIn a fully connected layer every neuron reads every output of the previous layer. The number of weights therefore grows as the product of the two layer sizes, which is why wider layers cost more to train.\n\n::quiz{ref=\"q1\"}\n\n## Activation functions\n\nThe activation decides how strong the neuron's output is. A rectified linear unit (ReLU) passes positive values unchanged and turns negative values into zero. Other activations, such as the sigmoid, squeeze the output into a bounded range.\n\n::widget{ref=\"w1\"}\n\n::quiz{ref=\"q2\"}\n",
+    "directives": [
+      {
+        "ref": "img_1",
+        "kind": "image",
+        "intent": "Show a single neuron: three input arrows entering a circle and one output arrow leaving it.",
+        "source_span": "A neuron computes a weighted sum of its inputs",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": "img_1"
+      },
+      {
+        "ref": "img_2",
+        "kind": "image",
+        "intent": "Show layers of neurons as two columns of circles connected by arrows, so the reader sees that each neuron in one layer links to the next.",
+        "source_span": "A layer stacks many neurons that read the same input vector.",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": "img_2"
+      },
+      {
+        "ref": "q1",
+        "kind": "quiz",
+        "intent": "Check that the reader understands what a neuron computes, what a layer outputs, and how weights grow in a fully connected layer.",
+        "source_span": "The number of weights therefore grows as the product of the two layer sizes",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": null
+      },
+      {
+        "ref": "w1",
+        "kind": "widget",
+        "intent": "Let the learner try input values and see how ReLU passes positive values and turns negative ones into zero, compared with a sigmoid that squeezes output into a bounded range.",
+        "source_span": "A rectified linear unit (ReLU) passes positive values unchanged and turns negative",
+        "primitive_hint": "three-frame",
+        "mode_hint": "predict",
+        "params_hint": "ReLU: positive values unchanged, negative values become zero. Sigmoid: output squeezed into a bounded range.",
+        "image_id": null
+      },
+      {
+        "ref": "q2",
+        "kind": "quiz",
+        "intent": "Ask what ReLU outputs for a negative input and what a sigmoid does to the output range.",
+        "source_span": "Other activations, such as the sigmoid, squeeze the",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": null
+      }
+    ],
+    "key_terms": [
+      "neuron",
+      "weighted sum",
+      "bias",
+      "activation function",
+      "layer",
+      "input vector",
+      "fully connected layer",
+      "rectified linear unit (ReLU)",
+      "sigmoid"
+    ]
+  }
+}

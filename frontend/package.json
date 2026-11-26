@@ -5,7 +5,12 @@
   "scripts": {
     "lint": "echo ok",
     "typecheck": "echo ok",
-    "test": "echo ok",
+    "test": "node --test",
     "build": "echo ok"
+  },
+  "devDependencies": {
+    "remark-directive": "4.0.0",
+    "remark-parse": "11.0.0",
+    "unified": "11.0.5"
   }
 }

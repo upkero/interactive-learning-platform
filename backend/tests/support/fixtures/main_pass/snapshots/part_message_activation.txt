@@ -1,0 +1,24 @@
+<part_data>
+<part_title>Activation functions</part_title>
+<part_topics>
+- Activation functions
+</part_topics>
+<images>
+<image alias="img_1" caption="ReLU and sigmoid curves" description="Plot: a hinge line and an S-shaped curve." />
+</images>
+<part>
+## Activation functions
+
+The activation function decides how strong a neuron's output is. A
+rectified linear unit (ReLU) passes positive values unchanged and turns
+negative values into zero. The sigmoid squeezes the output into a bounded
+range between zero and one.
+
+A network with only linear layers is still one linear transformation,
+whatever its depth. The non-linear activation between layers is what lets
+a deep network represent curved decision boundaries.
+
+</part>
+</part_data>
+
+Rewrite this part for the reader profile above. Keep the source's terminology and mark the interactive slots.

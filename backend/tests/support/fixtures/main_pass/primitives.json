@@ -1,0 +1,14 @@
+[
+  {
+    "id": "key-terms",
+    "version": "0.1.0",
+    "description": "Collapsible glossary that explains the key terms used in a part of the material.",
+    "modes": ["single", "multiple"]
+  },
+  {
+    "id": "three-frame",
+    "version": "1.0.0",
+    "description": "Three-frame demonstration with an initial state, a prediction and the result.",
+    "modes": ["watch", "steps", "predict"]
+  }
+]
