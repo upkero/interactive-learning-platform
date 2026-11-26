@@ -1,20 +1,11 @@
-import { getTranslations } from "next-intl/server";
-import { PageShell } from "@/shared/ui";
+import { TopicsFeature } from "@/features/topics";
 
 export default async function TopicsPage({
   params,
 }: {
   params: Promise<{ locale: string; id: string }>;
 }) {
-  const { locale, id } = await params;
-  const t = await getTranslations({ locale, namespace: "topics" });
+  const { id } = await params;
 
-  return (
-    <PageShell title={t("title")}>
-      <div className="stub">
-        <h1>{t("title")}</h1>
-        <p>Выбор тем для документа {id} (Э3) — заглушка.</p>
-      </div>
-    </PageShell>
-  );
+  return <TopicsFeature documentId={id} />;
 }

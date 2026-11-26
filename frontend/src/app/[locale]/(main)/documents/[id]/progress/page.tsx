@@ -1,20 +1,11 @@
-import { getTranslations } from "next-intl/server";
-import { PageShell } from "@/shared/ui";
+import { ProgressFeature } from "@/features/progress";
 
 export default async function ProgressPage({
   params,
 }: {
   params: Promise<{ locale: string; id: string }>;
 }) {
-  const { locale, id } = await params;
-  const t = await getTranslations({ locale, namespace: "progress" });
+  const { id } = await params;
 
-  return (
-    <PageShell title={t("title")}>
-      <div className="stub">
-        <h1>{t("title")}</h1>
-        <p>Прогресс генерации для документа {id} (Э5) — заглушка.</p>
-      </div>
-    </PageShell>
-  );
+  return <ProgressFeature documentId={id} />;
 }

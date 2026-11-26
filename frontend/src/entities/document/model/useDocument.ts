@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiClient, unwrap, qk } from "@/shared/api";
 import type { components } from "@/shared/api/schema";
 
@@ -30,12 +30,16 @@ export interface DocumentPart {
   quiz_score?: { correct: number; total: number };
 }
 
-export function useDocument(documentId: string | null) {
+export function useDocument(
+  documentId: string | null,
+  options?: { enabled?: boolean; refetchInterval?: number | false }
+) {
   return useQuery({
     queryKey: documentId
       ? DOCUMENT_QUERY_KEY(documentId)
       : ["document", "null"],
-    enabled: !!documentId,
+    enabled: options?.enabled ?? !!documentId,
+    refetchInterval: options?.refetchInterval ?? false,
     queryFn: async () => {
       if (!documentId) throw new Error("Document ID is required");
       return unwrap(
@@ -98,6 +102,22 @@ export function usePart(partId: string | null) {
       return unwrap(
         apiClient.GET("/api/v1/parts/{part_id}", {
           params: { path: { part_id: partId } },
+        })
+      );
+    },
+  });
+}
+
+export function useGenerateDocument() {
+  return useMutation({
+    mutationFn: async (params: {
+      documentId: string;
+      body: GenerateRequest;
+    }) => {
+      return unwrap(
+        apiClient.POST("/api/v1/documents/{document_id}/generate", {
+          params: { path: { document_id: params.documentId } },
+          body: params.body,
         })
       );
     },

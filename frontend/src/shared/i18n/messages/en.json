@@ -85,7 +85,9 @@
     "parsingFailed": "Failed to parse document",
     "replaceFileButton": "Choose another file",
     "noFileSelected": "Select a file to upload",
-    "noUrlEntered": "Enter a Google Docs link"
+    "noUrlEntered": "Enter a Google Docs link",
+    "uploadProgress": "Uploading file",
+    "documentLoadFailed": "Failed to load document. It may have been deleted or you don't have access."
   },
   "topics": {
     "title": "Select topics for your study guide",
@@ -100,7 +102,12 @@
     "selectedLabel": "Selected",
     "quotaLabel": "Remaining generations",
     "quotaUnknown": "Unknown",
-    "quotaError": "Failed to load quota"
+    "quotaError": "Failed to load quota",
+    "singleTopicNote": "Document will be a single topic",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "partsPreviewTitle": "Study guide part structure",
+    "partTokens": "{tokens} tokens"
   },
   "questions": {
     "title": "Generation Options",
@@ -116,6 +123,7 @@
     "goalRefresh": "Refresh memory",
     "goalExam": "Exam preparation",
     "goalPractice": "Practical application",
+    "goalUnderstand": "Understand the topic",
     "notifyEmailLabel": "Send an email notification when ready",
     "confirmSpend": "Will spend: {cost}. Remaining after start: {remaining}.",
     "startButton": "Start generation",
@@ -132,20 +140,25 @@
     "keyTermsTitle": "Key terms",
     "partStatus": {
       "queued": "Queued",
-      "generating": "Generating...",
-      "ready": "Ready",
+      "mainPass": "Main pass...",
+      "resolving": "Resolving...",
+      "assembling": "Assembling...",
+      "published": "Published",
       "failed": "Generation failed"
     },
     "partFailedHint": "Failed to generate this part. Retrying does not consume generations.",
-    "retryPartButton": "Retry part",
     "connectionLost": "Connection lost. Reconnecting...",
+    "reconnecting": "Reconnecting...",
     "openMaterialButton": "Open material",
     "waitingForStages": "Waiting for generation stages...",
     "waitingForParts": "Waiting for parts...",
     "noKeyTermsYet": "Key terms will appear as generation progresses.",
     "retryButton": "Retry",
     "backToMaterials": "Back to materials",
-    "generationError": "Generation error"
+    "generationError": "Generation error",
+    "canClosePage": "You can close this page — we'll notify you when ready",
+    "documentLoadFailed": "Failed to load document. It may have been deleted or you don't have access.",
+    "fatalErrorMessage": "A fatal error occurred: {code}"
   },
   "viewer": {
     "materialTitle": "Material",

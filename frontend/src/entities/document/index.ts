@@ -21,6 +21,7 @@ export {
   useDocumentTopics,
   useDocumentParts,
   usePart,
+  useGenerateDocument,
 } from "./model/useDocument";
 
 export {

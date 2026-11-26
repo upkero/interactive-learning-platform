@@ -24,6 +24,7 @@ export function LoginForm({ mode = "login" }: { mode?: "login" | "register" }) {
   const registerMutation = useRegister();
 
   const mutation = mode === "login" ? loginMutation : registerMutation;
+  const apiErrorMessage = useApiErrorMessage(mutation.error);
 
   const handleSubmit = (e: SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -46,7 +47,7 @@ export function LoginForm({ mode = "login" }: { mode?: "login" | "register" }) {
   };
 
   if (mutation.isError) {
-    setFormError(useApiErrorMessage(mutation.error));
+    setFormError(apiErrorMessage);
   }
 
   return (

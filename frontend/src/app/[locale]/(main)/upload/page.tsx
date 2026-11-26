@@ -1,5 +1,7 @@
+import { Suspense } from "react";
 import { getTranslations } from "next-intl/server";
-import { PageShell } from "@/shared/ui";
+import { PageShell, ActionLink } from "@/shared/ui";
+import { UploadFeature } from "@/features/upload";
 
 export default async function UploadPage({
   params,
@@ -8,13 +10,26 @@ export default async function UploadPage({
 }) {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "upload" });
+  const tCommon = await getTranslations({ locale, namespace: "common" });
 
   return (
-    <PageShell title={t("title")}>
-      <div className="stub">
-        <h1>{t("title")}</h1>
-        <p>Страница загрузки материала (Э2) — заглушка.</p>
-      </div>
+    <PageShell
+      title={t("title")}
+      actions={
+        <ActionLink href={`/${locale}/materials`} variant="secondary">
+          {tCommon("back")}
+        </ActionLink>
+      }
+    >
+      <Suspense
+        fallback={
+          <div className="loading" aria-live="polite">
+            {tCommon("loading")}
+          </div>
+        }
+      >
+        <UploadFeature />
+      </Suspense>
     </PageShell>
   );
 }
