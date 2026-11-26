@@ -226,3 +226,33 @@ def test_tab_indented_code_is_preserved() -> None:
     text = 'Paragraph.\n\n\t::widget{ref="w1"}'
     assert extract_markers(text) == ([], [])
     assert text in sanitize_draft(draft(text, []), max_widgets=6).markdown
+
+
+def test_nested_list_directive_is_reported_and_removed() -> None:
+    text = 'Paragraph.\n\n- - ::quiz{ref="q1"}'
+    assert extract_markers(text)[0] == []
+    assert len(extract_markers(text)[1]) == 1
+    cleaned = sanitize_draft(draft(text, []), max_widgets=6)
+    assert '::quiz{ref="q1"}' not in cleaned.markdown
+    assert extract_markers(cleaned.markdown) == ([], [])
+
+
+def test_code_immediately_after_leaf_directive_is_preserved() -> None:
+    text = 'Paragraph.\n\n::quiz{ref="q1"}\n    ::widget{ref="w1"}'
+    markers, issues = extract_markers(text)
+    assert [marker.ref for marker in markers] == ["q1"]
+    assert issues == []
+    cleaned = sanitize_draft(draft(text, []), max_widgets=6)
+    assert '::quiz{ref="q1"}' not in cleaned.markdown
+    assert '    ::widget{ref="w1"}' in cleaned.markdown
+    assert extract_markers(cleaned.markdown) == ([], [])
+
+
+def test_attribute_free_leaf_still_delimits_following_code() -> None:
+    text = 'Paragraph.\n\n::quiz\n    ::widget{ref="w1"}'
+    markers, issues = extract_markers(text)
+    assert markers == []
+    assert len(issues) == 1
+    cleaned = sanitize_draft(draft(text, []), max_widgets=6)
+    assert '    ::widget{ref="w1"}' in cleaned.markdown
+    assert extract_markers(cleaned.markdown) == ([], [])

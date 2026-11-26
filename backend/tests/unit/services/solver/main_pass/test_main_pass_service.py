@@ -308,3 +308,22 @@ async def test_tab_indented_code_does_not_trigger_retry() -> None:
     assert len(llm.requests) == 1
     assert result.draft.markdown == text
     assert result.draft.directives == ()
+
+
+@pytest.mark.parametrize(
+    ("fragment", "expected_code"),
+    [
+        ('- - ::quiz{ref="q1"}', None),
+        ('::quiz{ref="q1"}\n    ::widget{ref="w1"}', '    ::widget{ref="w1"}'),
+    ],
+)
+async def test_nested_directive_repair_preserves_adjacent_code(fragment: str, expected_code: str | None) -> None:
+    text = "body " * 50 + "\n\n" + fragment
+    draft = PageDraft(markdown=text, directives=[], key_terms=["body"] * 5)
+    llm = FakeLLMClient(structured=[draft, draft])
+    result = await _service(llm=llm, primitives=await _primitive_repo()).run(build_input())
+    assert len(llm.requests) == 2
+    assert result.draft.directives == ()
+    assert '::quiz{ref="q1"}' not in result.draft.markdown
+    if expected_code is not None:
+        assert expected_code in result.draft.markdown

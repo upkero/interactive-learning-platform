@@ -7,13 +7,14 @@ from itertools import pairwise
 from typing import cast
 
 from markdown_it import MarkdownIt
+from markdown_it.rules_block import StateBlock
 from pydantic import ValidationError
 
 from src.app.contracts.solver.main_pass import DirectiveKind
 from src.app.services.solver.main_pass.directives import Directive, PageDraft
 
 _DIRECTIVE = re.compile(r'^::(widget|image|quiz)\{(ref|id)="([^"]+)"\}\s*$')
-_CANDIDATE = re.compile(r"^\s*(?:>\s*)*(?:(?:[-+*]|\d+[.)])\s+)?:{2,3}(widget|image|quiz)\b")
+_CANDIDATE = re.compile(r"^\s*(?:>\s*)*(?:(?:[-+*]|\d+[.)])\s+)*:{2,3}(widget|image|quiz)\b")
 _INLINE = re.compile(r"(?<![\\:]):(?:widget|image|quiz)(?:\[[^\]\r\n]*\](?:\{[^}\r\n]*\})?|\{[^}\r\n]*\})")
 _CODE_SPAN = re.compile(r"(`+)(?!`)(.*?)(?<!`)\1(?!`)")
 
@@ -23,13 +24,38 @@ def _inline_directives(line: str) -> list[re.Match[str]]:
     return list(_INLINE.finditer(masked))
 
 
-def _code_lines(markdown: str) -> set[int]:
-    """Use CommonMark block context to distinguish code from list content."""
-    lines: set[int] = set()
-    for token in MarkdownIt("commonmark").parse(markdown):
-        if token.type in {"fence", "code_block"} and token.map is not None:
-            lines.update(range(token.map[0] + 1, token.map[1] + 1))
-    return lines
+_LEAF_BLOCK = re.compile(r"^::(?:widget|image|quiz)(?:\[[^]\r\n]*\])?(?:\{[^}\r\n]*\})?\s*$")
+
+
+def _leaf_directive(state: StateBlock, start_line: int, end_line: int, silent: bool) -> bool:
+    """Recognize leaf blocks before CommonMark decides where code starts."""
+    if state.is_code_block(start_line):
+        return False
+    start = state.bMarks[start_line] + state.tShift[start_line]
+    if not _LEAF_BLOCK.fullmatch(state.src[start : state.eMarks[start_line]]):
+        return False
+    if silent:
+        return True
+    state.line = start_line + 1
+    token = state.push("solver_directive", "", 0)
+    token.map = [start_line, state.line]
+    return True
+
+
+def _block_lines(markdown: str) -> tuple[set[int], set[int]]:
+    """Find code and directive blocks with list and blockquote context."""
+    parser = MarkdownIt("commonmark")
+    parser.block.ruler.before("paragraph", "solver_directive", _leaf_directive, {"alt": ["paragraph"]})
+    code: set[int] = set()
+    directives: set[int] = set()
+    for token in parser.parse(markdown):
+        if token.map is None:
+            continue
+        if token.type in {"fence", "code_block"}:
+            code.update(range(token.map[0] + 1, token.map[1] + 1))
+        elif token.type == "solver_directive":
+            directives.add(token.map[0] + 1)
+    return code, directives
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,7 +71,7 @@ def extract_markers(markdown: str) -> tuple[list[Marker], list[str]]:
     markers: list[Marker] = []
     issues: list[str] = []
     offset = 0
-    code_lines = _code_lines(markdown)
+    code_lines, block_directives = _block_lines(markdown)
     for number, raw in enumerate(markdown.splitlines(keepends=True), 1):
         line = raw.rstrip("\r\n")
         start = offset
@@ -54,7 +80,7 @@ def extract_markers(markdown: str) -> tuple[list[Marker], list[str]]:
             continue
         if _inline_directives(line):
             issues.append(f"line {number}: inline directives are not supported")
-        if not _CANDIDATE.match(line):
+        if number not in block_directives and not _CANDIDATE.match(line):
             continue
         match = _DIRECTIVE.fullmatch(line)
         if not match or (match[1] == "image") != (match[2] == "id"):
@@ -169,12 +195,12 @@ def sanitize_draft(
         kept.append(entry)
     # Remove malformed directive lines too, so the frontend cannot render unknown slots.
     offset = 0
-    code_lines = _code_lines(draft.markdown)
+    code_lines, block_directives = _block_lines(draft.markdown)
     marker_lines = {m.line for m in markers}
     for number, raw in enumerate(draft.markdown.splitlines(keepends=True), 1):
         line = raw.rstrip("\r\n")
         if number not in code_lines and number not in marker_lines:
-            if _CANDIDATE.match(line):
+            if number in block_directives or _CANDIDATE.match(line):
                 removed.append((offset, offset + len(raw)))
             else:
                 removed.extend((offset + item.start(), offset + item.end()) for item in _inline_directives(line))

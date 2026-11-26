@@ -41,3 +41,12 @@ A directive inside an ordered list remains a directive, not indented code:
 A tab after a blank line starts an indented code block:
 
 	::widget{ref="w1"}
+
+Nested list directives are unsupported slots:
+
+- - ::quiz{ref="q1"}
+
+Indented code immediately following a leaf directive remains code:
+
+::quiz{ref="q1"}
+    ::widget{ref="w1"}
