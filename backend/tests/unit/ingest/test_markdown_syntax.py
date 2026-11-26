@@ -52,3 +52,11 @@ def test_protected_blocks_match_full_parser_for_repeated_fences() -> None:
         "Other explanation.\n\n~~~~\nline\n```\n~~~~\n\n"
     )
     assert protected_markdown_blocks(text) == parse_markdown(text).protected_blocks
+
+
+@pytest.mark.parametrize("separator", ["\n", "  \n" * 5, "\t\n \n", "\n  \n\n"])
+def test_protected_block_excludes_whitespace_between_fences(separator: str) -> None:
+    from src.app.ingest.markdown_syntax import protected_markdown_blocks
+
+    text = "```python\nprint(1)\n```\n" + separator + "```\nsecond\n```\n"
+    assert protected_markdown_blocks(text) == parse_markdown(text).protected_blocks

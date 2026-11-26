@@ -15,7 +15,7 @@ _TABLE_ESCAPE = re.compile(r"\\(?=\|)")
 _SIMPLE_FENCED_ITEM = re.compile(
     r"(?:[A-Za-z0-9][^\n]*\n\n)?"
     r"(?P<fence>`{3,}|~{3,})[^\n`~]*\n"
-    r"(?:(?!(?P=fence))[^\n]*\n)*(?P=fence)[ \t]*(?:\n|\Z)"
+    r"(?:(?!(?P=fence))[^\n]*\n)*(?P<closing>(?P=fence)[ \t]*(?:\n|\Z))"
     r"(?:[ \t]*\n)*"
 )
 
@@ -181,10 +181,7 @@ def protected_markdown_blocks(markdown: str) -> tuple[Block, ...]:
     simple_blocks: list[Block] = []
     while match := _SIMPLE_FENCED_ITEM.match(markdown, offset):
         fence_start = match.start("fence")
-        fence_end = match.end()
-        while fence_end > fence_start and markdown[fence_end - 1] == "\n" and markdown[fence_end - 2] == "\n":
-            fence_end -= 1
-        simple_blocks.append(Block(fence_start, fence_end, "fence"))
+        simple_blocks.append(Block(fence_start, match.end("closing"), "fence"))
         offset = match.end()
     if offset == len(markdown) and simple_blocks:
         return tuple(simple_blocks)

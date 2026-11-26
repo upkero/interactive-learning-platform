@@ -67,6 +67,19 @@ def test_many_short_code_blocks_split_in_under_one_second() -> None:
     assert all(part.tokens <= DEFAULT_LIMITS.maximum for part in plans)
 
 
+def test_fence_near_maximum_excludes_whitespace_between_blocks() -> None:
+    first = "```python\n" + "word " * 15_547 + "\n```\n"
+    markdown = first + "  \n" * 5 + "```\nsmall\n```\n"
+    assert COUNTER.count(first) == 21_997
+    assert COUNTER.count(first + "  \n" * 5) > DEFAULT_LIMITS.maximum
+    tree = build_topic_tree(markdown, COUNTER)
+    plans = split_document(tree, {"0"}, markdown, COUNTER, DEFAULT_LIMITS)
+    assert len(plans) >= 2
+    assert sum(first in part.markdown for part in plans) == 1
+    assert "".join(part.markdown for part in plans) == markdown
+    assert all(part.tokens <= DEFAULT_LIMITS.maximum for part in plans)
+
+
 def test_selected_child_keeps_the_chapter_id_and_parent_selection_deduplicates() -> None:
     markdown = "# Root\n\nText.\n\n## Child\n\nMore text."
     tree = build_topic_tree(markdown, COUNTER)
