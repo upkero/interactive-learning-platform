@@ -4,7 +4,8 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.app.services.quota.quota_ledger import QuotaLedger, QuotaState
+from src.app.contracts.quota import QuotaState
+from src.app.services.quota.quota_ledger import QuotaLedger
 
 
 class QuotaService:

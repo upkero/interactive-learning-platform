@@ -1,17 +1,19 @@
 {
-  "markdown": "## Activation functions\n\nThe activation function decides how strong a neuron's output is. A\nrectified linear unit (ReLU) passes positive values unchanged and turns\nnegative values into zero.\n\n::widget{ref=\"w1\" primitive_hint=\"three-frame\" mode_hint=\"predict\"}\n\nThe sigmoid squeezes the output into a bounded range between zero and\none. A network with only linear layers is still one linear transformation.\n\n::quiz{ref=\"q1\"}\n",
+  "markdown": "## Activation functions\n\nThe activation function decides how strong a neuron's output is. A\nrectified linear unit (ReLU) passes positive values unchanged and turns\nnegative values into zero.\n\n::widget{ref=\"w1\"}\n\nThe sigmoid squeezes the output into a bounded range between zero and\none. A network with only linear layers is still one linear transformation.\n\n::quiz{ref=\"q1\"}\n",
   "directives": [
     {
       "ref": "w1",
       "kind": "widget",
       "intent": "Ask the reader to predict the output of a ReLU for a negative input.",
       "primitive_hint": "three-frame",
-      "mode_hint": "predict"
+      "mode_hint": "predict",
+      "source_span": "The activation function decides how strong a neuron's output is."
     },
     {
       "ref": "q1",
       "kind": "quiz",
-      "intent": "Check that the reader knows why a non-linear activation is needed."
+      "intent": "Check that the reader knows why a non-linear activation is needed.",
+      "source_span": "The activation function decides how strong a neuron's output is."
     }
   ],
   "key_terms": [

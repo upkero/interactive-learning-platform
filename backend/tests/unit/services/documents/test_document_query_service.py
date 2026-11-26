@@ -13,6 +13,8 @@ from src.app.contracts.documents import (
     DocumentStatus,
     MaterialRole,
     PartDraft,
+    PartRecord,
+    PartStatus,
     SourceType,
 )
 from src.app.exceptions.documents import DocumentNotFoundError, DocumentNotReadyError
@@ -23,6 +25,7 @@ from tests.support.fakes.repositories.documents import (
     FakeDocumentRepository,
     FakeUserMaterialRepository,
 )
+from tests.support.fakes.repositories.users import FakeUserRepository
 from tests.support.fakes.storage.object_storage_client import FakeObjectStorageClient
 
 pytestmark = pytest.mark.unit
@@ -48,6 +51,7 @@ def _service() -> tuple[
         materials=lambda _: materials,
         parts=lambda _: parts,
         storage=FakeObjectStorageClient(),
+        users=lambda _: FakeUserRepository(),
     )
     return service, documents, materials, parts
 
@@ -90,6 +94,7 @@ async def test_tree_copies_parser_levels_and_total_tokens() -> None:
                 topic_ids=["topic-adaptive", "topic-chunking"],
                 source_markdown="part one",
                 token_count=142,
+                quota_period_start=None,
                 profile={},
             ),
             PartDraft(
@@ -98,6 +103,7 @@ async def test_tree_copies_parser_levels_and_total_tokens() -> None:
                 topic_ids=["topic-chunking", "topic-tree"],
                 source_markdown="part two",
                 token_count=178,
+                quota_period_start=None,
                 profile={},
             ),
             PartDraft(
@@ -106,6 +112,7 @@ async def test_tree_copies_parser_levels_and_total_tokens() -> None:
                 topic_ids=["topic-quota"],
                 source_markdown="part three",
                 token_count=96,
+                quota_period_start=None,
                 profile={},
             ),
         ],
@@ -181,6 +188,7 @@ async def test_parts_do_not_change_the_tree_token_sums() -> None:
                 topic_ids=["topic-quota"],
                 source_markdown="extra",
                 token_count=1000,
+                quota_period_start=None,
                 profile={},
             )
         ],
@@ -188,3 +196,58 @@ async def test_parts_do_not_change_the_tree_token_sums() -> None:
 
     tree = await service.get_topic_tree(user_id=owner, document_id=document_id)
     assert tree[1].total_tokens == 96
+
+
+class _NoListingParts(FakeDocumentPartRepository):
+    """Fails when the SSE handshake falls back to loading every part."""
+
+    async def list_by_document(self, document_id: UUID) -> list[PartRecord]:
+        raise AssertionError("get_readable must use the narrow existence query")
+
+
+async def test_readable_outcome_uses_narrow_query_and_current_run_only() -> None:
+    documents = FakeDocumentRepository()
+    materials = FakeUserMaterialRepository()
+    parts = _NoListingParts()
+    service = DocumentQueryService(
+        session_factory=cast(async_sessionmaker[AsyncSession], lambda: FakeSession()),
+        documents=lambda _: documents,
+        materials=lambda _: materials,
+        parts=lambda _: parts,
+        storage=FakeObjectStorageClient(),
+        users=lambda _: FakeUserRepository(),
+    )
+    owner, document_id = await _document_with_access(documents, materials, status=DocumentStatus.GENERATING)
+    await documents.set_generation_start(document_id, 1)
+    previous, current = await parts.add_many(
+        document_id,
+        [
+            PartDraft(
+                index=0,
+                title="previous run",
+                topic_ids=[],
+                source_markdown="old",
+                token_count=1,
+                quota_period_start=None,
+                profile={},
+            ),
+            PartDraft(
+                index=1,
+                title="current run",
+                topic_ids=[],
+                source_markdown="new",
+                token_count=1,
+                quota_period_start=None,
+                profile={},
+            ),
+        ],
+    )
+    await parts.transition(previous.id, frozenset({PartStatus.QUEUED}), PartStatus.PUBLISHED)
+
+    # A published part from the previous run must not mark the current run ready.
+    readable = await service.get_readable(user_id=owner, document_id=document_id)
+    assert readable.run_outcome == "failed"
+
+    await parts.transition(current.id, frozenset({PartStatus.QUEUED}), PartStatus.PUBLISHED)
+    readable = await service.get_readable(user_id=owner, document_id=document_id)
+    assert readable.run_outcome == "ready"

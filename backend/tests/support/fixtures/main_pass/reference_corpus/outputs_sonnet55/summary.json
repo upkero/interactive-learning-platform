@@ -1,0 +1,13 @@
+{
+  "cases": 5,
+  "completed": 5,
+  "failures": {},
+  "first_schema_valid_answers": 5,
+  "first_answer_violations": 1,
+  "first_answer_violation_fraction": 0.2,
+  "schema_retry_cases_before_first": 0,
+  "schema_retry_case_fraction": 0.0,
+  "first_drafts_recorded": 5,
+  "first_answer_alternation_violations": 0,
+  "first_answer_alternation_fraction": 0.0
+}

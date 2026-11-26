@@ -43,16 +43,17 @@
       "topics": ["From neurons to layers"],
       "markdown": "part.md",
       "draft": "page_draft.json",
+      "glossary": ["neuron", "weight", "bias", "activation function", "layer"],
       "images": [
         {
           "id": "6a0f0e3c-1f0b-4d3a-9d3e-0a0b0c0d0e11",
-          "alias": "img-1",
+          "alias": "img_1",
           "caption": "A single neuron with three inputs",
           "description": "Diagram: three arrows into a circle, one arrow out."
         },
         {
           "id": "6a0f0e3c-1f0b-4d3a-9d3e-0a0b0c0d0e12",
-          "alias": "img-2",
+          "alias": "img_2",
           "caption": "Layers of neurons",
           "description": "Diagram: two columns of circles connected by arrows."
         }
@@ -64,10 +65,11 @@
       "topics": ["Activation functions"],
       "markdown": "part_activation.md",
       "draft": "page_draft_activation.json",
+      "glossary": ["activation function", "ReLU", "sigmoid"],
       "images": [
         {
           "id": "6a0f0e3c-1f0b-4d3a-9d3e-0a0b0c0d0e13",
-          "alias": "img-1",
+          "alias": "img_1",
           "caption": "ReLU and sigmoid curves",
           "description": "Plot: a hinge line and an S-shaped curve."
         }

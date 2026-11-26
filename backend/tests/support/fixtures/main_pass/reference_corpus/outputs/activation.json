@@ -1,0 +1,50 @@
+{
+  "model": "anthropic/claude-sonnet-4.6",
+  "prompt_version": "sha256:be7a871fbdd987e45065f8d07df4cf2498fb3973c2e48064071fb0804be8bf29",
+  "generated_at": "2026-11-26T10:39:18.027528+00:00",
+  "first_answer": "violations",
+  "draft": {
+    "markdown": "## Activation functions\n\nAfter each layer of a neural network, every neuron passes its result through an **activation function** — a simple rule that decides how strong the neuron's output signal should be.\n\nWithout activation functions, stacking many layers would still be mathematically equivalent to a single **linear transformation** (a straight-line rule). It is the **non-linear** activation between layers that lets a deep network learn curved, complex **decision boundaries** — the shapes that separate different categories in the data.\n\n### Two common activation functions\n\n**ReLU (rectified linear unit)** is the simplest: it passes positive values through unchanged and turns any negative value into zero. Think of it as a gate that opens for positive signals and closes completely for negative ones.\n\n**Sigmoid** squeezes any value into a **bounded range** between zero and one, producing an S-shaped output. This is useful when you want the output to look like a probability.\n\n::image{id=\"img_1\"}\n\n::widget{ref=\"w1\"}\n\n### Why non-linearity matters\n\nImagine trying to draw a curved boundary between two groups of points using only a ruler. A purely **linear** layer cannot do this. Stack as many linear layers as you like — the result is still one straight-line rule. Adding a **non-linear** activation function after each layer gives the network the power to bend and curve, which is essential for solving real-world problems.\n\n::quiz{ref=\"q1\"}",
+    "directives": [
+      {
+        "ref": "img_1",
+        "kind": "image",
+        "intent": "Show the ReLU hinge line and the sigmoid S-curve side by side so the learner can compare how each activation function shapes its output.",
+        "source_span": "A rectified linear unit (ReLU) passes positive values unchanged and turns negative values into zero. The sigmoid squeezes the output into a bounded range between zero and one.",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": "img_1"
+      },
+      {
+        "ref": "w1",
+        "kind": "widget",
+        "intent": "Let the learner feed different input values and watch how ReLU and sigmoid transform them, building intuition for the two activation functions.",
+        "source_span": "A rectified linear unit (ReLU) passes positive values unchanged and turns negative values into zero. The sigmoid squeezes the output into a bounded range between zero and one.",
+        "primitive_hint": "three-frame",
+        "mode_hint": "watch",
+        "params_hint": "Show input value on a number line; pass it through ReLU (hinge at zero) and sigmoid (S-curve); display the output for each.",
+        "image_id": null
+      },
+      {
+        "ref": "q1",
+        "kind": "quiz",
+        "intent": "Check that the learner understands why non-linear activation functions are necessary and can distinguish ReLU from sigmoid behaviour.",
+        "source_span": "A network with only linear layers is still one linear transformation, whatever its depth. The non-linear activation between layers is what lets a deep network represent curved decision boundaries.",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": null
+      }
+    ],
+    "key_terms": [
+      "activation function",
+      "rectified linear unit",
+      "ReLU",
+      "bounded range",
+      "non-linear",
+      "linear transformation",
+      "decision boundaries"
+    ]
+  }
+}

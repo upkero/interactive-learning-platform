@@ -1,9 +1,9 @@
 """Repository of images."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -77,3 +77,18 @@ class ImageRepository(ImageRepositoryProtocol):
         except IntegrityError as exc:
             raise DocumentsIntegrityError from exc
         return [self._to_record(row) for row in created]
+
+    async def delete_by_document(self, document_id: UUID) -> list[ImageRecord]:
+        rows = list((await self._session.scalars(select(Image).where(Image.document_id == document_id))).all())
+        records = [self._to_record(row) for row in rows]
+        await self._session.execute(delete(Image).where(Image.document_id == document_id))
+        await self._session.flush()
+        return records
+
+    async def update_descriptions(self, document_id: UUID, descriptions: Mapping[str, str | None]) -> None:
+        rows = (await self._session.scalars(select(Image).where(Image.document_id == document_id))).all()
+        for row in rows:
+            ref = row.object_key.rsplit("/", 1)[-1].removesuffix(".png")
+            if ref in descriptions:
+                row.description = descriptions[ref]
+        await self._session.flush()

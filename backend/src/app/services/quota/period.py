@@ -1,19 +1,12 @@
 """Billing period of one user (story 1.6)."""
 
 import calendar
-from dataclasses import dataclass
 from datetime import date
 
-
-@dataclass(frozen=True, slots=True)
-class QuotaPeriod:
-    """Current billing period; ``end`` is exclusive (story 1.6)."""
-
-    start: date
-    end: date
+from src.app.contracts.quota import QuotaPeriod
 
 
-def period_start_for(today: date, anchor_day: int) -> date:
+def _period_start_for(today: date, anchor_day: int) -> date:
     """The first day of the period that ``today`` falls into.
 
     ``anchor_day`` is the user's billing day; it is clamped to the last
@@ -35,10 +28,10 @@ def period_start_for(today: date, anchor_day: int) -> date:
 def current_period(today: date, anchor: date | None) -> QuotaPeriod:
     """``(start, end)`` of the current period; ``end`` is the next period's start."""
     anchor_day = anchor.day if anchor is not None else 1
-    start = period_start_for(today, anchor_day)
+    start = _period_start_for(today, anchor_day)
     next_year, next_month = (start.year + 1, 1) if start.month == 12 else (start.year, start.month + 1)
     end = date(next_year, next_month, min(anchor_day, calendar.monthrange(next_year, next_month)[1]))
     return QuotaPeriod(start=start, end=end)
 
 
-__all__ = ["QuotaPeriod", "current_period", "period_start_for"]
+__all__ = ["current_period"]

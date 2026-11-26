@@ -4,7 +4,7 @@
 - Activation functions
 </part_topics>
 <images>
-<image alias="img-1" caption="ReLU and sigmoid curves" description="Plot: a hinge line and an S-shaped curve." />
+<image alias="img_1" caption="ReLU and sigmoid curves" description="Plot: a hinge line and an S-shaped curve." />
 </images>
 <part>
 ## Activation functions

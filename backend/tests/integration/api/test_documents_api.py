@@ -21,10 +21,19 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.api.v1.middleware.rate_limit import limiter
 from src.app.bootstrap.container import ApplicationContainer
-from src.app.contracts.documents import DocumentErrorCode, DocumentStatus, MaterialRole, PartDraft, SourceType
+from src.app.contracts.documents import (
+    DocumentErrorCode,
+    DocumentStatus,
+    MaterialRole,
+    PartDraft,
+    PartStatus,
+    SourceType,
+)
 from src.app.contracts.quota import LedgerOp
 from src.app.contracts.widgets import UsageStatus, WidgetKind, WidgetUsageDraft
+from src.app.core.settings.ingest import IngestSettings
 from src.app.exceptions.tasks import TaskDispatchError
+from src.app.ingest.tokens import get_token_counter
 from src.app.models.document import Document
 from src.app.models.document_part import DocumentPart
 from src.app.models.generation_ledger import GenerationLedger
@@ -47,6 +56,7 @@ _PDF_PATH = Path(__file__).resolve().parents[2] / "support" / "fixtures" / "file
 _PDF_BYTES = _PDF_PATH.read_bytes()
 _DOCX_BYTES = (_PDF_PATH.parent / "sample.docx").read_bytes()
 _MD_BYTES = b"# Notes\n\nSome markdown content for the title test.\n"
+_PARSED_TOPIC_TEXTS = ("a" * 1200, "b" * 600)
 
 
 @pytest.fixture
@@ -300,7 +310,7 @@ async def test_quiz_attempts_are_stored(client: TestClient, session_factory: asy
             update(DocumentPart)
             .where(DocumentPart.id == part_id)
             .values(
-                status="published",
+                status=PartStatus.PUBLISHED.value,
                 content={
                     "quizzes": [{"key": "q", "type": "single_choice"}],
                     "answer_keys": {"q": {"correct_id": "a", "explanation": "yes"}},
@@ -331,7 +341,7 @@ async def test_published_part_accepts_section_without_topic(
             update(DocumentPart)
             .where(DocumentPart.id == part.id)
             .values(
-                status="published",
+                status=PartStatus.PUBLISHED.value,
                 content={
                     "title": "Page",
                     "markdown": "# Unmatched",
@@ -363,7 +373,7 @@ async def test_corrupt_answer_key_is_internal_error_with_context(
             update(DocumentPart)
             .where(DocumentPart.id == part.id)
             .values(
-                status="published",
+                status=PartStatus.PUBLISHED.value,
                 content={"quizzes": [{"key": "q", "type": "single_choice"}], "answer_keys": {"q": {"correct_id": 5}}},
             )
         )
@@ -524,6 +534,7 @@ async def test_topics_tree_of_a_parsed_document(
                     topic_ids=["topic-adaptive", "topic-chunking"],
                     source_markdown="part one",
                     token_count=142,
+                    quota_period_start=None,
                     profile={},
                 ),
                 PartDraft(
@@ -532,6 +543,7 @@ async def test_topics_tree_of_a_parsed_document(
                     topic_ids=["topic-chunking"],
                     source_markdown="part two",
                     token_count=178,
+                    quota_period_start=None,
                     profile={},
                 ),
             ],
@@ -642,6 +654,8 @@ async def test_topics_of_a_foreign_document_is_404(client: TestClient) -> None:
 async def test_plan_preview_is_stable_and_leaves_the_quota_journal_untouched(
     client: TestClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
+    container = cast(ApplicationContainer, cast(FastAPI, client.app).state.container)
+    container.__dict__["ingest_settings"] = IngestSettings(SPLIT_TARGET_TOKENS=250, SPLIT_MAX_TOKENS=500)
     _register(client)
     created = _upload(client, filename="lecture.pdf")
     document_id = UUID(created.json()["id"])
@@ -662,7 +676,8 @@ async def test_plan_preview_is_stable_and_leaves_the_quota_journal_untouched(
 
     body = first.json()
     assert body["cost"] == len(body["parts"]) == 2
-    assert body["parts"][0]["tokens"] == 320
+    counter = get_token_counter()
+    assert [part["tokens"] for part in body["parts"]] == [counter.count(text) for text in _PARSED_TOPIC_TEXTS]
     assert body["available"] == 20  # default monthly limit
 
     # the journal is untouched: nothing was reserved by the preview
@@ -720,7 +735,7 @@ async def test_generate_reserves_creates_parts_and_dispatches(
     assert part is not None and part.index == 3 and part.source_markdown == "a" * 1200
     assert part.profile == {"level": "novice", "goal": "exam", "depth": "standard"}
     assert document is not None and document.status is DocumentStatus.GENERATING
-    assert [(entry.op, entry.delta) for entry in entries] == [("reserve", -1)]
+    assert [(entry.op, entry.delta) for entry in entries] == [(LedgerOp.RESERVE.value, -1)]
 
 
 async def test_upload_parse_topics_plan_generate_without_existing_parts(
@@ -782,7 +797,7 @@ async def test_generate_queue_failure_keeps_queued_part_and_reservation(
         parts = await DocumentPartRepository(session).list_by_document(document_id)
         entries = (await session.scalars(select(GenerationLedger))).all()
     assert len(parts) == 4 and parts[-1].status.value == "queued"
-    assert [(entry.op, entry.delta) for entry in entries] == [("reserve", -1)]
+    assert [(entry.op, entry.delta) for entry in entries] == [(LedgerOp.RESERVE.value, -1)]
 
 
 async def test_plan_rejects_empty_and_unknown_selections(
@@ -924,6 +939,7 @@ async def _make_parsed(
                         topic_ids=["topic-adaptive", "topic-chunking"],
                         source_markdown="part one",
                         token_count=142,
+                        quota_period_start=None,
                         profile={},
                     ),
                     PartDraft(
@@ -932,6 +948,7 @@ async def _make_parsed(
                         topic_ids=["topic-chunking", "topic-tree"],
                         source_markdown="part two",
                         token_count=178,
+                        quota_period_start=None,
                         profile={},
                     ),
                     PartDraft(
@@ -940,6 +957,7 @@ async def _make_parsed(
                         topic_ids=["topic-quota"],
                         source_markdown="part three",
                         token_count=96,
+                        quota_period_start=None,
                         profile={},
                     ),
                 ],
@@ -949,7 +967,7 @@ async def _make_parsed(
     await container.object_storage.put_object(
         bucket="documents",
         key=parsed_markdown_key(document.owner_id, document_id),
-        data=("a" * 1200 + "b" * 600).encode(),
+        data="".join(_PARSED_TOPIC_TEXTS).encode(),
         content_type="text/markdown",
     )
 

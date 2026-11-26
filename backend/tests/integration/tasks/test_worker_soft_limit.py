@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID
 
@@ -16,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.documents.statuses import DocumentStatus, PartStatus
+from src.app.contracts.quota import LedgerOp
 from src.app.models.generation_ledger import GenerationLedger
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
@@ -29,6 +31,7 @@ async def test_soft_limit_retries_then_refunds(
     broker_url: str,
     session_factory: async_sessionmaker[AsyncSession],
     part_ids: tuple[UUID, UUID, UUID],
+    tmp_path: Path,
 ) -> None:
     monkeypatch.setenv("CELERY_BROKER_URL", broker_url)
     user_id, document_id, part_id = part_ids
@@ -45,6 +48,7 @@ async def test_soft_limit_retries_then_refunds(
         "CELERY_BROKER_URL": broker_url,
         "REDIS_PROGRESS_URL": progress_url,
         "SOLVER_PIPELINE": "stub",
+        "PROMETHEUS_MULTIPROC_DIR": str(tmp_path),
     }
     process = await asyncio.create_subprocess_exec(
         sys.executable,
@@ -79,7 +83,9 @@ async def test_soft_limit_retries_then_refunds(
         assert part is not None and part.status is PartStatus.FAILED and part.attempts == 2
         assert part.error == "soft_time_limit"
         async with session_factory() as session:
-            entries = (await session.scalars(select(GenerationLedger).where(GenerationLedger.op == "refund"))).all()
+            entries = (
+                await session.scalars(select(GenerationLedger).where(GenerationLedger.op == LedgerOp.REFUND.value))
+            ).all()
             assert len(entries) == 1 and entries[0].part_id == part_id
         progress = redis.Redis.from_url(progress_url)
         try:
@@ -98,7 +104,8 @@ async def test_soft_limit_retries_then_refunds(
             await progress.delete(f"progress:{document_id}")
             await progress.aclose()
     finally:
-        process.terminate()
+        if process.returncode is None:
+            process.terminate()
         await asyncio.wait_for(process.wait(), timeout=15)
         app.close()
         await container.close()

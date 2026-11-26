@@ -1,278 +1,206 @@
-"""Directive slots: syntax, checks and sanitising (story 2.2)."""
-
-import random
+"""Syntax and recovery of directive slots in a main-pass draft."""
 
 import pytest
 
-from src.app.contracts.solver.main_pass import DirectiveSpan
-from src.app.services.solver.main_pass.directive_parser import (
-    DirectiveError,
-    check_draft,
-    extract_markers,
-    locate_spans,
-    sanitize_draft,
-)
-from src.app.services.solver.main_pass.directives import PageDraft
-from tests.support.fixtures.main_pass import build_page_draft, load_text
+from src.app.services.solver.main_pass.directive_parser import check_draft, extract_markers, sanitize_draft
+from src.app.services.solver.main_pass.directives import Directive, PageDraft
 
 pytestmark = pytest.mark.unit
 
 
-def test_shared_frontend_examples_are_parsed_the_same_way() -> None:
-    # The fixture is shared with the Э6 tests: both sides must agree on it.
-    markdown = load_text("directives.md")
-
-    markers = extract_markers(markdown)
-
-    assert [(marker.ref, marker.kind) for marker in markers] == [
-        ("w1", "widget"),
-        ("i1", "image"),
-        ("q1", "quiz"),
-    ]
-    assert markers[0].attrs["primitive_hint"] == "three-frame"
-    assert markers[0].attrs["mode_hint"] == "steps"
-    assert markers[1].attrs["image_alias"] == "img-1"
+def entry(ref: str, kind: str = "widget", **extra: object) -> Directive:
+    data: dict[str, object] = {
+        "ref": ref,
+        "kind": kind,
+        "intent": "Explain this concept to the reader",
+        "source_span": "A source quotation",
+        **extra,
+    }
+    if kind == "image":
+        data["image_id"] = ref
+    return Directive.model_validate(data)
 
 
-def test_marker_offsets_point_at_the_directive_line() -> None:
-    markdown = 'Intro\r\n::widget{ref="w1"}\r\nText\r\n'
-
-    (marker,) = extract_markers(markdown)
-
-    assert marker.line == 2
-    assert markdown[marker.start : marker.end] == '::widget{ref="w1"}'
-    assert locate_spans(markdown) == (DirectiveSpan(ref="w1", kind="widget", start=7, end=25),)
-
-
-def test_directives_inside_fenced_code_are_not_slots() -> None:
-    markdown = '```markdown\n::widget{ref="w1"}\n```\n::image{ref="i1" image_alias="img-1"}\n'
-
-    assert [(slot.ref, slot.kind) for slot in extract_markers(markdown)] == [("i1", "image")]
-
-
-def test_directives_inside_indented_or_tilde_fences_are_not_slots() -> None:
-    markdown = (
-        "   ```markdown\n"
-        '::widget{ref="w1"}\n'
-        "   ```\n"
-        "~~~\n"
-        '::quiz{ref="q1"}\n'
-        "~~~\n"
-        '::image{ref="i1" image_alias="img-1"}\n'
-    )
-
-    assert [(slot.ref, slot.kind) for slot in extract_markers(markdown)] == [("i1", "image")]
-
-
-def test_inline_directive_is_not_a_slot() -> None:
-    markdown = 'Text ::widget{ref="w1"} continues the sentence.\n'
-
-    assert extract_markers(markdown) == ()
-
-
-def test_unknown_kind_is_rejected() -> None:
-    with pytest.raises(DirectiveError, match="unknown directive kind 'video'"):
-        extract_markers('::video{ref="v1"}')
-
-
-def test_directive_without_ref_is_rejected() -> None:
-    with pytest.raises(DirectiveError, match="has no ref attribute"):
-        extract_markers('::widget{mode="single"}')
-
-
-def test_malformed_directive_is_rejected() -> None:
-    with pytest.raises(DirectiveError, match="leaf block"):
-        extract_markers('::widget ref="w1"')
-
-
-def test_check_draft_accepts_the_reference_answer() -> None:
-    draft = PageDraft.model_validate(build_page_draft())
-
-    assert check_draft(draft.markdown, draft.directives, image_aliases={"img-1", "img-2"}, max_widgets=4) == []
-
-
-def test_check_draft_reports_missing_and_undeclared_refs() -> None:
-    draft = PageDraft.model_validate(build_page_draft())
-    declared = [directive for directive in draft.directives if directive.ref != "i1"]
-
-    violations = check_draft(draft.markdown, declared)
-
-    assert any("has no entry in the directive list" in message for message in violations)
-
-
-def test_check_draft_reports_a_missing_markdown_directive() -> None:
-    draft = PageDraft.model_validate(build_page_draft())
-    markdown = draft.markdown.replace('::quiz{ref="q1"}', "")
-
-    violations = check_draft(markdown, draft.directives)
-
-    assert any("directives missing from the markdown: q1" in message for message in violations)
-
-
-def test_check_draft_checks_image_aliases() -> None:
-    draft = PageDraft.model_validate(build_page_draft())
-
-    unknown = check_draft(draft.markdown, draft.directives, image_aliases={"img-2"})
-    duplicate = PageDraft.model_validate(
-        {
-            "markdown": '::image{ref="i1" image_alias="img-1"}\n::image{ref="i2" image_alias="img-1"}\n',
-            "directives": [
-                {"ref": "i1", "kind": "image", "intent": "One.", "image_alias": "img-1"},
-                {"ref": "i2", "kind": "image", "intent": "Two.", "image_alias": "img-1"},
-            ],
-            "key_terms": ["term"],
-        }
-    )
-
-    assert any("unknown image alias 'img-1'" in message for message in unknown)
-    assert any(
-        "used more than once" in message
-        for message in check_draft(duplicate.markdown, duplicate.directives, image_aliases={"img-1"})
+def draft(markdown: str, directives: list[Directive], key_terms: list[str] | None = None) -> PageDraft:
+    return PageDraft(
+        markdown=markdown + "\n" + "filler " * 40, directives=directives, key_terms=key_terms or ["filler"] * 5
     )
 
 
-def test_check_draft_enforces_the_widget_limit() -> None:
-    draft = PageDraft.model_validate(build_page_draft())
-
-    violations = check_draft(draft.markdown, draft.directives, max_widgets=0)
-
-    assert any("too many widgets: 1 > 0" in message for message in violations)
-
-
-def test_check_draft_detects_two_identical_widgets_in_a_row() -> None:
-    draft = PageDraft.model_validate(build_page_draft("page_draft_conflict.json"))
-
-    violations = check_draft(draft.markdown, draft.directives, max_widgets=4, alternation=True)
-
-    assert violations == [
-        "widgets 'w1' and 'w2' follow each other with primitive 'three-frame' and mode 'steps'; "
-        "change the mode, use another primitive, or merge them into one widget"
-    ]
+def test_leaf_syntax_offsets_and_image_id() -> None:
+    text = 'Intro\r\n::widget{ref="w1"}\r\n::image{id="img_1"}\r\n::quiz{ref="q1"}\r\n'
+    markers, issues = extract_markers(text)
+    assert issues == []
+    assert [(m.ref, m.kind) for m in markers] == [("w1", "widget"), ("img_1", "image"), ("q1", "quiz")]
+    assert text[markers[0].start : markers[0].end] == '::widget{ref="w1"}'
+    assert markers[0].line == 2
 
 
-def test_text_between_widgets_disables_the_alternation_rule() -> None:
-    draft = PageDraft.model_validate(
-        {
-            "markdown": (
-                '::widget{ref="w1" primitive_hint="three-frame" mode_hint="steps"}\n'
-                "Some explanation between the two widgets.\n"
-                '::widget{ref="w2" primitive_hint="three-frame" mode_hint="steps"}\n'
-            ),
-            "directives": [
-                {
-                    "ref": "w1",
-                    "kind": "widget",
-                    "intent": "One.",
-                    "primitive_hint": "three-frame",
-                    "mode_hint": "steps",
-                },
-                {
-                    "ref": "w2",
-                    "kind": "widget",
-                    "intent": "Two.",
-                    "primitive_hint": "three-frame",
-                    "mode_hint": "steps",
-                },
-            ],
-            "key_terms": ["term"],
-        }
-    )
-
-    assert check_draft(draft.markdown, draft.directives, alternation=True) == []
+def test_fences_and_plain_colon_text() -> None:
+    text = '   ````md\n```\n::widget{ref="w1"}\n````\n~~~\n::quiz{ref="q1"}\n~~~\n::before text\n::image{id="img_1"}'
+    markers, issues = extract_markers(text)
+    assert issues == []
+    assert [(m.ref, m.kind) for m in markers] == [("img_1", "image")]
 
 
 @pytest.mark.parametrize(
-    ("first", "second"),
+    "text",
     [
-        ({}, {}),
-        ({"mode_hint": "steps"}, {"mode_hint": "steps"}),
-        ({"primitive_hint": "three-frame"}, {"primitive_hint": "three-frame"}),
-        (
-            {"primitive_hint": "three-frame", "mode_hint": "steps"},
-            {"primitive_hint": "key-terms", "mode_hint": "steps"},
-        ),
+        '   ::widget{ref="w1"}',
+        '- item\n  ::quiz{ref="q1"}',
+        ':::widget{ref="w1"}',
+        '::widget ref="w1"',
+        '::widget{ref="w1" mode_hint="steps"}',
+        '::image{ref="img_1"}',
+        "text :widget[hello]",
     ],
 )
-def test_alternation_needs_two_non_empty_equal_hints(first: dict[str, str], second: dict[str, str]) -> None:
-    draft = PageDraft.model_validate(
-        {
-            "markdown": (
-                f"::widget{{ref=\"w1\"{_attrs(first)}}}\n"
-                f"::widget{{ref=\"w2\"{_attrs(second)}}}\n"
-            ),
-            "directives": [
-                {"ref": "w1", "kind": "widget", "intent": "One.", **first},
-                {"ref": "w2", "kind": "widget", "intent": "Two.", **second},
-            ],
-            "key_terms": ["term"],
-        }
+def test_unsupported_syntax_is_reported(text: str) -> None:
+    markers, issues = extract_markers(text)
+    assert markers == []
+    assert issues
+
+
+def test_all_syntax_errors_collected() -> None:
+    _, issues = extract_markers('::widget ref="w1"\n::quiz{ref="q1" extra="x"}\n')
+    assert len(issues) == 2
+
+
+def test_check_reports_each_structural_problem() -> None:
+    text = "\n".join(
+        [
+            '::widget{ref="w1"}',
+            '::widget{ref="w1"}',
+            '::quiz{ref="w2"}',
+            '::image{id="img_2"}',
+            '::image{id="img_2"}',
+            '::quiz{ref="q2"}',
+        ]
     )
-
-    assert check_draft(draft.markdown, draft.directives, alternation=True) == []
-    assert sanitize_draft(draft, max_widgets=4) == draft
-
-
-def _attrs(values: dict[str, str]) -> str:
-    return "".join(f' {name}="{value}"' for name, value in values.items())
-
-
-def test_sanitize_resets_the_mode_of_the_second_widget() -> None:
-    draft = PageDraft.model_validate(build_page_draft("page_draft_conflict.json"))
-
-    sanitized = sanitize_draft(draft, max_widgets=4)
-
-    assert [directive.mode_hint for directive in sanitized.directives] == ["steps", None, None]
-    assert check_draft(sanitized.markdown, sanitized.directives, max_widgets=4, alternation=True) == []
-    assert sanitize_draft(sanitized, max_widgets=4) == sanitized
+    items = [entry("w1"), entry("w1"), entry("w2"), entry("q1", "quiz"), entry("img_2", "image")]
+    issues = check_draft(text, items, image_aliases={"img_1"}, max_widgets=1, max_quizzes=1)
+    for fragment in (
+        "duplicate directive ref",
+        "appears more than once",
+        "different kinds",
+        "unknown image",
+        "used more than once",
+        "missing from the markdown",
+        "has no entry",
+        "too many widget",
+        "too many quiz",
+    ):
+        assert any(fragment in issue for issue in issues), (fragment, issues)
 
 
-def test_sanitize_drops_images_with_unknown_aliases() -> None:
-    draft = PageDraft.model_validate(build_page_draft())
-
-    sanitized = sanitize_draft(draft, max_widgets=4, image_aliases={"img-2"})
-
-    assert "i1" not in {directive.ref for directive in sanitized.directives}
-    assert "::image" not in sanitized.markdown
-    assert check_draft(sanitized.markdown, sanitized.directives, image_aliases={"img-2"}) == []
-
-
-def test_sanitize_drops_widgets_above_the_limit() -> None:
-    draft = PageDraft.model_validate(build_page_draft("page_draft_conflict.json"))
-
-    sanitized = sanitize_draft(draft, max_widgets=1)
-
-    assert [directive.ref for directive in sanitized.directives] == ["w1", "q1"]
-    assert sanitized.markdown.count("::widget") == 1
-    assert check_draft(sanitized.markdown, sanitized.directives, max_widgets=1, alternation=True) == []
+def test_alternation_uses_widget_sequence_and_both_hints() -> None:
+    text = '::widget{ref="w1"}\nParagraph.\n::quiz{ref="q1"}\n::widget{ref="w2"}'
+    first = entry("w1", primitive_hint="graph", mode_hint="watch")
+    second = entry("w2", primitive_hint="graph", mode_hint="watch")
+    items = [first, entry("q1", "quiz"), second]
+    assert any("identical primitive and mode" in x for x in check_draft(text, items, alternation=True))
+    for replacement in (entry("w2", mode_hint="watch"), entry("w2", primitive_hint="tree", mode_hint="watch")):
+        assert check_draft(text, [first, items[1], replacement], alternation=True) == []
+    cleaned = sanitize_draft(draft(text, items), max_widgets=6)
+    assert cleaned.directives[-1].mode_hint is None
+    assert sanitize_draft(cleaned, max_widgets=6) == cleaned
 
 
-def test_sanitize_draft_property_random_drafts() -> None:
-    """Random valid drafts: sanitising removes rule violations and is idempotent."""
-    rng = random.Random(20261124)
-    for _ in range(120):
-        count = rng.randint(1, 7)
-        directives: list[dict[str, object]] = []
-        lines: list[str] = []
-        for index in range(count):
-            mode = rng.choice(["steps", "predict", None])
-            directives.append(
-                {
-                    "ref": f"w{index + 1}",
-                    "kind": "widget",
-                    "intent": f"Show step {index + 1}.",
-                    "primitive_hint": "three-frame",
-                    "mode_hint": mode,
-                }
-            )
-            attrs = ' primitive_hint="three-frame"' + (f' mode_hint="{mode}"' if mode else "")
-            lines.append(f'::widget{{ref="w{index + 1}"{attrs}}}')
-            if rng.random() < 0.6:
-                lines.append("Some explanation between the widgets.")
-        draft = PageDraft.model_validate(
-            {"markdown": "\n".join(lines), "directives": directives, "key_terms": ["term"]}
+def test_sanitize_removes_dangling_duplicates_unknown_and_excess() -> None:
+    text = "\n".join(
+        [
+            '::widget{ref="w1"}',
+            '::widget{ref="w1"}',
+            '::widget{ref="w2"}',
+            '::quiz{ref="q1"}',
+            '::quiz{ref="q2"}',
+            '::image{id="img_1"}',
+            '::image{id="img_1"}',
+            '::image{id="img_2"}',
+            '::quiz{ref="q9"}',
+            '  ::widget{ref="w8"}',
+            "inline :quiz[invalid]",
+        ]
+    )
+    items = [
+        entry("w1"),
+        entry("w1"),
+        entry("w2"),
+        entry("w3"),
+        entry("q1", "quiz"),
+        entry("q2", "quiz"),
+        entry("img_1", "image"),
+        entry("img_2", "image"),
+    ]
+    cleaned = sanitize_draft(draft(text, items), max_widgets=1, max_quizzes=1, image_aliases={"img_1"})
+    assert [x.ref for x in cleaned.directives] == ["w1", "q1", "img_1"]
+    assert cleaned.markdown.count('::image{id="img_1"}') == 1
+    assert (
+        check_draft(
+            cleaned.markdown,
+            cleaned.directives,
+            max_widgets=1,
+            max_quizzes=1,
+            image_aliases={"img_1"},
+            alternation=True,
+            key_terms=cleaned.key_terms,
         )
+        == []
+    )
+    assert sanitize_draft(cleaned, max_widgets=1, max_quizzes=1, image_aliases={"img_1"}) == cleaned
 
-        sanitized = sanitize_draft(draft, max_widgets=10)
 
-        assert check_draft(sanitized.markdown, sanitized.directives, max_widgets=10, alternation=True) == []
-        assert sanitize_draft(sanitized, max_widgets=10) == sanitized
+def test_empty_after_sanitizing_does_not_throw() -> None:
+    broken = PageDraft.model_construct(markdown='::widget{ref="w1"}', directives=[], key_terms=["missing"])
+    cleaned = sanitize_draft(broken, max_widgets=0)
+    assert cleaned.markdown == ""
+    assert cleaned.directives == []
+    assert cleaned.key_terms == []
+
+
+def test_blockquote_directives_are_reported_and_removed() -> None:
+    text = '> ::widget{ref="w1"}\n> > ::quiz{ref="q1"}'
+    assert len(extract_markers(text)[1]) == 2
+    cleaned = sanitize_draft(draft(text, []), max_widgets=6)
+    assert "::widget" not in cleaned.markdown
+    assert "::quiz" not in cleaned.markdown
+
+
+def test_inline_code_and_quoted_fenced_code_are_preserved() -> None:
+    text = 'Use `:widget[demo]` or ``:quiz[x]`` as examples.\n> ```\n> ::widget{ref="w1"}\n> ```'
+    assert extract_markers(text) == ([], [])
+    cleaned = sanitize_draft(draft(text, []), max_widgets=6)
+    assert text in cleaned.markdown
+
+
+def test_sanitize_inline_preserves_surrounding_prose_and_newlines() -> None:
+    text = 'First :widget[bad]{ref="w9"} and `:quiz[example]` remain.\nSecond :quiz[bad]\nThird line.'
+    cleaned = sanitize_draft(draft(text, []), max_widgets=6)
+    assert "First  and `:quiz[example]` remain.\nSecond \nThird line." in cleaned.markdown
+    assert extract_markers(cleaned.markdown)[1] == []
+
+
+def test_escaped_inline_directive_is_plain_text() -> None:
+    assert extract_markers(r"Text \:widget[example]")[1] == []
+
+
+def test_quote_fence_cannot_close_plain_fenced_code() -> None:
+    text = '```\n> ```\n::widget{ref="w1"}\n```\n'
+    assert extract_markers(text) == ([], [])
+    assert text in sanitize_draft(draft(text, []), max_widgets=6).markdown
+
+
+def test_quoted_fence_stays_open_for_deeper_quote_and_ends_with_container() -> None:
+    text = '> ```\n> > ```\n> ::widget{ref="w1"}\n> ```\n::quiz{ref="q1"}'
+    markers, issues = extract_markers(text)
+    assert issues == []
+    assert [(marker.ref, marker.kind) for marker in markers] == [("q1", "quiz")]
+    source = draft(text, [entry("q1", "quiz")])
+    assert text in sanitize_draft(source, max_widgets=6).markdown
+
+
+def test_unclosed_quoted_fence_ends_when_leaving_quote() -> None:
+    text = '> ```\n> ::widget{ref="w1"}\n::quiz{ref="q1"}'
+    markers, issues = extract_markers(text)
+    assert issues == []
+    assert [marker.ref for marker in markers] == ["q1"]

@@ -1,8 +1,11 @@
 from functools import lru_cache
-from typing import Literal, Self
+from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+MIN_KEY_TERMS = 5
+MAX_KEY_TERMS = 15
 
 
 class SolverSettings(BaseSettings):
@@ -13,34 +16,35 @@ class SolverSettings(BaseSettings):
         description="Part pipeline; real is unavailable until story 2.7.",
     )
     main_pass_max_tokens: int = Field(
-        default=8192,
+        default=16000,
         ge=1,
         description=(
             "Max output tokens of one main-pass request. The pass rewrites a whole "
             "part, so this is above the LLMRequest default (story 2.2)."
         ),
     )
-    main_pass_max_widgets: int = Field(
-        default=4,
+    max_widgets_per_part: int = Field(
+        default=6,
         ge=0,
         description="Widget directives allowed in one part; also rendered into the prompt.",
     )
-    main_pass_min_key_terms: int = Field(
+    max_quizzes_per_part: int = Field(
         default=5,
-        ge=1,
+        ge=0,
+        description="Quiz directives allowed in one part; also rendered into the prompt.",
+    )
+    main_pass_min_key_terms: int = Field(
+        default=MIN_KEY_TERMS,
+        ge=MIN_KEY_TERMS,
+        le=MIN_KEY_TERMS,
         description="Lower bound of key terms per part; rendered into the prompt (story 2.2).",
     )
     main_pass_max_key_terms: int = Field(
-        default=12,
-        ge=1,
+        default=MAX_KEY_TERMS,
+        ge=MAX_KEY_TERMS,
+        le=MAX_KEY_TERMS,
         description="Upper bound of key terms per part; rendered into the prompt (story 2.2).",
     )
-
-    @model_validator(mode="after")
-    def validate_key_term_bounds(self) -> Self:
-        if self.main_pass_min_key_terms > self.main_pass_max_key_terms:
-            raise ValueError("main_pass_min_key_terms must not exceed main_pass_max_key_terms")
-        return self
 
     model_config = SettingsConfigDict(env_prefix="SOLVER_", env_file=".env", extra="ignore")
 

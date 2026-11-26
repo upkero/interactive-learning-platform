@@ -14,6 +14,7 @@ from src.app.core.clock import SystemClock
 from src.app.services.quota.quota_ledger import QuotaLedger
 from src.app.services.solver.pipeline.part_recovery import PartRecovery
 from tests.support.fakes.db.session import FakeSession
+from tests.support.fakes.notifications.service import FakeDocumentNotifications
 from tests.support.fakes.repositories.documents import FakeDocumentPartRepository, FakeDocumentRepository
 from tests.support.fakes.repositories.quota import FakeGenerationLedgerRepository
 from tests.support.fakes.repositories.users import FakeUserRepository
@@ -53,22 +54,33 @@ async def build_recovery(status: PartStatus, attempts: int) -> RecoveryFixture:
         size_bytes=1,
         checksum="c" * 64,
     )
+    users.attach_document(document.id, user.id)
     updated = await documents.set_status(document.id, DocumentStatus.GENERATING)
     assert updated is not None
     document = updated
-    (part,) = await parts.add_many(
-        document.id, [PartDraft(index=0, title="part", topic_ids=[], source_markdown="x", token_count=1)]
-    )
-    part = replace(part, status=status, attempts=attempts)
-    parts.store_record(part)
-    parts.owners[part.id] = PartOwner(user_id=user.id, document_id=document.id)
     quota = QuotaLedger(
         users_factory=lambda _: users,
         ledger_factory=lambda _: entries,
         parts_factory=lambda _: parts,
         clock=SystemClock(),
     )
-    await quota.reserve(cast(AsyncSession, session), user_id=user.id, document_id=document.id, parts=1)
+    state = await quota.reserve(cast(AsyncSession, session), user_id=user.id, document_id=document.id, parts=1)
+    (part,) = await parts.add_many(
+        document.id,
+        [
+            PartDraft(
+                index=0,
+                title="part",
+                topic_ids=[],
+                source_markdown="x",
+                token_count=1,
+                quota_period_start=state.period.start,
+            )
+        ],
+    )
+    part = replace(part, status=status, attempts=attempts)
+    parts.store_record(part)
+    parts.owners[part.id] = PartOwner(user_id=user.id, document_id=document.id, quota_period_start=state.period.start)
     dispatcher = FakeTaskDispatcher()
     recovery = PartRecovery(
         session_factory=cast(async_sessionmaker[AsyncSession], lambda: session),
@@ -77,6 +89,8 @@ async def build_recovery(status: PartStatus, attempts: int) -> RecoveryFixture:
         ledger=quota,
         dispatcher=dispatcher,
         notifier=notifier,
+        users=lambda _: users,
+        notifications=FakeDocumentNotifications(),
     )
     return RecoveryFixture(
         part=part,

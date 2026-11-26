@@ -5,7 +5,7 @@ from datetime import timedelta
 from uuid import UUID
 
 from pydantic import JsonValue
-from sqlalchemy import func, select, update
+from sqlalchemy import exists, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -57,9 +57,13 @@ class DocumentPartRepository(DocumentPartRepositoryProtocol):
         return self._to_record(row) if row is not None else None
 
     async def part_owner(self, part_id: UUID) -> PartOwner | None:
-        stmt = select(Document.owner_id, Document.id).join(DocumentPart).where(DocumentPart.id == part_id)
+        stmt = (
+            select(Document.owner_id, Document.id, DocumentPart.quota_period_start)
+            .join(DocumentPart)
+            .where(DocumentPart.id == part_id)
+        )
         row = (await self._session.execute(stmt)).one_or_none()
-        return PartOwner(user_id=row[0], document_id=row[1]) if row is not None else None
+        return PartOwner(user_id=row[0], document_id=row[1], quota_period_start=row[2]) if row is not None else None
 
     async def lock_stale(
         self, *, statuses: frozenset[PartStatus], older_than: timedelta, limit: int
@@ -87,6 +91,17 @@ class DocumentPartRepository(DocumentPartRepositoryProtocol):
         )
         return [self._to_record(row) for row in rows.all()]
 
+    async def has_published_since(self, document_id: UUID, start_index: int) -> bool:
+        """``SELECT EXISTS`` without loading the heavy part columns."""
+        stmt = select(
+            exists().where(
+                DocumentPart.document_id == document_id,
+                DocumentPart.index >= start_index,
+                DocumentPart.status == PartStatus.PUBLISHED.value,
+            )
+        )
+        return bool(await self._session.scalar(stmt))
+
     async def add_many(self, document_id: UUID, parts: Sequence[PartDraft]) -> list[PartRecord]:
         """Insert new parts from the splitting plan; only flush, never commit."""
         created = [
@@ -99,6 +114,7 @@ class DocumentPartRepository(DocumentPartRepositoryProtocol):
                 token_count=draft.token_count,
                 profile=draft.profile or {},
                 content=draft.content,
+                quota_period_start=draft.quota_period_start,
                 status="queued",
             )
             for draft in parts

@@ -1,24 +1,27 @@
 # Shared directive examples
 
-This fixture is the single set of remark-directive examples used by the
-backend parser tests and by the frontend (screen Э6) tests. Every example
-below must be understood identically by both sides.
+Only these unindented leaf directives on separate lines are supported:
 
-The three slots the main pass may emit:
-
-::widget{ref="w1" primitive_hint="three-frame" mode_hint="steps"}
-::image{ref="i1" image_alias="img-1"}
+::widget{ref="w1"}
+::image{id="img_1"}
 ::quiz{ref="q1"}
 
-Only the `ref` attribute is required. Extra attributes are allowed and
-ignored by the parser, but `remark-directive` keeps them for the renderer.
+Extra attributes, indentation, nested lists, container directives and inline
+`:widget[...]` are violations. Hints belong only in the directive list.
 
-The same lines inside a fenced code block are text, not slots:
+The following lines are code, not directives (the inner fence is shorter):
 
-```markdown
-::widget{ref="w9"}
-::quiz{ref="q9"}
+````markdown
 ```
+::widget{ref="w9"}
+````
 
-An inline directive is not a slot either: `::widget{ref="w7"}` inside a
-sentence stays text.
+Invalid examples:
+
+   ::widget{ref="w2"}
+- item
+  ::quiz{ref="q2"}
+:::widget{ref="w3"}
+::widget{ref="w4" mode_hint="watch"}
+
+The ordinary text `::before inserts content` is not a directive.

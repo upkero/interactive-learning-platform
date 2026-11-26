@@ -1,7 +1,7 @@
 """ORM model of document parts."""
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -39,3 +39,4 @@ class DocumentPart(Base):
     stage_changed_at: Mapped[datetime] = mapped_column(server_default=func.now())
     error: Mapped[str | None] = mapped_column(Text)
     published_at: Mapped[datetime | None]
+    quota_period_start: Mapped[date | None]

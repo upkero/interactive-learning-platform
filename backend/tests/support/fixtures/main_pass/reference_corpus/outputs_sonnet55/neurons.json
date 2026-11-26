@@ -1,0 +1,163 @@
+{
+  "model": "anthropic/claude-sonnet-5.5",
+  "prompt_version": "sha256:4d348b2d921fab7d72d00a479d9133fd3611e94fe544637b926a5842319acc62",
+  "generated_at": "2026-11-26T10:53:07.677432+00:00",
+  "first_answer": "clean",
+  "first_schema_valid_draft": {
+    "markdown": "## From neurons to layers\n\nThe basic building block of a neural network is the **neuron**. A neuron takes several numbers as inputs and turns them into one output number. It does this in two steps.\n\nFirst it computes a **weighted sum** of its inputs. Each input is multiplied by its **weight**, which says how much that input matters. The products are added, and then a **bias** is added to the total. Second, the result goes through a non-linear **activation function**.\n\n::image{id=\"img_1\"}\n\n::widget{ref=\"w1\"}\n\n### Many neurons make a layer\n\nA **layer** stacks many neurons that read the same input vector. Each neuron has its own weights, so one layer produces one output value per neuron.\n\nThe activation is what makes a stack of layers more expressive than a single linear transformation. Without it, the layers would add no more power than one linear step.\n\n::image{id=\"img_2\"}\n\nIn a **fully connected layer** every neuron reads every output of the previous layer. The number of weights therefore grows as the product of the two layer sizes, which is why wider layers cost more to train.\n\n::quiz{ref=\"q1\"}\n\n## Activation functions\n\nThe activation function decides how strong the neuron's output is. Two examples:\n\n- A **rectified linear unit (ReLU)** passes positive values unchanged and turns negative values into zero.\n- The **sigmoid** squeezes the output into a bounded range.\n\n::widget{ref=\"w2\"}\n\n::quiz{ref=\"q2\"}\n",
+    "directives": [
+      {
+        "ref": "img_1",
+        "kind": "image",
+        "intent": "Show a single neuron: three input arrows going into a circle and one output arrow coming out.",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": "img_1",
+        "source_span": "A neuron computes a weighted sum of its inputs: each input is multiplied"
+      },
+      {
+        "ref": "w1",
+        "kind": "widget",
+        "intent": "Walk step by step through one neuron: multiply each input by its weight, add the products, add the bias, then apply the activation function.",
+        "primitive_hint": "three-frame",
+        "mode_hint": "steps",
+        "params_hint": "Steps: inputs times weights, sum of products, add bias, pass through non-linear activation function.",
+        "image_id": null,
+        "source_span": "A neuron computes a weighted sum of its inputs: each input is multiplied"
+      },
+      {
+        "ref": "img_2",
+        "kind": "image",
+        "intent": "Show layers of neurons: two columns of circles connected by arrows, so the learner sees one output value per neuron.",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": "img_2",
+        "source_span": "has its own weights, so one layer produces one output value per neuron."
+      },
+      {
+        "ref": "q1",
+        "kind": "quiz",
+        "intent": "Check that the learner understands why the number of weights in a fully connected layer grows with layer sizes and why wider layers cost more to train.",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": null,
+        "source_span": "layer sizes, which is why wider layers cost more to train."
+      },
+      {
+        "ref": "w2",
+        "kind": "widget",
+        "intent": "Let the learner predict what ReLU does to a positive and to a negative value, then reveal the result; contrast with the sigmoid squeezing into a bounded range.",
+        "primitive_hint": "three-frame",
+        "mode_hint": "predict",
+        "params_hint": "ReLU: positive values pass unchanged, negative values become zero. Sigmoid: output squeezed into a bounded range.",
+        "image_id": null,
+        "source_span": "linear unit (ReLU) passes positive values unchanged and turns negative"
+      },
+      {
+        "ref": "q2",
+        "kind": "quiz",
+        "intent": "Check that the learner can tell what ReLU does to negative values and what the sigmoid does to the output.",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": null,
+        "source_span": "values into zero. Other activations, such as the sigmoid, squeeze the"
+      }
+    ],
+    "key_terms": [
+      "neuron",
+      "weighted sum",
+      "weight",
+      "bias",
+      "activation function",
+      "layer",
+      "fully connected layer",
+      "rectified linear unit (ReLU)",
+      "sigmoid"
+    ]
+  },
+  "first_answer_issues": {
+    "alternation": [],
+    "other": []
+  },
+  "schema_errors_before_first": 0,
+  "draft": {
+    "markdown": "## From neurons to layers\n\nThe basic building block of a neural network is the **neuron**. A neuron takes several numbers as inputs and turns them into one output number. It does this in two steps.\n\nFirst it computes a **weighted sum** of its inputs. Each input is multiplied by its **weight**, which says how much that input matters. The products are added, and then a **bias** is added to the total. Second, the result goes through a non-linear **activation function**.\n\n::image{id=\"img_1\"}\n\n::widget{ref=\"w1\"}\n\n### Many neurons make a layer\n\nA **layer** stacks many neurons that read the same input vector. Each neuron has its own weights, so one layer produces one output value per neuron.\n\nThe activation is what makes a stack of layers more expressive than a single linear transformation. Without it, the layers would add no more power than one linear step.\n\n::image{id=\"img_2\"}\n\nIn a **fully connected layer** every neuron reads every output of the previous layer. The number of weights therefore grows as the product of the two layer sizes, which is why wider layers cost more to train.\n\n::quiz{ref=\"q1\"}\n\n## Activation functions\n\nThe activation function decides how strong the neuron's output is. Two examples:\n\n- A **rectified linear unit (ReLU)** passes positive values unchanged and turns negative values into zero.\n- The **sigmoid** squeezes the output into a bounded range.\n\n::widget{ref=\"w2\"}\n\n::quiz{ref=\"q2\"}\n",
+    "directives": [
+      {
+        "ref": "img_1",
+        "kind": "image",
+        "intent": "Show a single neuron: three input arrows going into a circle and one output arrow coming out.",
+        "source_span": "A neuron computes a weighted sum of its inputs: each input is multiplied",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": "img_1"
+      },
+      {
+        "ref": "w1",
+        "kind": "widget",
+        "intent": "Walk step by step through one neuron: multiply each input by its weight, add the products, add the bias, then apply the activation function.",
+        "source_span": "A neuron computes a weighted sum of its inputs: each input is multiplied",
+        "primitive_hint": "three-frame",
+        "mode_hint": "steps",
+        "params_hint": "Steps: inputs times weights, sum of products, add bias, pass through non-linear activation function.",
+        "image_id": null
+      },
+      {
+        "ref": "img_2",
+        "kind": "image",
+        "intent": "Show layers of neurons: two columns of circles connected by arrows, so the learner sees one output value per neuron.",
+        "source_span": "has its own weights, so one layer produces one output value per neuron.",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": "img_2"
+      },
+      {
+        "ref": "q1",
+        "kind": "quiz",
+        "intent": "Check that the learner understands why the number of weights in a fully connected layer grows with layer sizes and why wider layers cost more to train.",
+        "source_span": "layer sizes, which is why wider layers cost more to train.",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": null
+      },
+      {
+        "ref": "w2",
+        "kind": "widget",
+        "intent": "Let the learner predict what ReLU does to a positive and to a negative value, then reveal the result; contrast with the sigmoid squeezing into a bounded range.",
+        "source_span": "linear unit (ReLU) passes positive values unchanged and turns negative",
+        "primitive_hint": "three-frame",
+        "mode_hint": "predict",
+        "params_hint": "ReLU: positive values pass unchanged, negative values become zero. Sigmoid: output squeezed into a bounded range.",
+        "image_id": null
+      },
+      {
+        "ref": "q2",
+        "kind": "quiz",
+        "intent": "Check that the learner can tell what ReLU does to negative values and what the sigmoid does to the output.",
+        "source_span": "values into zero. Other activations, such as the sigmoid, squeeze the",
+        "primitive_hint": null,
+        "mode_hint": null,
+        "params_hint": null,
+        "image_id": null
+      }
+    ],
+    "key_terms": [
+      "neuron",
+      "weighted sum",
+      "weight",
+      "bias",
+      "activation function",
+      "layer",
+      "fully connected layer",
+      "rectified linear unit (ReLU)",
+      "sigmoid"
+    ]
+  }
+}

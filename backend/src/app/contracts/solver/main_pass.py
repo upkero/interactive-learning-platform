@@ -12,7 +12,7 @@ stores and passes around.
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import Literal, cast, get_args
 from uuid import UUID
 
 from src.app.contracts.documents.topic_node import TopicNode
@@ -22,15 +22,16 @@ DIRECTIVE_KINDS: tuple[DirectiveKind, ...] = ("widget", "image", "quiz")
 
 # A ref carries its kind in the first letter (w1, i1, q1); the schema and
 # the parser both enforce it, so the resolver can trust the pair.
-REF_PREFIX: dict[DirectiveKind, str] = {"widget": "w", "image": "i", "quiz": "q"}
+REF_PREFIX: dict[DirectiveKind, str] = {"widget": "w", "image": "img_", "quiz": "q"}
+PrimitiveMode = Literal["watch", "steps", "tweak", "predict", "break"]
 
 ReaderLevel = Literal["novice", "intermediate", "advanced"]
 ReaderGoal = Literal["exam", "understand", "refresh"]
 ReaderDepth = Literal["overview", "standard", "deep"]
 
-_LEVELS = frozenset({"novice", "intermediate", "advanced"})
-_GOALS = frozenset({"exam", "understand", "refresh"})
-_DEPTHS = frozenset({"overview", "standard", "deep"})
+_LEVELS = frozenset(get_args(ReaderLevel))
+_GOALS = frozenset(get_args(ReaderGoal))
+_DEPTHS = frozenset(get_args(ReaderDepth))
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,7 +64,7 @@ class ReaderProfile:
 class PartImage:
     """A picture of the current part as the model sees it.
 
-    ``alias`` is a short synthetic name (``img-1``) shown to the model
+    ``alias`` is a short synthetic name (``img_1``) shown to the model
     instead of the database id; ``MainPassResult.image_ids`` maps it back
     to ``images.id`` after the call. Caption and description come from the
     uploaded file, so they are data and are escaped before the prompt.
@@ -77,22 +78,16 @@ class PartImage:
 
 @dataclass(frozen=True, slots=True)
 class MainPassDirective:
-    """One slot the model asks the resolver or the generator to fill.
-
-    ``ref`` is the identifier written into the markdown
-    (``::widget{ref="w1"}``), ``kind`` tells which subsystem owns the slot,
-    ``intent`` is the model's brief for it. ``primitive_hint``/``mode_hint``
-    are soft suggestions for the resolver; ``image_alias`` names a source
-    picture for ``kind="image"``. Refs are unique across kinds: a part's
-    widget usages are keyed by ``(part_id, directive_ref)``.
-    """
+    """One directive and its source quotation for downstream stages."""
 
     ref: str
     kind: DirectiveKind
     intent: str
+    source_span: str
     primitive_hint: str | None = None
-    mode_hint: str | None = None
-    image_alias: str | None = None
+    mode_hint: PrimitiveMode | None = None
+    params_hint: str | None = None
+    image_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,24 +123,19 @@ class MainPassDraft:
 
 @dataclass(frozen=True, slots=True)
 class DirectiveSpan:
-    """Offsets of one directive line in the draft markdown.
-
-    ``start`` is the offset of the first ``:`` and ``end`` is the offset
-    just after the closing brace, so the resolver can replace or remove the
-    slot without parsing the page again.
-    """
+    """Offsets of a quotation in the source, or None when it was not found."""
 
     ref: str
     kind: DirectiveKind
-    start: int
-    end: int
+    start: int | None
+    end: int | None
 
 
 @dataclass(frozen=True, slots=True)
 class MainPassResult:
     """What the pipeline stores after a successful pass.
 
-    ``spans`` are the directive offsets in the draft; ``image_ids`` maps
+    ``spans`` are the quotation offsets in the source; ``image_ids`` maps
     the aliases used by image directives to real ``images.id`` values.
     """
 

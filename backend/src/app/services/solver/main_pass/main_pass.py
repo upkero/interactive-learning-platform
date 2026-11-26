@@ -39,7 +39,6 @@ from src.app.interfaces.repositories.widgets import PrimitiveRepositoryProtocol
 from src.app.llm.structured import call_structured
 from src.app.services.solver.main_pass.directive_parser import (
     check_draft,
-    locate_spans,
     sanitize_draft,
 )
 from src.app.services.solver.main_pass.directives import PageDraft
@@ -48,10 +47,11 @@ from src.app.services.solver.main_pass.prompts import (
     render_part_message,
     render_system_prompt,
 )
+from src.app.services.solver.main_pass.source_spans import locate_spans
 
 logger = logging.getLogger(__name__)
 
-_VIOLATION_COUNTER = "main_pass.draft_violations"
+_VIOLATION_COUNTER = "main_pass.draft_violations_total"
 
 
 class MainPassService:
@@ -78,6 +78,9 @@ class MainPassService:
         with bind_log_context(document_id=str(payload.document_id), part_id=str(payload.part_id)):
             draft = await call_structured(self._llm, request, PageDraft)
             violations = self._violations(draft, payload)
+            self._metrics.increment_counter(
+                "main_pass.drafts_total", labels={"first_answer": "violations" if violations else "clean"}
+            )
             retried = bool(violations)
             if violations:
                 self._record_violations(violations, attempt="first")
@@ -88,12 +91,13 @@ class MainPassService:
                     self._record_violations(remaining, attempt="retry")
                     draft = sanitize_draft(
                         draft,
-                        max_widgets=self._settings.main_pass_max_widgets,
+                        max_widgets=self._settings.max_widgets_per_part,
+                        max_quizzes=self._settings.max_quizzes_per_part,
                         image_aliases={image.alias for image in payload.images},
                     )
             result = MainPassResult(
                 draft=draft.to_draft(),
-                spans=locate_spans(draft.markdown),
+                spans=locate_spans(draft.directives, payload.part_markdown),
                 image_ids=self._image_ids(draft, payload.images),
             )
             logger.info(
@@ -120,7 +124,8 @@ class MainPassService:
                 SystemBlock(
                     render_system_prompt(
                         catalog,
-                        max_widgets=settings.main_pass_max_widgets,
+                        max_widgets=settings.max_widgets_per_part,
+                        max_quizzes=settings.max_quizzes_per_part,
                         min_key_terms=settings.main_pass_min_key_terms,
                         max_key_terms=settings.main_pass_max_key_terms,
                     ),
@@ -143,6 +148,7 @@ class MainPassService:
                 ),
             ),
             max_tokens=settings.main_pass_max_tokens,
+            temperature=0.2,
             metadata={"document_id": str(payload.document_id), "part_id": str(payload.part_id)},
         )
 
@@ -155,8 +161,11 @@ class MainPassService:
         hint = (
             "The previous draft breaks these rules: "
             + "; ".join(violations)
-            + ". Fix exactly these issues and return the complete JSON again."
+            + ". Fix exactly these issues and return the complete JSON again. "
+            "If a key term is absent due only to letter case, copy the exact spelling and case "
+            "from the existing markdown into key_terms; do not alter markdown to match key_terms."
         )
+        # The retry includes the validated, normalised answer, not the raw provider JSON.
         return replace(
             request,
             messages=(
@@ -171,26 +180,26 @@ class MainPassService:
             draft.markdown,
             draft.directives,
             image_aliases={image.alias for image in payload.images},
-            max_widgets=self._settings.main_pass_max_widgets,
+            max_widgets=self._settings.max_widgets_per_part,
+            max_quizzes=self._settings.max_quizzes_per_part,
             alternation=True,
+            key_terms=draft.key_terms,
         )
 
     def _record_violations(self, violations: Sequence[str], *, attempt: str) -> None:
         self._metrics.increment_counter(_VIOLATION_COUNTER, labels={"attempt": attempt}, by=len(violations))
         logger.warning(
             "Main pass rule violation.",
-            extra={"attempt": attempt, "violations": list(violations)},
+            extra={"attempt": attempt, "violation_count": len(violations)},
         )
 
     @staticmethod
     def _image_ids(draft: PageDraft, images: Sequence[PartImage]) -> dict[str, UUID]:
         by_alias = {image.alias: image.id for image in images}
         return {
-            directive.image_alias: by_alias[directive.image_alias]
+            directive.image_id: by_alias[directive.image_id]
             for directive in draft.directives
-            if directive.kind == "image"
-            and directive.image_alias is not None
-            and directive.image_alias in by_alias
+            if directive.kind == "image" and directive.image_id is not None and directive.image_id in by_alias
         }
 
 

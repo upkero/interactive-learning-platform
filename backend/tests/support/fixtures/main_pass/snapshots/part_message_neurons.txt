@@ -4,8 +4,8 @@
 - From neurons to layers
 </part_topics>
 <images>
-<image alias="img-1" caption="A single neuron with three inputs" description="Diagram: three arrows into a circle, one arrow out." />
-<image alias="img-2" caption="Layers of neurons" description="Diagram: two columns of circles connected by arrows." />
+<image alias="img_1" caption="A single neuron with three inputs" description="Diagram: three arrows into a circle, one arrow out." />
+<image alias="img_2" caption="Layers of neurons" description="Diagram: two columns of circles connected by arrows." />
 </images>
 <part>
 ## From neurons to layers

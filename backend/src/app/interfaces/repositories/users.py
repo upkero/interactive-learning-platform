@@ -16,6 +16,8 @@ class UserRepositoryProtocol(Protocol):
 
     async def get(self, user_id: UUID) -> UserRecord | None: ...
 
+    async def get_locale_by_document(self, document_id: UUID) -> str: ...
+
     async def get_by_email(self, email: str) -> UserRecord | None: ...
 
     async def create(
@@ -25,7 +27,7 @@ class UserRepositoryProtocol(Protocol):
         password_hash: str,
         display_name: str | None = None,
         locale: str = "ru",
-        monthly_limit: int = 20,
+        monthly_limit: int,
     ) -> UserRecord: ...
 
     async def lock_for_update(self, user_id: UUID) -> UserRecord | None: ...

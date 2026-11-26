@@ -55,7 +55,8 @@ async def test_check_four_types_and_record_every_attempt(kind: str, correct: Any
     parts, materials, attempts = FakeDocumentPartRepository(), FakeUserMaterialRepository(), FakeQuizAttemptRepository()
     await materials.create(user_id=user, document_id=document_id, role=MaterialRole.OWNER)
     (part,) = await parts.add_many(
-        document_id, [PartDraft(index=0, title="Page", topic_ids=[], source_markdown="x", token_count=1)]
+        document_id,
+        [PartDraft(index=0, title="Page", topic_ids=[], source_markdown="x", token_count=1, quota_period_start=None)],
     )
     parts._parts[part.id] = replace(
         part,

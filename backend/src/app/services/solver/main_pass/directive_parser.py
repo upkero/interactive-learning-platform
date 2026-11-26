@@ -1,370 +1,214 @@
-"""Parse and check the remark-directive slots of a main-pass draft.
-
-A slot is a leaf directive that occupies a whole line::
-
-    ::widget{ref="w1"}
-
-The parser reads ``ref`` and the optional ``primitive_hint``,
-``mode_hint`` and ``image_alias`` attributes; unknown extra attributes are
-kept in ``Marker.attrs`` and ignored. Lines inside fenced code blocks are
-not slots. The syntax is the same subset that remark-directive understands
-on the frontend (screen Э6), so the shared examples live in
-``tests/support/fixtures/main_pass/directives.md``.
-
-``check_draft`` proves that the markdown and the directive list describe
-exactly the same slots (one occurrence each, same kind), checks source
-image aliases, the widget limit and the alternation rule. ``PageDraft``
-runs the structural part as a model validator, so a contradiction is a
-schema error and ``call_structured`` retries once with the broken reply;
-the service runs the semantic part and sanitises what survived the retry.
-"""
-
-from __future__ import annotations
+"""Parse and validate the supported remark-directive subset."""
 
 import re
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from itertools import pairwise
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import cast
 
-from src.app.contracts.solver.main_pass import (
-    DIRECTIVE_KINDS,
-    DirectiveKind,
-    DirectiveSpan,
-)
+from src.app.contracts.solver.main_pass import DirectiveKind
+from src.app.services.solver.main_pass.directives import Directive, PageDraft
 
-if TYPE_CHECKING:
-    from src.app.services.solver.main_pass.directives import PageDraft
-
-_DIRECTIVE = re.compile(r"^::(?P<kind>[a-z][a-z0-9-]*)\{(?P<attrs>[^}\n]*)\}\s*$")
-_ATTR = re.compile(
-    r"""(?P<name>[A-Za-z][A-Za-z0-9_-]*)\s*=\s*"""
-    r"""(?:"(?P<double>[^"]*)"|'(?P<single>[^']*)'|(?P<bare>[^\s}"']+))"""
-)
 _FENCE = re.compile(r"^ {0,3}(?P<fence>`{3,}|~{3,})(?P<info>.*)$")
+_DIRECTIVE = re.compile(r'^::(widget|image|quiz)\{(ref|id)="([^"]+)"\}\s*$')
+_CANDIDATE = re.compile(r"^\s*(?:>\s*)*(?:(?:[-+*]|\d+[.)])\s+)?:{2,3}(widget|image|quiz)\b")
+_INLINE = re.compile(r"(?<![\\:]):(?:widget|image|quiz)\[[^\]\r\n]*(?:\](?:\{[^}\r\n]*\})?|$)")
+_CODE_SPAN = re.compile(r"(`+)(?!`)(.*?)(?<!`)\1(?!`)")
+_BLOCKQUOTE = re.compile(r"^ {0,3}(?:> ?)+")
 
 
-class DirectiveError(ValueError):
-    """The markdown syntax is malformed or disagrees with the directive list."""
+def _inline_directives(line: str) -> list[re.Match[str]]:
+    masked = _CODE_SPAN.sub(lambda match: " " * len(match.group()), line)
+    return list(_INLINE.finditer(masked))
 
 
-class DirectiveLike(Protocol):
-    """Read-only view of a declared directive (pydantic ``Directive``)."""
-
-    @property
-    def ref(self) -> str: ...
-
-    @property
-    def kind(self) -> str: ...
-
-    @property
-    def primitive_hint(self) -> str | None: ...
-
-    @property
-    def mode_hint(self) -> str | None: ...
-
-    @property
-    def image_alias(self) -> str | None: ...
+def _fence_match(line: str) -> tuple[re.Match[str] | None, int]:
+    quote = _BLOCKQUOTE.match(line)
+    depth = quote.group().count(">") if quote else 0
+    return _FENCE.match(line[quote.end() :] if quote else line), depth
 
 
 @dataclass(frozen=True, slots=True)
 class Marker:
-    """A slot found in the markdown.
-
-    ``start``/``end`` are offsets of the directive line without the line
-    break; ``line`` is 1-based for error messages.
-    """
-
     ref: str
     kind: DirectiveKind
-    attrs: dict[str, str]
     start: int
     end: int
     line: int
 
 
-def extract_markers(markdown: str) -> tuple[Marker, ...]:
-    """Return the leaf directives of ``markdown`` in document order."""
+def extract_markers(markdown: str) -> tuple[list[Marker], list[str]]:
     markers: list[Marker] = []
-    fence: tuple[str, int] | None = None
+    issues: list[str] = []
+    fence: tuple[str, int, int] | None = None
     offset = 0
-    for number, raw in enumerate(markdown.splitlines(keepends=True), start=1):
-        content = raw.rstrip("\r\n")
+    for number, raw in enumerate(markdown.splitlines(keepends=True), 1):
+        line = raw.rstrip("\r\n")
         start = offset
         offset += len(raw)
-        fence_match = _FENCE.match(content)
-        if fence is not None:
-            # A closing fence uses the same character, is at least as long
-            # as the opening one and has no info string.
+        match, depth = _fence_match(line)
+        if fence and depth < fence[2]:
+            fence = None
+        if fence:
             if (
-                fence_match is not None
-                and fence_match["fence"][0] == fence[0]
-                and len(fence_match["fence"]) >= fence[1]
-                and not fence_match["info"].strip()
+                depth == fence[2]
+                and match
+                and match["fence"][0] == fence[0]
+                and len(match["fence"]) >= fence[1]
+                and not match["info"].strip()
             ):
                 fence = None
             continue
-        if fence_match is not None:
-            fence = (fence_match["fence"][0], len(fence_match["fence"]))
+        if match:
+            fence = (match["fence"][0], len(match["fence"]), depth)
             continue
-        if not content.startswith("::"):
+        if _inline_directives(line):
+            issues.append(f"line {number}: inline directives are not supported")
+        if not _CANDIDATE.match(line):
             continue
-        match = _DIRECTIVE.match(content)
-        if match is None:
-            raise DirectiveError(
-                f'line {number}: a directive must be a leaf block like ::widget{{ref="w1"}}'
-            )
-        kind = match["kind"]
-        if kind not in DIRECTIVE_KINDS:
-            raise DirectiveError(f"line {number}: unknown directive kind {kind!r}")
-        attrs = {
-            attr["name"]: attr["double"] or attr["single"] or attr["bare"]
-            for attr in _ATTR.finditer(match["attrs"])
-        }
-        ref = attrs.get("ref", "")
-        if not ref:
-            raise DirectiveError(f"line {number}: the {kind} directive has no ref attribute")
-        markers.append(
-            Marker(
-                ref=ref,
-                kind=cast(DirectiveKind, kind),
-                attrs=attrs,
-                start=start,
-                end=start + len(content),
-                line=number,
-            )
-        )
-    return tuple(markers)
-
-
-def locate_spans(markdown: str) -> tuple[DirectiveSpan, ...]:
-    """Offsets of every directive line; used to replace slots without reparsing."""
-    spans: list[DirectiveSpan] = []
-    seen: set[str] = set()
-    for marker in extract_markers(markdown):
-        if marker.ref in seen:
-            raise DirectiveError(f"directive ref {marker.ref!r} appears more than once in the markdown")
-        seen.add(marker.ref)
-        spans.append(
-            DirectiveSpan(ref=marker.ref, kind=marker.kind, start=marker.start, end=marker.end)
-        )
-    return tuple(spans)
+        match = _DIRECTIVE.fullmatch(line)
+        if not match or (match[1] == "image") != (match[2] == "id"):
+            issues.append(f"line {number}: directive must be an unindented leaf with only ref or image id")
+            continue
+        markers.append(Marker(match[3], cast(DirectiveKind, match[1]), start, start + len(line), number))
+    return markers, issues
 
 
 def check_draft(
     markdown: str,
-    directives: Sequence[DirectiveLike],
+    directives: Sequence[Directive],
     *,
     image_aliases: Collection[str] | None = None,
     max_widgets: int | None = None,
+    max_quizzes: int | None = None,
     alternation: bool = False,
+    key_terms: Sequence[str] | None = None,
 ) -> list[str]:
-    """Return human-readable violations; an empty list means the draft is good.
-
-    The optional checks are the ones that need data from outside the model
-    answer: ``image_aliases`` (source pictures available to the part),
-    ``max_widgets`` (part limit) and ``alternation`` (two widgets in a row
-    must differ in primitive or mode). ``PageDraft`` runs only the
-    structural part; the service adds the rest.
-    """
-    try:
-        markers = extract_markers(markdown)
-    except DirectiveError as exc:
-        return [str(exc)]
-
-    violations: list[str] = []
-    declared: dict[str, DirectiveLike] = {}
-    for directive in directives:
-        if directive.ref in declared:
-            violations.append(f"duplicate directive ref {directive.ref!r} in the directive list")
-            continue
-        declared[directive.ref] = directive
-
+    markers, issues = extract_markers(markdown)
+    declared: dict[str, Directive] = {}
+    for entry in directives:
+        if entry.ref in declared:
+            issues.append(f"duplicate directive ref {entry.ref!r} in the directive list")
+        else:
+            declared[entry.ref] = entry
     seen: set[str] = set()
+    images: set[str] = set()
     for marker in markers:
         if marker.ref in seen:
-            violations.append(f"directive ref {marker.ref!r} appears more than once in the markdown")
-            continue
+            issues.append(f"directive ref {marker.ref!r} appears more than once in the markdown")
         seen.add(marker.ref)
         target = declared.get(marker.ref)
         if target is None:
-            violations.append(f"markdown directive {marker.ref!r} has no entry in the directive list")
-            continue
-        if target.kind != marker.kind:
-            violations.append(
-                f"directive {marker.ref!r} is {marker.kind!r} in the markdown but {target.kind!r} in the list"
-            )
-
-    missing = sorted(set(declared) - seen)
-    if missing:
-        violations.append(f"directives missing from the markdown: {', '.join(missing)}")
-
-    if image_aliases is not None:
-        violations.extend(_check_images(markers, declared, image_aliases))
-
-    if max_widgets is not None:
-        widgets = [marker for marker in markers if marker.kind == "widget"]
-        if len(widgets) > max_widgets:
-            refs = ", ".join(marker.ref for marker in widgets[max_widgets:])
-            violations.append(f"too many widgets: {len(widgets)} > {max_widgets} (extra: {refs})")
-
+            issues.append(f"markdown directive {marker.ref!r} has no entry in the directive list")
+        elif target.kind != marker.kind:
+            issues.append(f"directive {marker.ref!r} has different kinds in markdown and list")
+        if marker.kind == "image":
+            if image_aliases is not None and marker.ref not in image_aliases:
+                issues.append(f"unknown image id {marker.ref!r}")
+            if marker.ref in images:
+                issues.append(f"image id {marker.ref!r} is used more than once")
+            images.add(marker.ref)
+    for ref in declared.keys() - seen:
+        issues.append(f"directive {ref!r} missing from the markdown")
+    for kind, limit in (("widget", max_widgets), ("quiz", max_quizzes)):
+        count = sum(m.kind == kind for m in markers)
+        if limit is not None and count > limit:
+            issues.append(f"too many {kind} directives: {count} > {limit}")
     if alternation:
-        violations.extend(_check_alternation(markdown, markers, declared))
-
-    return violations
+        widgets = [
+            declared[m.ref]
+            for m in markers
+            if m.kind == "widget" and m.ref in declared and declared[m.ref].kind == "widget"
+        ]
+        for previous, current in pairwise(widgets):
+            if (
+                previous.primitive_hint is not None
+                and previous.mode_hint is not None
+                and (previous.primitive_hint, previous.mode_hint) == (current.primitive_hint, current.mode_hint)
+            ):
+                issues.append(f"widgets {previous.ref!r} and {current.ref!r} have identical primitive and mode")
+    if key_terms is not None:
+        for term in key_terms:
+            if term not in markdown:
+                issues.append(f"key term {term!r} is absent from markdown")
+    return issues
 
 
 def sanitize_draft(
-    draft: PageDraft,
-    *,
-    max_widgets: int,
-    image_aliases: Collection[str] | None = None,
+    draft: PageDraft, *, max_widgets: int, max_quizzes: int = 5, image_aliases: Collection[str] | None = None
 ) -> PageDraft:
-    """Repair what survived the retry, without inventing content.
-
-    - image directives with an unknown or already used alias are removed
-      (the resolver cannot place them);
-    - widgets beyond ``max_widgets`` are removed;
-    - when two widgets still follow each other with the same primitive and
-      mode, the second loses ``mode_hint`` and the resolver picks a mode.
-    The function is idempotent: sanitising a sanitised draft changes nothing.
-    """
-    payload = draft.model_dump()
-    markdown: str = payload["markdown"]
-    entries: list[dict[str, object]] = payload["directives"]
-    markers = list(extract_markers(markdown))
-
-    by_ref = {str(entry["ref"]): entry for entry in entries}
-    dropped: list[Marker] = []
-    if image_aliases is not None:
-        used_aliases: set[str] = set()
-        for marker in markers:
-            if marker.kind != "image":
-                continue
-            alias = by_ref[marker.ref].get("image_alias")
-            if alias not in image_aliases or alias in used_aliases:
-                dropped.append(marker)
-            else:
-                used_aliases.add(str(alias))
-
-    widgets = [marker for marker in markers if marker.kind == "widget" and marker not in dropped]
-    dropped.extend(widgets[max_widgets:])
-    if dropped:
-        dropped_refs = {marker.ref for marker in dropped}
-        markdown = _without_lines(markdown, [(marker.start, marker.end) for marker in dropped])
-        entries = [entry for entry in entries if entry["ref"] not in dropped_refs]
-
-    # Offsets changed if lines were removed, so locate the slots again.
-    markers = list(extract_markers(markdown))
-    mode_resets: list[Marker] = []
-    for previous, current in pairwise(markers):
-        if previous.kind != "widget" or current.kind != "widget":
-            continue
-        if markdown[previous.end : current.start].strip():
-            continue
-        earlier, later = by_ref[previous.ref], by_ref[current.ref]
-        earlier_primitive = earlier.get("primitive_hint")
-        later_primitive = later.get("primitive_hint")
-        earlier_mode = earlier.get("mode_hint")
-        later_mode = later.get("mode_hint")
-        if (
-            earlier_primitive is not None
-            and earlier_primitive == later_primitive
-            and earlier_mode is not None
-            and earlier_mode == later_mode
-        ):
-            later["mode_hint"] = None
-            mode_resets.append(current)
-
-    if mode_resets:
-        markdown = _without_attributes(markdown, mode_resets, names=("mode_hint",))
-
-    if not dropped and not mode_resets:
-        return draft
-    return type(draft).model_validate({**payload, "markdown": markdown, "directives": entries})
-
-
-def _check_images(
-    markers: Sequence[Marker],
-    declared: dict[str, DirectiveLike],
-    image_aliases: Collection[str],
-) -> list[str]:
-    violations: list[str] = []
+    markers, _ = extract_markers(draft.markdown)
+    entries: dict[str, Directive] = {}
+    for directive in draft.directives:
+        entries.setdefault(directive.ref, directive)
+    kept: list[Directive] = []
+    removed: list[tuple[int, int]] = []
     used: set[str] = set()
+    counts = {"widget": 0, "quiz": 0}
+    previous_widget: Directive | None = None
     for marker in markers:
-        if marker.kind != "image" or marker.ref not in declared:
+        entry = entries.get(marker.ref)
+        valid = entry is not None and entry.kind == marker.kind and marker.ref not in used
+        if marker.kind == "image" and image_aliases is not None and marker.ref not in image_aliases:
+            valid = False
+        if marker.kind in counts:
+            limit = max_widgets if marker.kind == "widget" else max_quizzes
+            if counts[marker.kind] >= limit:
+                valid = False
+        if not valid or entry is None:
+            end = marker.end
+            if draft.markdown[end : end + 2] == "\r\n":
+                end += 2
+            elif draft.markdown[end : end + 1] == "\n":
+                end += 1
+            removed.append((marker.start, end))
             continue
-        alias = declared[marker.ref].image_alias
-        if alias is None:
-            violations.append(f"image directive {marker.ref!r} has no image_alias")
-        elif alias not in image_aliases:
-            violations.append(f"image directive {marker.ref!r} uses unknown image alias {alias!r}")
-        elif alias in used:
-            violations.append(f"image alias {alias!r} is used more than once")
-        else:
-            used.add(alias)
-    return violations
-
-
-def _check_alternation(
-    markdown: str,
-    markers: Sequence[Marker],
-    declared: dict[str, DirectiveLike],
-) -> list[str]:
-    violations: list[str] = []
-    widgets = [marker for marker in markers if marker.kind == "widget" and marker.ref in declared]
-    for previous, current in pairwise(widgets):
-        if markdown[previous.end : current.start].strip():
-            continue
-        earlier, later = declared[previous.ref], declared[current.ref]
-        if earlier.primitive_hint is None or later.primitive_hint is None:
-            continue
-        if earlier.primitive_hint != later.primitive_hint:
-            continue
-        if earlier.mode_hint is None or later.mode_hint is None:
-            continue
-        if earlier.mode_hint != later.mode_hint:
-            continue
-        violations.append(
-            f"widgets {previous.ref!r} and {current.ref!r} follow each other with primitive "
-            f"{later.primitive_hint!r} and mode {later.mode_hint!r}; change the mode, use another "
-            "primitive, or merge them into one widget"
-        )
-    return violations
-
-
-def _without_lines(markdown: str, spans: Sequence[tuple[int, int]]) -> str:
-    result = markdown
-    for start, end in sorted(spans, reverse=True):
-        if result.startswith("\r\n", end):
-            end += 2
-        elif result.startswith("\n", end):
-            end += 1
-        result = result[:start] + result[end:]
-    return result
-
-
-def _without_attributes(markdown: str, markers: Sequence[Marker], *, names: Sequence[str]) -> str:
-    """Remove the given attributes from the directive lines, keeping the refs."""
-    result = markdown
-    patterns = [
-        re.compile(r"\s+" + re.escape(name) + r"\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s}]+)")
-        for name in names
-    ]
-    for marker in sorted(markers, key=lambda item: item.start, reverse=True):
-        line = result[marker.start : marker.end]
-        for pattern in patterns:
-            line = pattern.sub("", line)
-        result = result[: marker.start] + line + result[marker.end :]
-    return result
-
-
-__all__ = [
-    "DirectiveError",
-    "DirectiveLike",
-    "Marker",
-    "check_draft",
-    "extract_markers",
-    "locate_spans",
-    "sanitize_draft",
-]
+        used.add(marker.ref)
+        if marker.kind in counts:
+            counts[marker.kind] += 1
+        if marker.kind == "widget":
+            if (
+                previous_widget
+                and previous_widget.primitive_hint is not None
+                and previous_widget.mode_hint is not None
+                and (previous_widget.primitive_hint, previous_widget.mode_hint)
+                == (entry.primitive_hint, entry.mode_hint)
+            ):
+                entry = entry.model_copy(update={"mode_hint": None})
+            previous_widget = entry
+        kept.append(entry)
+    # Remove malformed directive lines too, so the frontend cannot render unknown slots.
+    offset = 0
+    marker_lines = {m.line for m in markers}
+    fence: tuple[str, int, int] | None = None
+    for number, raw in enumerate(draft.markdown.splitlines(keepends=True), 1):
+        line = raw.rstrip("\r\n")
+        match, depth = _fence_match(line)
+        if fence and depth < fence[2]:
+            fence = None
+        if fence:
+            if (
+                depth == fence[2]
+                and match
+                and match["fence"][0] == fence[0]
+                and len(match["fence"]) >= fence[1]
+                and not match["info"].strip()
+            ):
+                fence = None
+        elif match:
+            fence = (match["fence"][0], len(match["fence"]), depth)
+        elif number not in marker_lines and _CANDIDATE.match(line):
+            removed.append((offset, offset + len(raw)))
+        elif number not in marker_lines:
+            removed.extend((offset + item.start(), offset + item.end()) for item in _inline_directives(line))
+        offset += len(raw)
+    markdown = draft.markdown
+    for start, end in sorted(removed, reverse=True):
+        markdown = markdown[:start] + markdown[end:]
+    return draft.model_copy(
+        update={
+            "markdown": markdown,
+            "directives": kept,
+            "key_terms": [term for term in draft.key_terms if term in markdown],
+        }
+    )

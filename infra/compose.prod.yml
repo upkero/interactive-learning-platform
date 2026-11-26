@@ -28,6 +28,7 @@ services:
       - frontend
       - widget-host
       - minio
+      - grafana
     healthcheck:
       # /healthz — конечный 2xx на HTTP без редиректа на TLS-контекст localhost
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
@@ -44,23 +45,53 @@ services:
     ports: !reset []
     restart: unless-stopped
 
+  mailpit:
+    profiles: ["dev-only"]
+    ports: !reset []
+
   minio:
     ports: !reset []
     restart: unless-stopped
 
   # Backend-сервисы (сборка обозначена тегом backend в CI), образ из GHCR
   api:
+    environment:
+      ENVIRONMENT: production
     image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/backend:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
     build: !reset {}
     ports: !reset []
     restart: unless-stopped
 
   worker:
+    environment:
+      ENVIRONMENT: production
     image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/backend:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
     build: !reset {}
+    ports: !reset []
+    restart: unless-stopped
+
+  prometheus:
+    ports: !reset []
+    restart: unless-stopped
+
+  loki:
+    ports: !reset []
+    restart: unless-stopped
+
+  grafana:
+    ports: !reset []
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:?Set a strong GF_SECURITY_ADMIN_PASSWORD}
+      GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:?Set GF_SERVER_ROOT_URL to the external Grafana HTTPS URL}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+
+  promtail:
     restart: unless-stopped
 
   beat:
+    environment:
+      ENVIRONMENT: production
     image: ghcr.io/${GITHUB_REPOSITORY:-upkero/interactive-learning-platform}/backend:${IMAGE_TAG:?IMAGE_TAG must be the commit sha published by CI (required)}
     build: !reset {}
     restart: unless-stopped

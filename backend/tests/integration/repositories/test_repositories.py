@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.app.contracts.documents.image_draft import ImageDraft
 from src.app.contracts.documents.part_draft import PartDraft
 from src.app.contracts.documents.part_record import PartRecord
-from src.app.contracts.documents.statuses import DocumentStatus, MaterialRole, SourceType
+from src.app.contracts.documents.statuses import DocumentStatus, MaterialRole, PartStatus, SourceType
 from src.app.contracts.quizzes import QuizAttemptRecord
 from src.app.contracts.quota import LedgerOp
 from src.app.contracts.users import UserRecord
@@ -47,7 +47,7 @@ async def _new_document(
     """Committed user + document pair; returns (user_id, document_id)."""
     email = f"u-{uuid4()}@grasp.test"
     async with session_factory() as session, session.begin():
-        user = await UserRepository(session).create(email=email, password_hash="hash")
+        user = await UserRepository(session).create(email=email, password_hash="hash", monthly_limit=20)
         document = await DocumentRepository(session).create(
             owner_id=user.id,
             title="Doc",
@@ -65,7 +65,7 @@ async def _create_part(session: AsyncSession, document_id: UUID) -> PartRecord:
     repository = DocumentPartRepository(session)
     (part,) = await repository.add_many(
         document_id,
-        [PartDraft(index=0, title="P", topic_ids=[], source_markdown="m", token_count=1)],
+        [PartDraft(index=0, title="P", topic_ids=[], source_markdown="m", token_count=1, quota_period_start=None)],
     )
     return part
 
@@ -75,7 +75,7 @@ async def test_user_repository_roundtrip(session_factory: SessionFactory) -> Non
     email = f"u-{uuid4()}@grasp.test"
     async with session_factory() as session, session.begin():
         repository = UserRepository(session)
-        created = await repository.create(email=email.upper(), password_hash="h", display_name="N")
+        created = await repository.create(email=email.upper(), password_hash="h", display_name="N", monthly_limit=20)
         # Before commit the identity map still holds the value we passed:
         # CITEXT folding happens on the database side, not in Python.
         assert created.email == email.upper()
@@ -100,16 +100,16 @@ async def test_duplicate_email_raises_domain_exception(session_factory: SessionF
     email = f"u-{uuid4()}@grasp.test"
     async with session_factory() as session, session.begin():
         repository = UserRepository(session)
-        await repository.create(email=email, password_hash="hash")
+        await repository.create(email=email, password_hash="hash", monthly_limit=20)
         with pytest.raises(UserAlreadyExistsError):
-            await repository.create(email=email.upper(), password_hash="hash")
+            await repository.create(email=email.upper(), password_hash="hash", monthly_limit=20)
 
 
 async def test_contract_is_immutable(session_factory: SessionFactory) -> None:
     """Contracts are frozen: mutation attempts raise FrozenInstanceError."""
     email = f"u-{uuid4()}@grasp.test"
     async with session_factory() as session, session.begin():
-        created: UserRecord = await UserRepository(session).create(email=email, password_hash="hash")
+        created: UserRecord = await UserRepository(session).create(email=email, password_hash="hash", monthly_limit=20)
     with pytest.raises(dataclasses.FrozenInstanceError):
         created.email = "other@grasp.test"  # type: ignore[misc]
 
@@ -146,8 +146,12 @@ async def test_document_part_repository_roundtrip(session_factory: SessionFactor
         created = await repository.add_many(
             document_id,
             [
-                PartDraft(index=1, title="B", topic_ids=["t"], source_markdown="b", token_count=2),
-                PartDraft(index=0, title="A", topic_ids=[], source_markdown="a", token_count=1),
+                PartDraft(
+                    index=1, title="B", topic_ids=["t"], source_markdown="b", token_count=2, quota_period_start=None
+                ),
+                PartDraft(
+                    index=0, title="A", topic_ids=[], source_markdown="a", token_count=1, quota_period_start=None
+                ),
             ],
         )
         listed = await repository.list_by_document(document_id)
@@ -160,6 +164,38 @@ async def test_document_part_repository_roundtrip(session_factory: SessionFactor
     assert created[0].topic_ids == ("t",)
     assert listed[0].id == created[1].id
     assert content_type is None
+
+
+async def test_document_part_has_published_since(session_factory: SessionFactory) -> None:
+    """The SSE handshake asks only whether the current run published anything."""
+    _, document_id = await _new_document(session_factory)
+    async with session_factory() as session, session.begin():
+        repository = DocumentPartRepository(session)
+        previous, current, queued = await repository.add_many(
+            document_id,
+            [
+                PartDraft(
+                    index=0, title="old", topic_ids=[], source_markdown="x", token_count=1, quota_period_start=None
+                ),
+                PartDraft(
+                    index=1, title="new", topic_ids=[], source_markdown="x", token_count=1, quota_period_start=None
+                ),
+                PartDraft(
+                    index=2, title="queued", topic_ids=[], source_markdown="x", token_count=1, quota_period_start=None
+                ),
+            ],
+        )
+        assert await repository.has_published_since(document_id, 0) is False
+
+        await repository.transition(previous.id, frozenset({PartStatus.QUEUED}), PartStatus.PUBLISHED)
+        assert await repository.has_published_since(document_id, 0) is True
+        assert await repository.has_published_since(document_id, 1) is False
+
+        await repository.transition(current.id, frozenset({PartStatus.QUEUED}), PartStatus.PUBLISHED)
+        assert await repository.has_published_since(document_id, 1) is True
+        assert await repository.has_published_since(document_id, 2) is False
+        assert await repository.has_published_since(uuid4(), 0) is False
+        assert queued.index == 2
 
 
 async def test_image_repository_roundtrip(session_factory: SessionFactory) -> None:
@@ -202,7 +238,9 @@ async def test_image_repository_get_many_batches_and_preserves_order(
 async def test_user_material_repository_roundtrip(session_factory: SessionFactory) -> None:
     owner_id, document_id = await _new_document(session_factory)
     async with session_factory() as session, session.begin():
-        other_user = await UserRepository(session).create(email=f"u-{uuid4()}@grasp.test", password_hash="hash")
+        other_user = await UserRepository(session).create(
+            email=f"u-{uuid4()}@grasp.test", password_hash="hash", monthly_limit=20
+        )
         repository = UserMaterialRepository(session)
         await repository.create(user_id=owner_id, document_id=document_id, role=MaterialRole.OWNER)
         assert await repository.get_role(owner_id, document_id) is MaterialRole.OWNER

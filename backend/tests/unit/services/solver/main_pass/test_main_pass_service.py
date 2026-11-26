@@ -54,7 +54,7 @@ def _service(
         llm=llm,
         session_factory=cast(async_sessionmaker[AsyncSession], lambda: FakeSession()),
         primitives=lambda _: primitives,
-        settings=SolverSettings(main_pass_max_tokens=max_tokens, main_pass_max_widgets=max_widgets),
+        settings=SolverSettings(main_pass_max_tokens=max_tokens, max_widgets_per_part=max_widgets),
         metrics=metrics or RecordingMetricsCollector(),
     )
 
@@ -89,7 +89,7 @@ async def test_builds_two_cached_layers_and_one_volatile_message() -> None:
     assert isinstance(message.content, str)
     assert payload.part_title in message.content
     assert "weighted sum" in message.content
-    assert 'alias="img-1"' in message.content
+    assert 'alias="img_1"' in message.content
     assert "<part_topics>" in message.content
 
     assert result.draft.markdown.startswith("## From neurons to layers")
@@ -100,17 +100,20 @@ async def test_builds_two_cached_layers_and_one_volatile_message() -> None:
             intent="Show how the weighted sum of three inputs becomes one neuron output.",
             primitive_hint="three-frame",
             mode_hint="steps",
+            source_span="A neuron computes a weighted sum of its inputs",
         ),
         MainPassDirective(
-            ref="i1",
+            ref="img_1",
             kind="image",
             intent="The diagram of a single neuron with three inputs from the source part.",
-            image_alias="img-1",
+            image_id="img_1",
+            source_span="A neuron computes a weighted sum of its inputs",
         ),
         MainPassDirective(
             ref="q1",
             kind="quiz",
             intent="Check that the reader can tell a weight from an activation function.",
+            source_span="A neuron computes a weighted sum of its inputs",
         ),
     )
     assert result.draft.key_terms == ("neuron", "weight", "bias", "activation function", "layer", "ReLU")
@@ -122,15 +125,14 @@ async def test_returns_spans_and_the_alias_to_image_id_mapping() -> None:
 
     result = await service.run(build_input())
 
-    assert [span.ref for span in result.spans] == ["w1", "i1", "q1"]
-    assert [result.draft.markdown[span.start : span.end] for span in result.spans] == [
-        '::widget{ref="w1" primitive_hint="three-frame" mode_hint="steps"}',
-        '::image{ref="i1" image_alias="img-1"}',
-        '::quiz{ref="q1"}',
-    ]
+    assert [span.ref for span in result.spans] == ["w1", "img_1", "q1"]
+    source = build_input().part_markdown
+    assert [source[span.start : span.end] for span in result.spans] == [
+        "A neuron computes a weighted sum of its inputs",
+    ] * 3
     image_ids = {image.alias: image.id for image in build_images("neurons")}
-    assert result.image_ids == {"img-1": image_ids["img-1"]}
-    assert isinstance(result.image_ids["img-1"], UUID)
+    assert result.image_ids == {"img_1": image_ids["img_1"]}
+    assert isinstance(result.image_ids["img_1"], UUID)
 
 
 async def test_two_parts_of_one_document_share_both_cached_blocks() -> None:
@@ -176,9 +178,7 @@ async def test_logs_one_summary_line_with_output_counts(caplog: pytest.LogCaptur
 async def test_a_first_answer_violation_is_sent_back_for_one_repair_turn() -> None:
     primitives = await _primitive_repo()
     metrics = RecordingMetricsCollector()
-    llm = FakeLLMClient(
-        structured=[_draft("page_draft_conflict.json"), _draft()]
-    )
+    llm = FakeLLMClient(structured=[_draft("page_draft_conflict.json"), _draft()])
     service = _service(llm=llm, primitives=primitives, metrics=metrics)
 
     result = await service.run(build_input())
@@ -188,11 +188,12 @@ async def test_a_first_answer_violation_is_sent_back_for_one_repair_turn() -> No
     assert retry_message.role == "user"
     assert isinstance(retry_message.content, str)
     assert "The previous draft breaks these rules" in retry_message.content
-    assert "follow each other with primitive 'three-frame'" in retry_message.content
+    assert "identical primitive and mode" in retry_message.content
+    assert "do not alter markdown to match key_terms" in retry_message.content
     assert llm.requests[1].messages[-2].role == "assistant"
 
     assert [directive.mode_hint for directive in result.draft.directives] == ["steps", None, None]
-    first_answer = metrics.counters_named("main_pass.draft_violations")
+    first_answer = metrics.counters_named("main_pass.draft_violations_total")
     assert [(counter.labels["attempt"], counter.by) for counter in first_answer] == [("first", 1)]
 
 
@@ -215,10 +216,9 @@ async def test_a_violation_surviving_the_retry_is_sanitized(
     # The second widget keeps its primitive but loses the mode: the resolver
     # picks a different mode instead of repeating the same widget twice.
     assert [directive.mode_hint for directive in result.draft.directives] == ["steps", None, None]
-    assert '::widget{ref="w2" primitive_hint="three-frame"}' in result.draft.markdown
-    assert '::widget{ref="w2" primitive_hint="three-frame" mode_hint="steps"}' not in result.draft.markdown
+    assert '::widget{ref="w2"}' in result.draft.markdown
 
-    violations = metrics.counters_named("main_pass.draft_violations")
+    violations = metrics.counters_named("main_pass.draft_violations_total")
     assert [(counter.labels["attempt"], counter.by) for counter in violations] == [("first", 1), ("retry", 1)]
     warnings = [record for record in caplog.records if record.message == "Main pass rule violation."]
     assert [warning.__dict__["attempt"] for warning in warnings] == ["first", "retry"]
@@ -231,7 +231,7 @@ async def test_a_clean_first_answer_logs_no_violation() -> None:
 
     await service.run(build_input())
 
-    assert metrics.counters_named("main_pass.draft_violations") == []
+    assert metrics.counters_named("main_pass.draft_violations_total") == []
 
 
 async def test_the_widget_limit_comes_from_the_settings() -> None:
@@ -244,5 +244,5 @@ async def test_the_widget_limit_comes_from_the_settings() -> None:
 
     result = await service.run(build_input())
 
-    assert [directive.ref for directive in result.draft.directives] == ["i1", "q1"]
+    assert [directive.ref for directive in result.draft.directives] == ["img_1", "q1"]
     assert "::widget" not in result.draft.markdown

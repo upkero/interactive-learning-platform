@@ -47,14 +47,4 @@ class FakeGenerationLedgerRepository(GenerationLedgerRepositoryProtocol):
         return tuple(self._entries)
 
     async def sum_delta(self, user_id: UUID, period_start: date) -> int:
-        return sum(e.delta for e in self._entries if e.user_id == user_id and e.period_start >= period_start)
-
-    async def reserve_period(self, document_id: UUID) -> date | None:
-        return next(
-            (
-                e.period_start
-                for e in reversed(self._entries)
-                if e.document_id == document_id and e.op is LedgerOp.RESERVE
-            ),
-            None,
-        )
+        return sum(e.delta for e in self._entries if e.user_id == user_id and e.period_start == period_start)

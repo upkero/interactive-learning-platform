@@ -1,31 +1,34 @@
 {
-  "markdown": "## From neurons to layers\n\nA neuron computes a weighted sum of its inputs.\n\n::widget{ref=\"w1\" primitive_hint=\"three-frame\" mode_hint=\"steps\"}\n::widget{ref=\"w2\" primitive_hint=\"three-frame\" mode_hint=\"steps\"}\n\nA layer stacks many neurons that read the same input vector.\n\n::quiz{ref=\"q1\"}\n",
+  "markdown": "## From neurons to layers\n\nA neuron computes a weighted sum of its inputs.\n\n::widget{ref=\"w1\"}\n::widget{ref=\"w2\"}\n\nA layer stacks many neurons that read the same input vector. Each neuron has its own weights, so a layer produces one output value per neuron.\n\n::quiz{ref=\"q1\"}\n",
   "directives": [
     {
       "ref": "w1",
       "kind": "widget",
       "intent": "Show a weighted sum step by step.",
       "primitive_hint": "three-frame",
-      "mode_hint": "steps"
+      "mode_hint": "steps",
+      "source_span": "A neuron computes a weighted sum of its inputs"
     },
     {
       "ref": "w2",
       "kind": "widget",
       "intent": "Show the same weighted sum again.",
       "primitive_hint": "three-frame",
-      "mode_hint": "steps"
+      "mode_hint": "steps",
+      "source_span": "A neuron computes a weighted sum of its inputs"
     },
     {
       "ref": "q1",
       "kind": "quiz",
-      "intent": "Check that the reader can tell a weight from an activation function."
+      "intent": "Check that the reader can tell a weight from an activation function.",
+      "source_span": "A neuron computes a weighted sum of its inputs"
     }
   ],
   "key_terms": [
     "neuron",
     "weight",
-    "bias",
-    "activation function",
-    "layer"
+    "layer",
+    "input",
+    "output"
   ]
 }

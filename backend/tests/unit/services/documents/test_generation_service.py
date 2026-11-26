@@ -1,5 +1,6 @@
 """Unit tests 1.4.6: GenerationService.plan — pure preview, no writes."""
 
+from dataclasses import replace
 from datetime import date
 from typing import cast
 from uuid import UUID, uuid4
@@ -7,18 +8,25 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.app.contracts.documents import DocumentStatus, MaterialRole, PartDraft, SourceType
+from src.app.contracts.documents import DocumentStatus, MaterialRole, PartDraft, PartStatus, SourceType
 from src.app.contracts.documents.generation import GenerationAnswers, GenerationCommand
-from src.app.core.clock import Clock
+from src.app.core.settings.app import AppSettings
 from src.app.core.settings.processing import ProcessingSettings
+from src.app.core.settings.smtp import SMTPSettings
 from src.app.exceptions.documents import DocumentNotFoundError, DocumentNotReadyError
 from src.app.exceptions.quota import QuotaExceededError
 from src.app.exceptions.tasks import TaskDispatchError
+from src.app.ingest.part_planner import DocumentPartPlanner
+from src.app.ingest.splitting import SplitLimits
+from src.app.ingest.tokens import TokenCounter
 from src.app.interfaces.storage.object_storage_client import StorageBucket
 from src.app.services.documents.generation_service import GenerationService
-from src.app.services.documents.topic_per_part_planner import TopicPerPartPlanner
+from src.app.services.notifications.notification_service import NotificationService
 from src.app.services.quota.quota_ledger import QuotaLedger
+from tests.support.fakes.core.clock import FixedClock
 from tests.support.fakes.db.session import FakeSession
+from tests.support.fakes.notifications.claims import FakeNotificationClaims
+from tests.support.fakes.notifications.email_sender import FakeEmailSender
 from tests.support.fakes.repositories.documents import (
     FakeDocumentPartRepository,
     FakeDocumentRepository,
@@ -26,10 +34,12 @@ from tests.support.fakes.repositories.documents import (
 )
 from tests.support.fakes.repositories.quota import FakeGenerationLedgerRepository
 from tests.support.fakes.repositories.users import FakeUserRepository
+from tests.support.fakes.services.progress_notifier import FakeProgressNotifier
 from tests.support.fakes.services.task_dispatcher import FakeTaskDispatcher
 from tests.support.fakes.storage.object_storage_client import FakeObjectStorageClient
 
 pytestmark = pytest.mark.unit
+_DEFAULT_LIMITS = SplitLimits(15_000, 22_000)
 
 _TREE: list[dict[str, object]] = [
     {
@@ -77,11 +87,6 @@ class _ParsedStorage(FakeObjectStorageClient):
         return ("a" * 1200 + "b" * 600).encode()
 
 
-class _FixedClock(Clock):
-    def today(self) -> date:
-        return date(2026, 11, 14)
-
-
 def _factory(session: FakeSession) -> async_sessionmaker[AsyncSession]:
     return cast(async_sessionmaker[AsyncSession], lambda: session)
 
@@ -91,11 +96,13 @@ def _ledger(users: FakeUserRepository, ledger_repo: FakeGenerationLedgerReposito
         users_factory=lambda _: users,
         ledger_factory=lambda _: ledger_repo,
         parts_factory=lambda _: FakeDocumentPartRepository(),
-        clock=_FixedClock(),
+        clock=FixedClock(date(2026, 11, 14)),
     )
 
 
-def _service() -> tuple[
+def _service(
+    limits: SplitLimits = _DEFAULT_LIMITS,
+) -> tuple[
     GenerationService,
     FakeDocumentRepository,
     FakeUserMaterialRepository,
@@ -115,11 +122,13 @@ def _service() -> tuple[
         materials=lambda _: materials,
         parts=lambda _: parts,
         users=lambda _: users,
-        planner=TopicPerPartPlanner(),
+        planner=DocumentPartPlanner(TokenCounter(), limits),
         storage=_ParsedStorage(),
         ledger=_ledger(users, ledger_repo),
         dispatcher=FakeTaskDispatcher(),
         settings=ProcessingSettings(max_active_documents=2),
+        notification_claims=FakeNotificationClaims(),
+        progress_notifier=FakeProgressNotifier(),
     )
     return service, documents, materials, parts, ledger_repo, users
 
@@ -154,6 +163,7 @@ async def _parsed_document(
                 topic_ids=["topic-adaptive", "topic-chunking"],
                 source_markdown="part one",
                 token_count=142,
+                quota_period_start=None,
                 profile={},
             ),
             PartDraft(
@@ -162,6 +172,7 @@ async def _parsed_document(
                 topic_ids=["topic-chunking", "topic-tree"],
                 source_markdown="part two",
                 token_count=178,
+                quota_period_start=None,
                 profile={},
             ),
             PartDraft(
@@ -170,6 +181,7 @@ async def _parsed_document(
                 topic_ids=["topic-quota"],
                 source_markdown="part three",
                 token_count=96,
+                quota_period_start=None,
                 profile={},
             ),
         ],
@@ -187,11 +199,11 @@ async def test_plan_returns_preview_cost_and_available() -> None:
         topic_ids=["topic-adaptive", "topic-quota"],
     )
 
-    # adaptive: 142+178 (each part counted once per subtree); quota: 96.
-    # The short quota part (< 5000) is glued to the previous one (1.10.1)
-    assert [(p.index, p.tokens) for p in plan.parts] == [(0, 320), (1, 96)]
-    assert plan.parts[0].title == "Adaptive learning"
-    assert len(plan.parts) == 2
+    # Small topics from different chapters share a part while it is below the
+    # minimum fill threshold; generation therefore costs one unit.
+    assert len(plan.parts) == 1
+    assert plan.parts[0].tokens == TokenCounter().count(plan.parts[0].markdown)
+    assert plan.parts[0].title == "Adaptive learning — Quota and generation pipeline"
     assert available == 20  # default monthly limit, nothing reserved
 
     # the plan is a pure read: the journal is untouched
@@ -264,11 +276,13 @@ async def test_start_reserves_and_dispatches_after_commit() -> None:
         materials=lambda _: materials,
         parts=lambda _: parts,
         users=lambda _: users,
-        planner=TopicPerPartPlanner(),
+        planner=DocumentPartPlanner(TokenCounter(), SplitLimits(15_000, 22_000)),
         storage=_ParsedStorage(),
         ledger=_ledger(users, ledger_repo),
         dispatcher=dispatcher,
         settings=ProcessingSettings(max_active_documents=2),
+        notification_claims=FakeNotificationClaims(),
+        progress_notifier=FakeProgressNotifier(),
     )
     started = await service.start(
         GenerationCommand(
@@ -318,7 +332,48 @@ async def test_generate_fresh_parsed_document_without_existing_parts() -> None:
     )
     assert started.cost == len(preview.parts) == 1
     part = await parts.get(started.part_ids[0])
-    assert part is not None and part.source_markdown == "a" * 1200
+    assert part is not None
+    assert (part.title, part.token_count) == (preview.parts[0].title, preview.parts[0].tokens)
+    assert part.source_markdown == preview.parts[0].markdown == "a" * 1200
+
+
+@pytest.mark.parametrize("anchor", [None, date(2000, 1, 31)])
+async def test_start_assigns_reservation_period_to_every_part(anchor: date | None) -> None:
+    service, documents, materials, parts, ledger_repo, users = _service(SplitLimits(250, 500))
+    owner, document_id = await _parsed_document(users, documents, materials, parts)
+    users._users[owner] = replace(users._users[owner], period_anchor=anchor)
+    state = await _ledger(users, ledger_repo).available(cast(AsyncSession, FakeSession()), user_id=owner)
+    started = await service.start(
+        GenerationCommand(
+            user_id=owner,
+            document_id=document_id,
+            topic_ids=("topic-adaptive", "topic-quota"),
+            answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+        )
+    )
+    assert started.cost == len(started.part_ids) == 2
+    assert all(parts.drafts[part_id].quota_period_start == state.period.start for part_id in started.part_ids)
+    assert ledger_repo.entries[0].period_start == state.period.start
+
+
+async def test_start_rejects_empty_source_before_reserving(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def empty_markdown(self: _ParsedStorage, *, bucket: StorageBucket, key: str) -> bytes:
+        return b" " * 1800
+
+    monkeypatch.setattr(_ParsedStorage, "get_object", empty_markdown)
+    service, documents, materials, parts, ledger_repo, users = _service()
+    owner, document_id = await _parsed_document(users, documents, materials, parts)
+    with pytest.raises(DocumentNotReadyError):
+        await service.start(
+            GenerationCommand(
+                user_id=owner,
+                document_id=document_id,
+                topic_ids=("topic-adaptive",),
+                answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+            )
+        )
+    assert not ledger_repo.entries
+    assert len(await parts.list_by_document(document_id)) == 3
 
 
 async def test_queue_failure_keeps_committed_parts_and_reservation() -> None:
@@ -331,11 +386,13 @@ async def test_queue_failure_keeps_committed_parts_and_reservation() -> None:
         materials=lambda _: materials,
         parts=lambda _: parts,
         users=lambda _: users,
-        planner=TopicPerPartPlanner(),
+        planner=DocumentPartPlanner(TokenCounter(), SplitLimits(15_000, 22_000)),
         storage=_ParsedStorage(),
         ledger=_ledger(users, ledger_repo),
         dispatcher=FakeTaskDispatcher(fail_with=TaskDispatchError()),
         settings=ProcessingSettings(max_active_documents=2),
+        notification_claims=FakeNotificationClaims(),
+        progress_notifier=FakeProgressNotifier(),
     )
     with pytest.raises(TaskDispatchError):
         await service.start(
@@ -354,8 +411,6 @@ async def test_queue_failure_keeps_committed_parts_and_reservation() -> None:
 async def test_start_rejects_insufficient_quota_without_writes() -> None:
     _, documents, materials, parts, ledger_repo, users = _service()
     owner, document_id = await _parsed_document(users, documents, materials, parts)
-    from dataclasses import replace
-
     users._users[owner] = replace(users._users[owner], monthly_limit=0)
     session = FakeSession()
     dispatcher = FakeTaskDispatcher()
@@ -365,11 +420,13 @@ async def test_start_rejects_insufficient_quota_without_writes() -> None:
         materials=lambda _: materials,
         parts=lambda _: parts,
         users=lambda _: users,
-        planner=TopicPerPartPlanner(),
+        planner=DocumentPartPlanner(TokenCounter(), SplitLimits(15_000, 22_000)),
         storage=_ParsedStorage(),
         ledger=_ledger(users, ledger_repo),
         dispatcher=dispatcher,
         settings=ProcessingSettings(max_active_documents=2),
+        notification_claims=FakeNotificationClaims(),
+        progress_notifier=FakeProgressNotifier(),
     )
     with pytest.raises(QuotaExceededError) as error:
         await service.start(
@@ -410,11 +467,13 @@ async def test_start_requires_owner_even_when_processing_limit_is_full() -> None
         materials=lambda _: materials,
         parts=lambda _: parts,
         users=lambda _: users,
-        planner=TopicPerPartPlanner(),
+        planner=DocumentPartPlanner(TokenCounter(), SplitLimits(15_000, 22_000)),
         storage=_ParsedStorage(),
         ledger=_ledger(users, ledger_repo),
         dispatcher=FakeTaskDispatcher(),
         settings=ProcessingSettings(max_active_documents=2),
+        notification_claims=FakeNotificationClaims(),
+        progress_notifier=FakeProgressNotifier(),
     )
     with pytest.raises(DocumentNotFoundError):
         await service.start(
@@ -427,3 +486,101 @@ async def test_start_requires_owner_even_when_processing_limit_is_full() -> None
         )
     assert (await documents.get(document_id)).owner_id == owner  # type: ignore[union-attr]
     assert ledger_repo._entries == []
+
+
+async def test_two_generations_send_two_emails_but_duplicate_completion_sends_one_each() -> None:
+    _unused, documents, materials, parts, ledger_repo, users = _service()
+    owner, document_id = await _parsed_document(users, documents, materials, parts)
+    claims = FakeNotificationClaims()
+    sender = FakeEmailSender()
+    progress_notifier = FakeProgressNotifier()
+    service = GenerationService(
+        session_factory=_factory(FakeSession()),
+        documents=lambda _: documents,
+        materials=lambda _: materials,
+        parts=lambda _: parts,
+        users=lambda _: users,
+        planner=DocumentPartPlanner(TokenCounter(), SplitLimits(15_000, 22_000)),
+        storage=_ParsedStorage(),
+        ledger=_ledger(users, ledger_repo),
+        dispatcher=FakeTaskDispatcher(),
+        settings=ProcessingSettings(),
+        notification_claims=claims,
+        progress_notifier=progress_notifier,
+    )
+    mail = NotificationService(
+        session_factory=_factory(FakeSession()),
+        users=lambda _: users,
+        documents=lambda _: documents,
+        parts=lambda _: parts,
+        claims=claims,
+        sender=sender,
+        app_settings=AppSettings(),
+        smtp_settings=SMTPSettings(enabled=True, host="localhost"),
+    )
+    command = GenerationCommand(
+        user_id=owner,
+        document_id=document_id,
+        topic_ids=("topic-adaptive",),
+        answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+    )
+    for iteration in range(2):
+        started = await service.start(command)
+        for part_id in started.part_ids:
+            await parts.transition(part_id, frozenset({PartStatus.QUEUED}), PartStatus.PUBLISHED)
+        await documents.set_status(document_id, DocumentStatus.DONE)
+        await mail.on_document_finished(document_id)
+        await mail.on_document_finished(document_id)
+        assert len(sender.sent) == iteration + 1
+    assert claims.reset_calls == [document_id, document_id]
+    assert progress_notifier.reset_calls == [document_id, document_id]
+
+
+async def test_notification_reset_outage_does_not_prevent_dispatch(caplog: pytest.LogCaptureFixture) -> None:
+    _unused, documents, materials, parts, ledger_repo, users = _service()
+    owner, document_id = await _parsed_document(users, documents, materials, parts)
+    claims = FakeNotificationClaims()
+    claims.fail_reset = True
+    dispatcher = FakeTaskDispatcher()
+    service = GenerationService(
+        session_factory=_factory(FakeSession()),
+        documents=lambda _: documents,
+        materials=lambda _: materials,
+        parts=lambda _: parts,
+        users=lambda _: users,
+        planner=DocumentPartPlanner(TokenCounter(), SplitLimits(15_000, 22_000)),
+        storage=_ParsedStorage(),
+        ledger=_ledger(users, ledger_repo),
+        dispatcher=dispatcher,
+        settings=ProcessingSettings(),
+        notification_claims=claims,
+        progress_notifier=FakeProgressNotifier(),
+    )
+    result = await service.start(
+        GenerationCommand(
+            user_id=owner,
+            document_id=document_id,
+            topic_ids=("topic-adaptive",),
+            answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+        )
+    )
+    assert dispatcher.calls == [("enqueue_part", (result.part_ids[0], True))]
+    assert "notification.reset_failed" in caplog.text
+
+
+async def test_failed_generation_can_be_retried_from_parsed_topics() -> None:
+    service, documents, materials, parts, _ledger, users = _service()
+    owner, document_id = await _parsed_document(users, documents, materials, parts)
+    await documents.set_status(document_id, DocumentStatus.FAILED)
+    preview, _ = await service.plan(user_id=owner, document_id=document_id, topic_ids=["topic-adaptive"])
+    started = await service.start(
+        GenerationCommand(
+            user_id=owner,
+            document_id=document_id,
+            topic_ids=("topic-adaptive",),
+            answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
+        )
+    )
+    assert started.cost == len(preview.parts) == 1
+    saved = await documents.get(document_id)
+    assert saved is not None and saved.status is DocumentStatus.GENERATING

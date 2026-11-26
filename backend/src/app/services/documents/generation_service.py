@@ -1,16 +1,18 @@
 """Generation service: plan preview (story 1.4.6) and start (story 1.4.7).
 
-``plan`` is a pure read: it loads the parsed tree, runs the splitting
-rules (1.10 later replaced through ``PartPlanner``) over the selected
+``plan`` is a pure read: it loads the parsed tree, runs ``PartPlanner`` over the selected
 topics and reports the cost against the quota — without reserving or
 writing anything. ``start`` does the same inside one transaction, then
 reserves quota, creates the parts and only after the commit enqueues
 them.
 """
 
+import asyncio
+import logging
 from collections.abc import Callable
 from uuid import UUID
 
+from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.documents import (
@@ -29,6 +31,7 @@ from src.app.exceptions.documents import (
     EmptyTopicSelectionError,
     UnknownTopicError,
 )
+from src.app.interfaces.notifications.claims import NotificationClaims
 from src.app.interfaces.repositories.documents import (
     DocumentPartRepositoryProtocol,
     DocumentRepositoryProtocol,
@@ -36,12 +39,15 @@ from src.app.interfaces.repositories.documents import (
 )
 from src.app.interfaces.repositories.users import UserRepositoryProtocol
 from src.app.interfaces.services.part_planner import PartPlanner
+from src.app.interfaces.services.progress_notifier import ProgressNotifier
 from src.app.interfaces.services.task_dispatcher import TaskDispatcher
 from src.app.interfaces.storage.object_storage_client import ObjectStorageClient
 from src.app.services.documents.document_query_service import READABLE_STATUSES
 from src.app.services.documents.processing_capacity import assert_processing_capacity
 from src.app.services.quota.quota_ledger import QuotaLedger
 from src.app.storage.object_keys import parsed_markdown_key
+
+logger = logging.getLogger(__name__)
 
 
 class GenerationService:
@@ -58,6 +64,8 @@ class GenerationService:
         ledger: QuotaLedger,
         dispatcher: TaskDispatcher,
         settings: ProcessingSettings,
+        notification_claims: NotificationClaims,
+        progress_notifier: ProgressNotifier,
     ) -> None:
         self._session_factory = session_factory
         self._documents = documents
@@ -69,6 +77,8 @@ class GenerationService:
         self._ledger = ledger
         self._dispatcher = dispatcher
         self._settings = settings
+        self._notification_claims = notification_claims
+        self._progress_notifier = progress_notifier
 
     async def start(self, command: GenerationCommand) -> GenerationStarted:
         user_id, document_id, topic_ids, answers = (
@@ -93,18 +103,7 @@ class GenerationService:
             existing = await parts.list_by_document(document_id)
             next_index = max((part.index for part in existing), default=-1) + 1
             profile = answers.as_dict()
-            drafts = [
-                PartDraft(
-                    index=next_index + part.index,
-                    title=part.title,
-                    topic_ids=list(part.topic_ids),
-                    source_markdown=part.markdown,
-                    token_count=part.tokens,
-                    profile=profile,
-                )
-                for part in plan.parts
-            ]
-            if any(not draft.source_markdown.strip() for draft in drafts):
+            if any(not part.markdown.strip() for part in plan.parts):
                 raise DocumentNotReadyError(detail="Source text for selected topics is not available.")
             quota = await self._ledger.reserve(
                 session,
@@ -112,9 +111,27 @@ class GenerationService:
                 document_id=document_id,
                 parts=len(plan.parts),
             )
+            drafts = [
+                PartDraft(
+                    index=next_index + part.index,
+                    title=part.title,
+                    topic_ids=list(part.topic_ids),
+                    source_markdown=part.markdown,
+                    token_count=part.tokens,
+                    quota_period_start=quota.period.start,
+                    profile=profile,
+                )
+                for part in plan.parts
+            ]
             created = await parts.add_many(document_id, drafts)
+            await documents.set_generation_start(document_id, next_index)
             await documents.set_status(document_id, DocumentStatus.GENERATING)
             await self._users(session).save_last_answers(user_id, profile)
+        try:
+            await self._notification_claims.reset(document_id)
+        except RedisError:
+            logger.warning("notification.reset_failed", extra={"document_id": str(document_id)}, exc_info=True)
+        await self._progress_notifier.reset(document_id)
         for index, part in enumerate(created):
             await self._dispatcher.enqueue_part(part.id, high=index == 0)
         return GenerationStarted(document_id, tuple(p.id for p in created), len(created), quota.available)
@@ -155,13 +172,18 @@ class GenerationService:
 
         if set(topic_ids) - ids(tree):
             raise UnknownTopicError()
-        plan = TopicPlan(tuple(self._planner.plan(tree, set(topic_ids), markdown)))
+        parts = await asyncio.to_thread(self._planner.plan, tree, set(topic_ids), markdown)
+        plan = TopicPlan(tuple(parts))
         available = (await self._ledger.available(session, user_id=user_id)).available
         return plan, available
 
     @staticmethod
     def _assert_plannable(document: DocumentRecord) -> None:
         if document.status is DocumentStatus.FAILED:
+            # Parsing failures remain unavailable, but failed generation parts
+            # may be retried against the already parsed source and topic tree.
+            if document.error_code is None and document.topic_tree:
+                return
             reason = document.error_code.value if document.error_code is not None else None
             raise DocumentNotReadyError(
                 detail="Document processing failed.", extra={"status": "failed", "reason": reason}

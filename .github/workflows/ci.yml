@@ -11,6 +11,7 @@ jobs:
   # ---------------------------------------------------------------------------
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       # pull the private MinIO copy from GHCR (aistor-minio is a private
       # package: a one-time docker login ghcr.io above is mandatory)
@@ -30,6 +31,11 @@ jobs:
         image: redis:7-alpine
         ports:
           - "6379:6379"
+      mailpit:
+        image: axllent/mailpit:v1.34.0
+        ports:
+          - "1025:1025"
+          - "8025:8025"
 
     defaults:
       run:
@@ -38,7 +44,12 @@ jobs:
     env:
       DB_URL: postgresql+asyncpg://grasp:grasp@localhost:5432/grasp_test
       REDIS_URL: redis://localhost:6379/0
+      REDIS_PROGRESS_URL: redis://localhost:6379/14
+      SMTP_ENABLED: true
+      SMTP_HOST: localhost
+      SMTP_PORT: 1025
       TEST_CELERY_BROKER_URL: redis://localhost:6379/15
+      TEST_CELERY_REDIS_URL: redis://localhost:6379/13
       RATE_LIMIT_STORAGE_URI: memory://
       AUTH_JWT_SECRET: ci-test-jwt-secret-must-be-at-least-32-characters-long
       SEED_PASSWORD: ci-seed-password
@@ -143,7 +154,7 @@ jobs:
         run: uv run ruff check . && uv run ruff format --check .
 
       - name: Mypy type check
-        run: uv run mypy src tests
+        run: uv run mypy src tests evals
 
       - name: Verify OpenAPI snapshot
         run: |
@@ -158,6 +169,11 @@ jobs:
 
       - name: Run tests
         run: uv run pytest -m "unit or integration" --maxfail=1
+
+      - name: Repeat quota race and spending-rule tests
+        run: >-
+          uv run pytest tests/integration/services/quota/test_quota_races.py
+          tests/integration/services/quota/test_quota_rules.py -m integration --count=20 --maxfail=1
 
   # ---------------------------------------------------------------------------
   # 2. Web package checks (frontend, sandbox, primitives)
