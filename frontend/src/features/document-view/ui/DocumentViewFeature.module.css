@@ -389,18 +389,27 @@
   line-height: 1.7;
   color: var(--g-color-text);
   max-width: 72ch;
+  overflow-wrap: anywhere;
 }
 
-.markdownBody {
-  display: flex;
-  flex-direction: column;
-  gap: var(--g-space-4);
+.markdownContent > :first-child {
+  margin-top: 0;
 }
 
-.markdownLine {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
+.markdownContent > :last-child {
+  margin-bottom: 0;
+}
+
+.markdownContent a {
+  text-decoration: underline;
+}
+
+.markdownContent img {
+  max-width: 100%;
+}
+
+.markdownContent pre {
+  overflow-x: auto;
 }
 
 .widgetPlaceholder {

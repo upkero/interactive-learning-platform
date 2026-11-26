@@ -20,6 +20,7 @@
     "openapi-fetch": "^0.13.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "react-markdown": "10.1.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {

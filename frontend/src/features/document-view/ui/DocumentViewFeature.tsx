@@ -1,11 +1,11 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { useLocale, useTranslations } from 'next-intl';
-import { useDocument, useDocumentParts, usePart } from '@/entities/document';
-import { useDocumentStatusGuard } from '@/entities/document/guard/useDocumentStatusGuard';
+import { useRouter } from '@/shared/i18n/navigation-client';
+import { Link } from '@/shared/i18n/navigation';
+import { useTranslations } from 'next-intl';
+import Markdown from 'react-markdown';
+import { useDocument, useDocumentParts, useDocumentStatusGuard, usePart } from '@/entities/document';
 import { ApiError } from '@/shared/api/errors';
 import { ActionLink } from '@/shared/ui/action-link/ActionLink';
 import { PageShell } from '@/shared/ui/page-shell/PageShell';
@@ -26,7 +26,6 @@ export function DocumentViewFeature({ documentId, onShare }: DocumentViewFeature
   const tEmpty = useTranslations('empty');
 
   const router = useRouter();
-  const locale = useLocale();
 
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
   const [showTOC, setShowTOC] = useState(true);
@@ -58,8 +57,8 @@ export function DocumentViewFeature({ documentId, onShare }: DocumentViewFeature
   }, [documentQuery, partsQuery]);
 
   const handleBackToMaterials = useCallback(() => {
-    router.push(`/${locale}/materials`);
-  }, [router, locale]);
+    router.push("/materials");
+  }, [router]);
 
   // Loading state
   if (isLoading || documentQuery.isPending || partsQuery.isPending || (selectedPartId && partQuery.isPending)) {
@@ -82,7 +81,7 @@ export function DocumentViewFeature({ documentId, onShare }: DocumentViewFeature
             </p>
             <div className={styles.errorActions}>
               <ActionLink
-                href={`/${locale}/materials`}
+                href="/materials"
                 variant="secondary"
                 className={styles.actionButton}
               >
@@ -117,7 +116,7 @@ export function DocumentViewFeature({ documentId, onShare }: DocumentViewFeature
                 {tCommon('retry')}
               </button>
               <ActionLink
-                href={`/${locale}/materials`}
+                href="/materials"
                 variant="secondary"
                 className={styles.actionButton}
               >
@@ -137,7 +136,7 @@ export function DocumentViewFeature({ documentId, onShare }: DocumentViewFeature
         <Surface>
           <div className={styles.emptyState} role="status">
             <p>{tEmpty('materialsAll')}</p>
-            <ActionLink href={`/${locale}/materials`} variant="primary">
+            <ActionLink href="/materials" variant="primary">
               {tCommon('back')}
             </ActionLink>
           </div>
@@ -158,7 +157,7 @@ export function DocumentViewFeature({ documentId, onShare }: DocumentViewFeature
         actions={
           <div className={styles.headerActions}>
             <ActionLink
-              href={`/${locale}/materials`}
+              href="/materials"
               variant="secondary"
               onClick={handleBackToMaterials}
             >
@@ -188,7 +187,7 @@ export function DocumentViewFeature({ documentId, onShare }: DocumentViewFeature
       actions={
         <div className={styles.headerActions}>
           <ActionLink
-            href={`/${locale}/materials`}
+            href="/materials"
             variant="secondary"
             onClick={handleBackToMaterials}
           >
@@ -261,7 +260,6 @@ export function DocumentViewFeature({ documentId, onShare }: DocumentViewFeature
               <DocumentPartView
                 part={part ?? null}
                 summary={selectedPart}
-                locale={locale}
                 t={t}
                 tProgress={tProgress}
               />
@@ -278,12 +276,12 @@ export function DocumentViewFeature({ documentId, onShare }: DocumentViewFeature
 interface DocumentPartViewProps {
   part: PartOut | null;
   summary: PartSummaryOut | undefined;
-  locale: string;
   t: ReturnType<typeof useTranslations>;
   tProgress: ReturnType<typeof useTranslations>;
 }
 
-function DocumentPartView({ part, summary, locale, t, tProgress }: DocumentPartViewProps) {
+function DocumentPartView({ part, summary, t, tProgress }: DocumentPartViewProps) {
+  const tErrors = useTranslations('errors');
   const partStatus = summary?.status || part?.status || '';
   const partTitle = summary?.title || part?.title || '';
   const partContent = part?.content;
@@ -324,7 +322,7 @@ function DocumentPartView({ part, summary, locale, t, tProgress }: DocumentPartV
       {isFailed && (
         <div className={styles.partError} role="alert">
           <p className={styles.partErrorText}>
-            {useTranslations('errors')('part_generation_failed' as keyof ReturnType<typeof useTranslations>)}
+            {tErrors('part_generation_failed')}
           </p>
           <p className={styles.partErrorHint}>{tProgress('partFailedHint')}</p>
           <button type="button" className={styles.retryPartButton} disabled>
@@ -343,7 +341,7 @@ function DocumentPartView({ part, summary, locale, t, tProgress }: DocumentPartV
           {partContent?.markdown && (
             <div className={styles.partContent}>
               <div className={styles.markdownContent}>
-                {renderMarkdown(partContent.markdown)}
+                <Markdown skipHtml>{partContent.markdown}</Markdown>
               </div>
             </div>
           )}
@@ -386,7 +384,7 @@ function DocumentPartView({ part, summary, locale, t, tProgress }: DocumentPartV
 
           <footer className={styles.partFooter}>
             <Link
-              href={`/${locale}/parts/${part.id}/quiz`}
+              href={`/parts/${part.id}/quiz`}
               className={styles.quizButton}
               aria-label={t('startQuizButton')}
             >
@@ -417,22 +415,6 @@ function DocumentViewSkeleton() {
           <div className={styles.skeletonContent} />
         </Surface>
       </main>
-    </div>
-  );
-}
-
-// Simple markdown renderer - in production, use react-markdown or similar
-function renderMarkdown(content: string) {
-  // For now, just render as pre-formatted text with basic formatting
-  // TODO: Replace with react-markdown + remark-gfm + rehype-katex when available
-  const lines = content.split('\n');
-  return (
-    <div className={styles.markdownBody}>
-      {lines.map((line, index) => (
-        <p key={index} className={styles.markdownLine}>
-          {line || <br />}
-        </p>
-      ))}
     </div>
   );
 }
