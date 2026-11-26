@@ -1,20 +1,11 @@
-import { getTranslations } from "next-intl/server";
-import { PageShell } from "@/shared/ui";
+import { QuizFeature } from '@/features/quiz';
 
 export default async function QuizPage({
   params,
 }: {
   params: Promise<{ locale: string; id: string }>;
 }) {
-  const { locale, id } = await params;
-  const t = await getTranslations({ locale, namespace: "quiz" });
+  const { id } = await params;
 
-  return (
-    <PageShell title={t("title")}>
-      <div className="stub">
-        <h1>{t("title")}</h1>
-        <p>Квиз для части {id} (Э7) — заглушка.</p>
-      </div>
-    </PageShell>
-  );
+  return <QuizFeature partId={id} documentId={id.split('-')[0]} />;
 }
