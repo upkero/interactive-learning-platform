@@ -83,6 +83,7 @@ from src.app.services.solver.library.primitive_catalog import PrimitiveCatalog
 from src.app.services.solver.pipeline.part_recovery import PartRecovery
 from src.app.services.solver.pipeline.stub_pipeline import StubPipeline
 from src.app.services.solver.pipeline.watchdog import Watchdog
+from src.app.services.solver.quizzes.quiz_generator import QuizGenerator
 from src.app.services.solver.resolve.widget_resolver import WidgetResolver
 from src.app.services.solver.search.embedding_service import EmbeddingService
 from src.app.services.solver.search.instrumented_embedding_service import InstrumentedEmbeddingService
