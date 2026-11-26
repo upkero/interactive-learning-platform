@@ -59,10 +59,12 @@ def test_voyage_wraps_api_client(monkeypatch: pytest.MonkeyPatch) -> None:
 
     class Result:
         embeddings: ClassVar[list[list[float]]] = [[0.5, 0.25]]
+        total_tokens = 7
 
     class FakeClient:
-        def __init__(self, *, api_key: str) -> None:
+        def __init__(self, *, api_key: str, max_retries: int) -> None:
             captured["api_key"] = api_key
+            captured["max_retries"] = max_retries
 
         def embed(
             self,
@@ -80,17 +82,21 @@ def test_voyage_wraps_api_client(monkeypatch: pytest.MonkeyPatch) -> None:
             )
             return Result()
 
-    module = ModuleType("voyageai")
+    module = ModuleType("voyageai.client")
     module.Client = FakeClient  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "voyageai", module)
+    monkeypatch.setitem(sys.modules, "voyageai.client", module)
 
-    embedder = VoyageEmbedder(api_key=SecretStr("secret"))
+    embedder = VoyageEmbedder(api_key=SecretStr("secret"), max_retries=0)
 
     assert embedder.model_name == VOYAGE_MODEL
     assert embedder.dimension == VOYAGE_DIMENSION
     assert embedder.embed(["intent"]) == [[0.5, 0.25]]
+    assert embedder.total_tokens == 7
+    assert embedder.embed([]) == []
+    assert embedder.total_tokens == 7
     assert captured == {
         "api_key": "secret",
+        "max_retries": 0,
         "texts": ["intent"],
         "model": VOYAGE_MODEL,
         "input_type": None,
@@ -99,7 +105,7 @@ def test_voyage_wraps_api_client(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_voyage_missing_extra_is_a_configuration_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setitem(sys.modules, "voyageai", None)
+    monkeypatch.setitem(sys.modules, "voyageai.client", None)
 
     with pytest.raises(EmbeddingConfigurationError):
         VoyageEmbedder(api_key=SecretStr("secret"))

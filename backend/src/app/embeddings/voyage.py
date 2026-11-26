@@ -18,15 +18,19 @@ VOYAGE_DIMENSION = 1024
 class VoyageEmbedder:
     """Thin wrapper around the synchronous Voyage client."""
 
-    def __init__(self, *, api_key: SecretStr, model_name: str = VOYAGE_MODEL) -> None:
+    def __init__(self, *, api_key: SecretStr, model_name: str = VOYAGE_MODEL, max_retries: int | None = None) -> None:
         try:
-            import voyageai
+            from voyageai.client import Client
         except ImportError as exc:  # pragma: no cover - depends on the install extra
             raise EmbeddingConfigurationError(
                 "voyageai is not installed; install the embeddings-voyage extra."
             ) from exc
         self._model_name = model_name
-        self._client = voyageai.Client(api_key=api_key.get_secret_value())
+        self._total_tokens = 0
+        if max_retries is None:
+            self._client = Client(api_key=api_key.get_secret_value())
+        else:
+            self._client = Client(api_key=api_key.get_secret_value(), max_retries=max_retries)
 
     @property
     def model_name(self) -> str:
@@ -35,6 +39,11 @@ class VoyageEmbedder:
     @property
     def dimension(self) -> int:
         return VOYAGE_DIMENSION
+
+    @property
+    def total_tokens(self) -> int:
+        """Total usage reported in successful API responses for this instance."""
+        return self._total_tokens
 
     def embed(self, texts: Sequence[str]) -> list[list[float]]:
         if not texts:
@@ -45,6 +54,7 @@ class VoyageEmbedder:
             input_type=None,
             output_dimension=self.dimension,
         )
+        self._total_tokens += result.total_tokens
         return [[float(value) for value in vector] for vector in result.embeddings]
 
 

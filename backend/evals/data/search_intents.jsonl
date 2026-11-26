@@ -1,0 +1,180 @@
+{"intent": "Animate 3 + 2 by moving physical tokens between groups.", "widget_id": "00000000-0000-4000-8000-000000000001", "language": "en", "split": "calibration"}
+{"intent": "Покажи, как к трём фишкам прикладывают ещё две и получают пять.", "widget_id": "00000000-0000-4000-8000-000000000001", "language": "ru", "split": "calibration"}
+{"intent": "Let children watch the join operation before they see the new total.", "widget_id": "00000000-0000-4000-8000-000000000001", "language": "en", "split": "calibration"}
+{"intent": "Ask whether 4 + 0 gives a bigger group, then reveal it.", "widget_id": "00000000-0000-4000-8000-000000000002", "language": "en", "split": "test"}
+{"intent": "Дай угадать, изменятся ли четыре кружка, если добавлять нечего.", "widget_id": "00000000-0000-4000-8000-000000000002", "language": "ru", "split": "test"}
+{"intent": "Use a guess-and-reveal activity for the additive identity.", "widget_id": "00000000-0000-4000-8000-000000000002", "language": "en", "split": "test"}
+{"intent": "Walk through 2 + 1 with a separate pause after each picture.", "widget_id": "00000000-0000-4000-8000-000000000003", "language": "en", "split": "calibration"}
+{"intent": "Сделай пошаговое сложение: два предмета, добавляем один, считаем результат.", "widget_id": "00000000-0000-4000-8000-000000000003", "language": "ru", "split": "calibration"}
+{"intent": "Let the reader advance the addition pictures individually.", "widget_id": "00000000-0000-4000-8000-000000000003", "language": "en", "split": "calibration"}
+{"intent": "Provide a fold-out glossary for the vocabulary of the learning platform.", "widget_id": "00000000-0000-4000-8000-000000000004", "language": "en", "split": "test"}
+{"intent": "Вынеси адаптивное обучение, чанкинг и дерево тем в раскрывающийся словарь.", "widget_id": "00000000-0000-4000-8000-000000000004", "language": "ru", "split": "test"}
+{"intent": "Put definitions for unfamiliar platform terms below the paragraph.", "widget_id": "00000000-0000-4000-8000-000000000004", "language": "en", "split": "test"}
+{"intent": "Check that the learner knows why the pipeline builds a hierarchy of topics.", "widget_id": "00000000-0000-4000-8000-000000000005", "language": "en", "split": "calibration"}
+{"intent": "Спроси с вариантами, зачем перед генерацией контента строится дерево тем.", "widget_id": "00000000-0000-4000-8000-000000000005", "language": "ru", "split": "calibration"}
+{"intent": "Offer an answer choice that checks the rationale for semantic splitting.", "widget_id": "00000000-0000-4000-8000-000000000005", "language": "en", "split": "calibration"}
+{"intent": "Make a revision card about the unit used to divide source documents.", "widget_id": "00000000-0000-4000-8000-000000000006", "language": "en", "split": "test"}
+{"intent": "Сделай карточку с вопросом о смысловом фрагменте и определением на обороте.", "widget_id": "00000000-0000-4000-8000-000000000006", "language": "ru", "split": "test"}
+{"intent": "Hide what a semantic chunk means until the card is flipped.", "widget_id": "00000000-0000-4000-8000-000000000006", "language": "en", "split": "test"}
+{"intent": "Show the parameter walking downhill on a loss curve.", "widget_id": "00000000-0000-4000-8000-000000000007", "language": "en", "split": "calibration"}
+{"intent": "Анимируй движение точки в сторону минимума функции потерь.", "widget_id": "00000000-0000-4000-8000-000000000007", "language": "ru", "split": "calibration"}
+{"intent": "Display repeated slope-based optimizer updates as motion.", "widget_id": "00000000-0000-4000-8000-000000000007", "language": "en", "split": "calibration"}
+{"intent": "Have the learner put the document-processing stages back in order.", "widget_id": "00000000-0000-4000-8000-000000000008", "language": "en", "split": "test"}
+{"intent": "Пусть ученик расставит загрузку, построение дерева, разбиение и генерацию в нужной последовательности.", "widget_id": "00000000-0000-4000-8000-000000000008", "language": "ru", "split": "test"}
+{"intent": "Make the platform lifecycle an ordering exercise.", "widget_id": "00000000-0000-4000-8000-000000000008", "language": "en", "split": "test"}
+{"intent": "Blank out the words naming how the allowance is held and returned.", "widget_id": "00000000-0000-4000-8000-000000000009", "language": "en", "split": "calibration"}
+{"intent": "Оставь пропуски в предложении про резерв и возврат лимита.", "widget_id": "00000000-0000-4000-8000-000000000009", "language": "ru", "split": "calibration"}
+{"intent": "Test vocabulary for the two ledger operations by omitting their names.", "widget_id": "00000000-0000-4000-8000-000000000009", "language": "en", "split": "calibration"}
+{"intent": "Let me change each connection strength independently and see the unit respond.", "widget_id": "00000000-0000-4000-8000-00000000000a", "language": "en", "split": "test"}
+{"intent": "Дай покрутить веса одного нейрона и посмотреть на взвешенную сумму.", "widget_id": "00000000-0000-4000-8000-00000000000a", "language": "ru", "split": "test"}
+{"intent": "Illustrate a weighted combination of two features with adjustable coefficients.", "widget_id": "00000000-0000-4000-8000-00000000000a", "language": "en", "split": "test"}
+{"intent": "Keep the weights fixed and show how an offset changes when the neuron fires.", "widget_id": "00000000-0000-4000-8000-00000000000b", "language": "en", "split": "calibration"}
+{"intent": "Покажи, как свободный член сдвигает порог срабатывания нейрона.", "widget_id": "00000000-0000-4000-8000-00000000000b", "language": "ru", "split": "calibration"}
+{"intent": "Let me move the firing boundary without adjusting input weights.", "widget_id": "00000000-0000-4000-8000-00000000000b", "language": "en", "split": "calibration"}
+{"intent": "Let me guess the unit's result from its inputs before displaying the answer.", "widget_id": "00000000-0000-4000-8000-00000000000c", "language": "en", "split": "test"}
+{"intent": "Попроси предсказать выход по заданным входам и весам, затем открой вычисление.", "widget_id": "00000000-0000-4000-8000-00000000000c", "language": "ru", "split": "test"}
+{"intent": "Present a commit-first neuron question with a reveal button.", "widget_id": "00000000-0000-4000-8000-00000000000c", "language": "en", "split": "test"}
+{"intent": "Let readers cross zero and see negative activations disappear.", "widget_id": "00000000-0000-4000-8000-00000000000d", "language": "en", "split": "calibration"}
+{"intent": "Пусть точка проходит через ноль на графике ReLU и показывает отсечение отрицательных значений.", "widget_id": "00000000-0000-4000-8000-00000000000d", "language": "ru", "split": "calibration"}
+{"intent": "Explore the two branches of rectification by dragging the input.", "widget_id": "00000000-0000-4000-8000-00000000000d", "language": "en", "split": "calibration"}
+{"intent": "Compare how strongly probability reacts to small score shifts in the middle and at the ends.", "widget_id": "00000000-0000-4000-8000-00000000000e", "language": "en", "split": "test"}
+{"intent": "Покажи, что при больших по модулю значениях сигмоида почти перестаёт меняться.", "widget_id": "00000000-0000-4000-8000-00000000000e", "language": "ru", "split": "test"}
+{"intent": "Explore saturation of a logistic unit and its small tail gradient.", "widget_id": "00000000-0000-4000-8000-00000000000e", "language": "en", "split": "test"}
+{"intent": "Make class probabilities more uniform or peaked without changing their order.", "widget_id": "00000000-0000-4000-8000-00000000000f", "language": "en", "split": "calibration"}
+{"intent": "Дай менять температуру softmax и наблюдать, как столбики вероятностей выравниваются.", "widget_id": "00000000-0000-4000-8000-00000000000f", "language": "ru", "split": "calibration"}
+{"intent": "Show confidence calibration through a temperature control.", "widget_id": "00000000-0000-4000-8000-00000000000f", "language": "en", "split": "calibration"}
+{"intent": "Let the learner pick a step multiplier and observe whether training bounces around.", "widget_id": "00000000-0000-4000-8000-000000000010", "language": "en", "split": "test"}
+{"intent": "Сравни маленький и большой шаг обучения на одной кривой ошибки.", "widget_id": "00000000-0000-4000-8000-000000000010", "language": "ru", "split": "test"}
+{"intent": "Explain unstable optimization by overlaying trajectories at two step sizes.", "widget_id": "00000000-0000-4000-8000-000000000010", "language": "en", "split": "test"}
+{"intent": "Give me a line I can tilt and translate to reduce the distance from data points.", "widget_id": "00000000-0000-4000-8000-000000000011", "language": "en", "split": "calibration"}
+{"intent": "Дай подбирать наклон и сдвиг прямой на облаке точек и смотреть ошибки.", "widget_id": "00000000-0000-4000-8000-000000000011", "language": "ru", "split": "calibration"}
+{"intent": "Let students manually fit a straight line and inspect leftover error.", "widget_id": "00000000-0000-4000-8000-000000000011", "language": "en", "split": "calibration"}
+{"intent": "Let me adjust how many nearby labeled points vote and watch the class regions change.", "widget_id": "00000000-0000-4000-8000-000000000012", "language": "en", "split": "test"}
+{"intent": "Покажи, как граница классов меняется при выборе числа соседей.", "widget_id": "00000000-0000-4000-8000-000000000012", "language": "ru", "split": "test"}
+{"intent": "Use example points around a query marker to explain majority-vote classification.", "widget_id": "00000000-0000-4000-8000-000000000012", "language": "en", "split": "test"}
+{"intent": "Let readers see where false alarms and misses go after changing the cutoff.", "widget_id": "00000000-0000-4000-8000-000000000013", "language": "en", "split": "calibration"}
+{"intent": "При движении порога подсвечивай изменения в матрице ошибок.", "widget_id": "00000000-0000-4000-8000-000000000013", "language": "ru", "split": "calibration"}
+{"intent": "Connect the four cells of a classifier score table to the decision cutoff.", "widget_id": "00000000-0000-4000-8000-000000000013", "language": "en", "split": "calibration"}
+{"intent": "Show the point where continuing to train improves the training set but harms new examples.", "widget_id": "00000000-0000-4000-8000-000000000014", "language": "en", "split": "test"}
+{"intent": "Покажи расходящиеся кривые обучения и проверки по эпохам, отметь начало переобучения.", "widget_id": "00000000-0000-4000-8000-000000000014", "language": "ru", "split": "test"}
+{"intent": "Highlight the epoch with the best held-out error on paired loss curves.", "widget_id": "00000000-0000-4000-8000-000000000014", "language": "en", "split": "test"}
+{"intent": "Show the difference between the first item and its numeric index.", "widget_id": "00000000-0000-4000-8000-000000000015", "language": "en", "split": "calibration"}
+{"intent": "Покажи элементы массива и подсвети ячейку с индексом ноль.", "widget_id": "00000000-0000-4000-8000-000000000015", "language": "ru", "split": "calibration"}
+{"intent": "Let me point at an offset and read the item stored there.", "widget_id": "00000000-0000-4000-8000-000000000015", "language": "en", "split": "calibration"}
+{"intent": "Show that the thing added last is taken out first.", "widget_id": "00000000-0000-4000-8000-000000000016", "language": "en", "split": "test"}
+{"intent": "Дай складывать и снимать элементы с вершины стека.", "widget_id": "00000000-0000-4000-8000-000000000016", "language": "ru", "split": "test"}
+{"intent": "Give the reader push and pop actions on a pile of numbered cards.", "widget_id": "00000000-0000-4000-8000-000000000016", "language": "en", "split": "test"}
+{"intent": "Have new items join the back and serve the one that waited longest.", "widget_id": "00000000-0000-4000-8000-000000000017", "language": "en", "split": "calibration"}
+{"intent": "Покажи, как добавление в хвост очереди и извлечение из головы сохраняют порядок.", "widget_id": "00000000-0000-4000-8000-000000000017", "language": "ru", "split": "calibration"}
+{"intent": "Animate operations on a FIFO line of tasks.", "widget_id": "00000000-0000-4000-8000-000000000017", "language": "en", "split": "calibration"}
+{"intent": "Walk through finding a number by repeatedly halving the still possible range.", "widget_id": "00000000-0000-4000-8000-000000000018", "language": "en", "split": "test"}
+{"intent": "Анимируй двоичный поиск с подсветкой середины и отбрасыванием половины.", "widget_id": "00000000-0000-4000-8000-000000000018", "language": "ru", "split": "test"}
+{"intent": "Let the reader advance comparisons in a divide-in-half lookup.", "widget_id": "00000000-0000-4000-8000-000000000018", "language": "en", "split": "test"}
+{"intent": "Make the sorted first part grow one item at a time by moving larger numbers aside.", "widget_id": "00000000-0000-4000-8000-000000000019", "language": "en", "split": "calibration"}
+{"intent": "Покажи сортировку вставками: текущий элемент занимает место в упорядоченной части.", "widget_id": "00000000-0000-4000-8000-000000000019", "language": "ru", "split": "calibration"}
+{"intent": "Animate how a key is placed into the already sorted prefix.", "widget_id": "00000000-0000-4000-8000-000000000019", "language": "en", "split": "calibration"}
+{"intent": "Explore nearer neighbors before proceeding to vertices two edges away.", "widget_id": "00000000-0000-4000-8000-00000000001a", "language": "en", "split": "test"}
+{"intent": "Покажи обход графа в ширину по слоям от начальной вершины.", "widget_id": "00000000-0000-4000-8000-00000000001a", "language": "ru", "split": "test"}
+{"intent": "Step through visiting a graph using a waiting list of discovered vertices.", "widget_id": "00000000-0000-4000-8000-00000000001a", "language": "en", "split": "test"}
+{"intent": "Show a search go deep along one route, then retreat to a fork.", "widget_id": "00000000-0000-4000-8000-00000000001b", "language": "en", "split": "calibration"}
+{"intent": "Покажи обход графа в глубину с возвратом, когда ветка закончилась.", "widget_id": "00000000-0000-4000-8000-00000000001b", "language": "ru", "split": "calibration"}
+{"intent": "Step through a branch-first graph traversal with the pending path visible.", "widget_id": "00000000-0000-4000-8000-00000000001b", "language": "en", "split": "calibration"}
+{"intent": "Let two distinct keys land in the same slot and show how both are kept.", "widget_id": "00000000-0000-4000-8000-00000000001c", "language": "en", "split": "test"}
+{"intent": "Покажи коллизии хешей через цепочку записей в одной корзине.", "widget_id": "00000000-0000-4000-8000-00000000001c", "language": "ru", "split": "test"}
+{"intent": "Insert values with matching remainders and visualize their shared bucket.", "widget_id": "00000000-0000-4000-8000-00000000001c", "language": "en", "split": "test"}
+{"intent": "Walk through a nested call and show where each function's local values live.", "widget_id": "00000000-0000-4000-8000-00000000001d", "language": "en", "split": "calibration"}
+{"intent": "Покажи кадры вызовов с локальными переменными при вложенных функциях.", "widget_id": "00000000-0000-4000-8000-00000000001d", "language": "ru", "split": "calibration"}
+{"intent": "Display how control returns to a suspended caller after a function finishes.", "widget_id": "00000000-0000-4000-8000-00000000001d", "language": "en", "split": "calibration"}
+{"intent": "Show factorial as a chain of smaller products with an explicit stopping condition.", "widget_id": "00000000-0000-4000-8000-00000000001e", "language": "en", "split": "test"}
+{"intent": "Проведи от вычисления факториала до базового случая и обратно с умножением.", "widget_id": "00000000-0000-4000-8000-00000000001e", "language": "ru", "split": "test"}
+{"intent": "Present the base case and pending multiplications in a step-through example.", "widget_id": "00000000-0000-4000-8000-00000000001e", "language": "en", "split": "test"}
+{"intent": "Show which next links change when placing one node inside a chain.", "widget_id": "00000000-0000-4000-8000-00000000001f", "language": "en", "split": "calibration"}
+{"intent": "Покажи, как переподключить указатели при вставке узла в односвязный список.", "widget_id": "00000000-0000-4000-8000-00000000001f", "language": "ru", "split": "calibration"}
+{"intent": "Show how a cheaper route through another vertex can replace a tentative cost.", "widget_id": "00000000-0000-4000-8000-000000000020", "language": "en", "split": "test"}
+{"intent": "Пошагово найди кратчайшие пути в графе с весами, обновляя оценки расстояний.", "widget_id": "00000000-0000-4000-8000-000000000020", "language": "ru", "split": "test"}
+{"intent": "Let me change the length of the string and compare how often the weight comes back.", "widget_id": "00000000-0000-4000-8000-000000000021", "language": "en", "split": "calibration"}
+{"intent": "Покажи, как длина нити влияет на период качания груза.", "widget_id": "00000000-0000-4000-8000-000000000021", "language": "ru", "split": "calibration"}
+{"intent": "Show how far an object flies when I aim higher but launch just as fast.", "widget_id": "00000000-0000-4000-8000-000000000022", "language": "en", "split": "test"}
+{"intent": "Сравни, как угол броска при одной начальной скорости меняет дальность и высоту.", "widget_id": "00000000-0000-4000-8000-000000000022", "language": "ru", "split": "test"}
+{"intent": "At the ends of the motion, show where the moving object's energy went.", "widget_id": "00000000-0000-4000-8000-000000000023", "language": "en", "split": "calibration"}
+{"intent": "Покажи превращения кинетической и потенциальной энергии груза на пружине.", "widget_id": "00000000-0000-4000-8000-000000000023", "language": "ru", "split": "calibration"}
+{"intent": "Let students vary two resistors on the same branch and see the voltage divide.", "widget_id": "00000000-0000-4000-8000-000000000024", "language": "en", "split": "test"}
+{"intent": "Покажи, как делится напряжение на двух последовательно соединённых резисторах.", "widget_id": "00000000-0000-4000-8000-000000000024", "language": "ru", "split": "test"}
+{"intent": "Change one branch and show how its current differs under the same voltage.", "widget_id": "00000000-0000-4000-8000-000000000025", "language": "en", "split": "calibration"}
+{"intent": "Покажи распределение тока между двумя параллельными ветвями с резисторами.", "widget_id": "00000000-0000-4000-8000-000000000025", "language": "ru", "split": "calibration"}
+{"intent": "Let me tilt a ray entering water and compare the angles on both sides.", "widget_id": "00000000-0000-4000-8000-000000000026", "language": "en", "split": "test"}
+{"intent": "Покажи преломление луча на границе сред относительно нормали.", "widget_id": "00000000-0000-4000-8000-000000000026", "language": "ru", "split": "test"}
+{"intent": "Move the object past the focal mark and show where its picture appears.", "widget_id": "00000000-0000-4000-8000-000000000027", "language": "en", "split": "calibration"}
+{"intent": "Подвигай предмет перед собирающей линзой и покажи, где возникает изображение.", "widget_id": "00000000-0000-4000-8000-000000000027", "language": "ru", "split": "calibration"}
+{"intent": "Show the heat front creeping from the warmed tip along a metal bar.", "widget_id": "00000000-0000-4000-8000-000000000028", "language": "en", "split": "test"}
+{"intent": "Покажи, как тепло постепенно распространяется по нагретому с одного конца стержню.", "widget_id": "00000000-0000-4000-8000-000000000028", "language": "ru", "split": "test"}
+{"intent": "Use arrows to show the whole water circulation loop above a heater.", "widget_id": "00000000-0000-4000-8000-000000000029", "language": "en", "split": "calibration"}
+{"intent": "Покажи круговорот воды над нагревателем: тёплая поднимается, холодная опускается.", "widget_id": "00000000-0000-4000-8000-000000000029", "language": "ru", "split": "calibration"}
+{"intent": "Show why a dark warm plate emits more infrared than a shiny plate at the same temperature.", "widget_id": "00000000-0000-4000-8000-00000000002a", "language": "en", "split": "test"}
+{"intent": "Сравни тепловое излучение матовой и блестящей пластин при одинаковой температуре.", "widget_id": "00000000-0000-4000-8000-00000000002a", "language": "ru", "split": "test"}
+{"intent": "Move through heating ice to steam and explain why temperature pauses twice.", "widget_id": "00000000-0000-4000-8000-00000000002b", "language": "en", "split": "calibration"}
+{"intent": "Покажи график нагрева льда до пара с горизонтальными участками таяния и кипения.", "widget_id": "00000000-0000-4000-8000-00000000002b", "language": "ru", "split": "calibration"}
+{"intent": "Let the learner squeeze a sealed chamber without heating it and see the pressure rise.", "widget_id": "00000000-0000-4000-8000-00000000002c", "language": "en", "split": "test"}
+{"intent": "Дай сжимать газ поршнем при постоянной температуре и наблюдать давление.", "widget_id": "00000000-0000-4000-8000-00000000002c", "language": "ru", "split": "test"}
+{"intent": "Move one crest relative to the other and watch the sum vanish or double.", "widget_id": "00000000-0000-4000-8000-00000000002d", "language": "en", "split": "calibration"}
+{"intent": "Дай менять сдвиг фаз двух волн и наблюдать их усиление или гашение.", "widget_id": "00000000-0000-4000-8000-00000000002d", "language": "ru", "split": "calibration"}
+{"intent": "Generate many throws and see whether the six fractions become similar.", "widget_id": "00000000-0000-4000-8000-00000000002e", "language": "en", "split": "test"}
+{"intent": "Сделай серию бросков кубика и покажи, как частоты граней выравниваются.", "widget_id": "00000000-0000-4000-8000-00000000002e", "language": "ru", "split": "test"}
+{"intent": "Show frequencies for getting zero through eight heads when tossing eight coins per trial.", "widget_id": "00000000-0000-4000-8000-00000000002f", "language": "en", "split": "calibration"}
+{"intent": "Покажи распределение количества орлов в сериях из восьми бросков.", "widget_id": "00000000-0000-4000-8000-00000000002f", "language": "ru", "split": "calibration"}
+{"intent": "Show how a rare condition can produce more false alarms than true findings even with a good test.", "widget_id": "00000000-0000-4000-8000-000000000030", "language": "en", "split": "test"}
+{"intent": "Покажи влияние редкости состояния на долю истинных случаев среди положительных результатов теста.", "widget_id": "00000000-0000-4000-8000-000000000030", "language": "ru", "split": "test"}
+{"intent": "Shade everything below a draggable score and display its percentile.", "widget_id": "00000000-0000-4000-8000-000000000031", "language": "en", "split": "calibration"}
+{"intent": "Дай двигать отсечку по нормальному распределению и читать долю слева.", "widget_id": "00000000-0000-4000-8000-000000000031", "language": "ru", "split": "calibration"}
+{"intent": "Show many intervals from fresh samples and highlight the ones that miss the real average.", "widget_id": "00000000-0000-4000-8000-000000000032", "language": "en", "split": "test"}
+{"intent": "Покажи серию доверительных интервалов и отметь те, что не накрыли истинное среднее.", "widget_id": "00000000-0000-4000-8000-000000000032", "language": "ru", "split": "test"}
+{"intent": "Show which part of a null curve contributes to a one-sided significance value.", "widget_id": "00000000-0000-4000-8000-000000000033", "language": "en", "split": "calibration"}
+{"intent": "Move an observed result farther to the right and show the probability left in that extreme tail.", "widget_id": "00000000-0000-4000-8000-000000000033", "language": "en", "split": "calibration"}
+{"intent": "Show why averaging several skewed measurements makes the distribution of averages more symmetric.", "widget_id": "00000000-0000-4000-8000-000000000034", "language": "en", "split": "test"}
+{"intent": "Compare histograms of averages computed from one, five and thirty draws.", "widget_id": "00000000-0000-4000-8000-000000000034", "language": "en", "split": "test"}
+{"intent": "Show how every category can trend upward while the overall fitted line trends downward.", "widget_id": "00000000-0000-4000-8000-000000000035", "language": "en", "split": "calibration"}
+{"intent": "Let me flip between individual group correlations and the combined line with the reverse slope.", "widget_id": "00000000-0000-4000-8000-000000000035", "language": "en", "split": "calibration"}
+{"intent": "Walk through copying a DNA template into an RNA message.", "widget_id": "00000000-0000-4000-8000-000000000036", "language": "en", "split": "test"}
+{"intent": "Use a base-by-base stepper to show which letters match a DNA template during RNA synthesis.", "widget_id": "00000000-0000-4000-8000-000000000036", "language": "en", "split": "test"}
+{"intent": "Show how the three-letter RNA groups become amino acids in sequence.", "widget_id": "00000000-0000-4000-8000-000000000037", "language": "en", "split": "calibration"}
+{"intent": "Make a stepper that stops a growing peptide when the reader reaches a termination codon.", "widget_id": "00000000-0000-4000-8000-000000000037", "language": "en", "split": "calibration"}
+{"intent": "Let students add more substrate and see why the reaction speed eventually levels off.", "widget_id": "00000000-0000-4000-8000-000000000038", "language": "en", "split": "test"}
+{"intent": "Plot reaction velocity against concentration and draw attention to the horizontal limit.", "widget_id": "00000000-0000-4000-8000-000000000038", "language": "en", "split": "test"}
+{"intent": "Show how running out of room changes a fast-growing population curve into an S.", "widget_id": "00000000-0000-4000-8000-000000000039", "language": "en", "split": "calibration"}
+{"intent": "Put population curves with and without a carrying-capacity limit on the same axes.", "widget_id": "00000000-0000-4000-8000-000000000039", "language": "en", "split": "calibration"}
+{"intent": "Show which direction water goes if dissolved particles cannot cross the divider.", "widget_id": "00000000-0000-4000-8000-00000000003a", "language": "en", "split": "test"}
+{"intent": "Slide the salt concentration in one compartment and watch solvent cross the semipermeable barrier.", "widget_id": "00000000-0000-4000-8000-00000000003a", "language": "en", "split": "test"}
+{"intent": "Let me pause as the duplicated chromosomes line up and then separate.", "widget_id": "00000000-0000-4000-8000-00000000003b", "language": "en", "split": "calibration"}
+{"intent": "Advance a dividing cell from metaphase through the creation of two identical nuclei.", "widget_id": "00000000-0000-4000-8000-00000000003b", "language": "en", "split": "calibration"}
+{"intent": "Remove a top predator and trace what happens to species several links away.", "widget_id": "00000000-0000-4000-8000-00000000003c", "language": "en", "split": "test"}
+{"intent": "Give the learner a predator toggle and reveal the downstream changes in grazing and producers.", "widget_id": "00000000-0000-4000-8000-00000000003c", "language": "en", "split": "test"}
+{"intent": "Read the time on a clock where I can move the two hands.", "widget_id": null, "language": "en", "split": "calibration"}
+{"intent": "Покажи, как долгота точки меняет её местное солнечное время.", "widget_id": null, "language": "ru", "split": "test"}
+{"intent": "Illustrate vector addition with a head-to-tail construction and a draggable second arrow.", "widget_id": null, "language": "en", "split": "test"}
+{"intent": "Дай сравнить открытый и закрытый колебательные контуры по резонансной частоте.", "widget_id": null, "language": "ru", "split": "calibration"}
+{"intent": "Let the class use a drawn compass and straightedge to bisect an angle.", "widget_id": null, "language": "en", "split": "calibration"}
+{"intent": "Построй сечение пирамиды плоскостью, которую можно вращать.", "widget_id": null, "language": "ru", "split": "test"}
+{"intent": "Show how three particles diffuse through air from an opened perfume bottle.", "widget_id": null, "language": "en", "split": "test"}
+{"intent": "Allow me to decompose income growth into wages, inflation and purchasing power.", "widget_id": null, "language": "en", "split": "calibration"}
+{"intent": "Покажи, как меняется эластичность спроса вдоль кривой при изменении цены.", "widget_id": null, "language": "ru", "split": "calibration"}
+{"intent": "Let me drag a date along a map and see the boundaries of ancient city-states change.", "widget_id": null, "language": "en", "split": "test"}
+{"intent": "Give students an interactive accent placement drill for Spanish words.", "widget_id": null, "language": "en", "split": "test"}
+{"intent": "Покажи схему сборки многогранника из плоской развёртки.", "widget_id": null, "language": "ru", "split": "calibration"}
+{"intent": "Walk through factoring a quadratic by completing the square.", "widget_id": null, "language": "en", "split": "calibration"}
+{"intent": "Покажи, как расположение полос на радаре меняется с радиальной скоростью.", "widget_id": null, "language": "ru", "split": "test"}
+{"intent": "Display the rotation matrix for a draggable vector in a coordinate plane.", "widget_id": null, "language": "en", "split": "test"}
+{"intent": "Try different branch angles on a fractal tree and show how the pattern changes by depth.", "widget_id": null, "language": "en", "split": "calibration"}
+{"intent": "Дай двигать затвор транзистора и смотреть, как меняется ток стока.", "widget_id": null, "language": "ru", "split": "calibration"}
+{"intent": "Visualize a scheduled task timeline for a round-robin CPU scheduler.", "widget_id": null, "language": "en", "split": "test"}
+{"intent": "Покажи, когда спутник закрывает Солнце для наблюдателя на разных широтах.", "widget_id": null, "language": "ru", "split": "test"}
+{"intent": "Demonstrate packet switching across a network while individual links fail.", "widget_id": null, "language": "en", "split": "calibration"}
+{"intent": "Let me compare yield curves for bonds with different maturities.", "widget_id": null, "language": "en", "split": "calibration"}
+{"intent": "Покажи, как тариф за электричество зависит от времени суток на диаграмме потребления.", "widget_id": null, "language": "ru", "split": "test"}
+{"intent": "Make an interactive map of air traffic as a front crosses an airport.", "widget_id": null, "language": "en", "split": "test"}
+{"intent": "Дай послушать, как меняется созвучие при настройке высоты двух нот.", "widget_id": null, "language": "ru", "split": "calibration"}
+{"intent": "Drag alternating digits into a sample ISBN and recompute its check digit.", "widget_id": null, "language": "en", "split": "calibration"}
+{"intent": "Покажи складки горной породы при постепенном боковом сжатии.", "widget_id": null, "language": "ru", "split": "test"}
+{"intent": "Use a watering slider to estimate how quickly soil drains from the bottom of a pot.", "widget_id": null, "language": "en", "split": "test"}
+{"intent": "Сравни титрование слабой и сильной кислоты одним основанием.", "widget_id": null, "language": "ru", "split": "calibration"}
+{"intent": "Show how a transform changes image pixel brightness on a histogram.", "widget_id": null, "language": "en", "split": "calibration"}
+{"intent": "Дай построить тень от здания в зависимости от положения Солнца.", "widget_id": null, "language": "ru", "split": "test"}
