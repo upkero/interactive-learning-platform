@@ -85,30 +85,31 @@ class WidgetRepository(WidgetRepositoryProtocol):
     ) -> dict[UUID, WidgetWithDescription]:
         """Active widgets with their main description in one statement.
 
-        Paraphrases are ordered after the main description, so the first row
-        per widget is the main one; a widget without any description is
-        omitted (it cannot be searched or rendered meaningfully).
+        Select one description per widget before loading the widget row.
+        Prefer the main description and retain the earliest paraphrase for data
+        without a main description.
         """
         if not widget_ids:
             return {}
-        stmt = (
-            select(Widget, WidgetDescription.text)
-            .join(WidgetDescription, WidgetDescription.widget_id == Widget.id)
-            .where(
-                Widget.id.in_(list(dict.fromkeys(widget_ids))),
-                Widget.status == WidgetStatus.ACTIVE.value,
-            )
+        description = (
+            select(WidgetDescription.widget_id, WidgetDescription.text)
+            .where(WidgetDescription.widget_id.in_(widget_ids))
+            .distinct(WidgetDescription.widget_id)
             .order_by(
-                Widget.id,
-                WidgetDescription.is_paraphrase.asc(),
-                WidgetDescription.created_at.asc(),
+                WidgetDescription.widget_id,
+                WidgetDescription.is_paraphrase,
+                WidgetDescription.created_at,
+                WidgetDescription.id,
             )
+            .subquery()
+        )
+        stmt = (
+            select(Widget, description.c.text)
+            .join(description, description.c.widget_id == Widget.id)
+            .where(Widget.status == WidgetStatus.ACTIVE.value)
         )
         rows = (await self._session.execute(stmt)).all()
-        result: dict[UUID, WidgetWithDescription] = {}
-        for row, text in rows:
-            result.setdefault(row.id, WidgetWithDescription(widget=self._to_record(row), description=text))
-        return result
+        return {row.id: WidgetWithDescription(widget=self._to_record(row), description=text) for row, text in rows}
 
     async def create(
         self,

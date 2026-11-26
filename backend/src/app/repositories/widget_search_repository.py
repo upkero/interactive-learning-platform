@@ -45,24 +45,32 @@ class WidgetSearchRepository(WidgetSearchRepositoryProtocol):
         await self._session.execute(text("SET LOCAL hnsw.iterative_scan = relaxed_order"))
 
         distance = WidgetDescription.embedding.cosine_distance(list(query_vector)).label("distance")
-        nearest = (
-            select(WidgetDescription.widget_id, WidgetDescription.text, distance)
-            .join(Widget, Widget.id == WidgetDescription.widget_id)
-            .where(Widget.status == WidgetStatus.ACTIVE.value)
+        eligible_widget = select(Widget.id).where(
+            Widget.id == WidgetDescription.widget_id,
+            Widget.status == WidgetStatus.ACTIVE.value,
         )
         if primitive_id is not None:
-            nearest = nearest.where(Widget.primitive_id == primitive_id)
-        nearest = nearest.order_by(distance).limit(overfetch)
-        nearest_sq = nearest.subquery("nearest")
+            eligible_widget = eligible_widget.where(Widget.primitive_id == primitive_id)
+        # Keep eligibility as an index-scan filter; flattening EXISTS into a
+        # join makes PostgreSQL prefer scanning and sorting the toasted vectors.
+        nearest = (
+            select(WidgetDescription.widget_id, WidgetDescription.id, WidgetDescription.text, distance)
+            .where(eligible_widget.offset(0).exists())
+            .order_by(distance)
+            .limit(overfetch)
+            .subquery("nearest")
+        )
 
         best = (
-            select(nearest_sq.c.widget_id, nearest_sq.c.text, nearest_sq.c.distance)
-            .distinct(nearest_sq.c.widget_id)
-            .order_by(nearest_sq.c.widget_id, nearest_sq.c.distance)
+            select(nearest.c.widget_id, nearest.c.text, nearest.c.distance)
+            .distinct(nearest.c.widget_id)
+            .order_by(nearest.c.widget_id, nearest.c.distance, nearest.c.id)
             .subquery("best")
         )
-        stmt = select(best.c.widget_id, best.c.text, best.c.distance).order_by(best.c.distance).limit(k)
-        rows = (await self._session.execute(stmt)).tuples().all()
+        stmt = (
+            select(best.c.widget_id, best.c.text, best.c.distance).order_by(best.c.distance, best.c.widget_id).limit(k)
+        )
+        rows = (await self._session.execute(stmt)).all()
         return [
             WidgetMatch(widget_id=widget_id, matched_text=matched_text, distance=float(distance_value))
             for widget_id, matched_text, distance_value in rows
