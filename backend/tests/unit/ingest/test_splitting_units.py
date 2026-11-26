@@ -80,6 +80,25 @@ def test_fence_near_maximum_excludes_whitespace_between_blocks() -> None:
     assert all(part.tokens <= DEFAULT_LIMITS.maximum for part in plans)
 
 
+def test_indented_fences_and_whitespace_tail_do_not_split_code() -> None:
+    first = "```python\n" + "word " * 15_547 + "\n  ```\n"
+    second = "  ```\nsmall\n  ```\n"
+    markdown = first + "\n" + second
+    tree = build_topic_tree(markdown, COUNTER)
+    plans = split_document(tree, {"0"}, markdown, COUNTER, DEFAULT_LIMITS)
+    assert sum(first in part.markdown for part in plans) == 1
+    assert sum(second in part.markdown for part in plans) == 1
+    assert "".join(part.markdown for part in plans) == markdown
+
+
+def test_whitespace_tail_never_creates_a_separate_part() -> None:
+    code = "```python\n" + "word " * 15_547 + "\n```\n"
+    markdown = code + "  \n" * 5
+    plans = split_document(build_topic_tree(markdown, COUNTER), {"0"}, markdown, COUNTER, DEFAULT_LIMITS)
+    assert len(plans) == 1
+    assert plans[0].markdown == code
+
+
 def test_selected_child_keeps_the_chapter_id_and_parent_selection_deduplicates() -> None:
     markdown = "# Root\n\nText.\n\n## Child\n\nMore text."
     tree = build_topic_tree(markdown, COUNTER)

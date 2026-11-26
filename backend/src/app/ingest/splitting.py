@@ -269,6 +269,10 @@ def _paragraph_units(markdown: str, start: int, end: int, counter: TokenCounting
             current.append(span)
             size += span.tokens
     close()
+    # Whitespace that cannot fit alongside the preceding content has no
+    # semantic content and must not become a separate billable generation.
+    # Its offsets are omitted only when it would form a standalone unit.
+    result = [span for span in result if markdown[span.start : span.end].strip()]
     return result
 
 

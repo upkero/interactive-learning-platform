@@ -55,8 +55,9 @@ def test_protected_blocks_match_full_parser_for_repeated_fences() -> None:
 
 
 @pytest.mark.parametrize("separator", ["\n", "  \n" * 5, "\t\n \n", "\n  \n\n"])
-def test_protected_block_excludes_whitespace_between_fences(separator: str) -> None:
+@pytest.mark.parametrize("indent", ["", "  ", "   "])
+def test_protected_block_excludes_whitespace_between_fences(separator: str, indent: str) -> None:
     from src.app.ingest.markdown_syntax import protected_markdown_blocks
 
-    text = "```python\nprint(1)\n```\n" + separator + "```\nsecond\n```\n"
+    text = f"```python\nprint(1)\n{indent}```\n" + separator + f"{indent}```\nsecond\n{indent}```\n"
     assert protected_markdown_blocks(text) == parse_markdown(text).protected_blocks

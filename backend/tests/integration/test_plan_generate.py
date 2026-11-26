@@ -27,8 +27,8 @@ pytestmark = pytest.mark.integration
 
 @pytest.mark.parametrize(
     ("selected", "minimum_parts"),
-    [(["1", "2", "3"], 3), (["1.1", "3.1"], 2), (["2", "2.2"], 2)],
-    ids=["all-chapters", "scattered-selection", "parent-and-child"],
+    [(["1", "2", "3"], 3), (["1.1", "3.1"], 2), (["2", "2.2"], 2), (["0"], 1)],
+    ids=["all-chapters", "scattered-selection", "parent-and-child", "fence-and-whitespace-tail"],
 )
 async def test_preview_matches_persisted_generation_parts(
     session_factory: async_sessionmaker[AsyncSession], selected: list[str], minimum_parts: int
@@ -46,6 +46,8 @@ async def test_preview_matches_persisted_generation_parts(
         + "# Last chapter\n\n## Last section\n\n"
         + paragraph * 55
     )
+    if selected == ["0"]:
+        markdown = "```python\n" + "word " * 15_547 + "\n```\n" + "  \n" * 5
     counter = get_token_counter()
     tree = build_topic_tree(markdown, counter)
     app = create_app()
@@ -53,7 +55,8 @@ async def test_preview_matches_persisted_generation_parts(
     with TestClient(app, raise_server_exceptions=False) as client:
         container: ApplicationContainer = app.state.container
         container.__dict__["task_dispatcher"] = FakeTaskDispatcher()
-        assert tree[1].total_tokens > container.ingest_settings.split_max_tokens
+        if selected != ["0"]:
+            assert tree[1].total_tokens > container.ingest_settings.split_max_tokens
         email = f"splitting-{uuid4()}@example.com"
         registered = client.post("/api/v1/auth/register", json={"email": email, "password": "long-enough-password"})
         assert registered.status_code == 201, registered.text
@@ -111,3 +114,6 @@ async def test_preview_matches_persisted_generation_parts(
         assert all(
             part.source_markdown.strip() and counter.count(part.source_markdown) == part.token_count for part in parts
         )
+        if selected == ["0"]:
+            assert len(parts) == 1
+            assert parts[0].source_markdown == markdown.rstrip(" \n") + "\n"
