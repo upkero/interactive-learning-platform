@@ -1,0 +1,207 @@
+.page {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 100vh;
+  background: var(--g-color-bg-dark);
+  color: var(--g-color-text-dark);
+}
+
+/* Left Panel - Brand */
+.leftPanel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--g-color-bg-dark);
+  border-right: var(--g-hairline) solid var(--g-color-border-dark);
+  position: relative;
+  overflow: hidden;
+}
+
+.leftPanel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      ellipse 80% 50% at 50% 0%,
+      rgba(255, 255, 255, 0.03) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 60% 40% at 50% 100%,
+      rgba(255, 255, 255, 0.02) 0%,
+      transparent 60%
+    );
+  pointer-events: none;
+}
+
+.leftContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 400px;
+  height: 100%;
+  padding: var(--g-space-7) var(--g-space-6);
+  z-index: 1;
+}
+
+.brandTop {
+  width: 100%;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--g-space-3);
+  color: var(--g-color-text-dark);
+  text-decoration: none;
+}
+
+.brand:focus-visible {
+  outline: 2px solid var(--g-focus-color-dark);
+  outline-offset: 4px;
+  border-radius: var(--g-radius-sm);
+}
+
+.brandMark {
+  display: flex;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+}
+
+.brandText {
+  font-size: var(--g-text-xl);
+  font-weight: var(--g-font-weight-bold);
+  letter-spacing: -0.01em;
+}
+
+.centerSymbol {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--g-color-text-dark);
+  opacity: 0.4;
+  flex: 1;
+}
+
+.brandBottom {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.copyright {
+  margin: 0;
+  color: var(--g-color-text-dark-muted);
+  font-size: var(--g-text-xs);
+  font-weight: var(--g-font-weight-normal);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+/* Right Panel - Form */
+.rightPanel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--g-color-surface-dark);
+  padding: var(--g-space-8) var(--g-space-7);
+}
+
+.rightContent {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+}
+
+.formSwitcher {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--g-space-6);
+}
+
+.switchLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--g-space-2);
+  padding: var(--g-space-1) var(--g-space-3);
+  color: var(--g-color-text-dark-secondary);
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-weight-medium);
+  border-radius: var(--g-radius-full);
+  transition:
+    color var(--g-duration-fast) var(--g-easing),
+    background-color var(--g-duration-fast) var(--g-easing);
+}
+
+.switchLink:hover {
+  color: var(--g-color-text-dark);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.switchLink:focus-visible {
+  outline: 2px solid var(--g-focus-color-dark);
+  outline-offset: 2px;
+}
+
+/* Mobile - Single column */
+@media (max-width: 767px) {
+  .page {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .leftPanel {
+    border-right: none;
+    border-bottom: var(--g-hairline) solid var(--g-color-border-dark);
+    min-height: 320px;
+    max-height: 45vh;
+  }
+
+  .leftContent {
+    padding: var(--g-space-6) var(--g-space-5);
+  }
+
+  .brandText {
+    font-size: var(--g-text-lg);
+  }
+
+  .centerSymbol svg {
+    width: 80px;
+    height: 80px;
+  }
+
+  .rightPanel {
+    padding: var(--g-space-6) var(--g-space-5);
+  }
+
+  .formSwitcher {
+    margin-bottom: var(--g-space-4);
+  }
+}
+
+/* Tablet */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .leftContent {
+    max-width: 360px;
+    padding: var(--g-space-6) var(--g-space-5);
+  }
+
+  .rightPanel {
+    padding: var(--g-space-7) var(--g-space-6);
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .switchLink {
+    transition: none;
+  }
+}

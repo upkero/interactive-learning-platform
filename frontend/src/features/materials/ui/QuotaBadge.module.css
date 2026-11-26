@@ -1,0 +1,100 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--g-space-2);
+  height: var(--g-control-min-height);
+  padding: 0 var(--g-space-3);
+  border: none;
+  border-radius: var(--g-radius-md);
+  background: var(--g-color-surface);
+  font-size: var(--g-text-sm);
+  white-space: nowrap;
+  color: var(--g-color-text);
+}
+
+.label {
+  color: var(--g-color-text-secondary);
+  font-weight: var(--g-font-weight-medium);
+}
+
+.value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 20px;
+  padding: 0 var(--g-space-2);
+  border-radius: var(--g-radius-sm);
+  background: var(--g-color-bg-alt);
+  color: var(--g-color-text);
+  font-weight: var(--g-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--g-font-mono);
+}
+
+.count {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--g-font-mono);
+}
+
+.exhausted .value {
+  background: var(--g-color-danger-bg);
+  color: var(--g-color-danger-text);
+}
+
+.exhausted .label {
+  color: var(--g-color-danger-text);
+}
+
+.error {
+  background: var(--g-color-danger-bg);
+  gap: var(--g-space-2);
+  white-space: nowrap;
+}
+
+.error .value {
+  background: transparent;
+  color: var(--g-color-danger-text);
+  min-width: auto;
+  height: auto;
+  padding: 0;
+}
+
+.error .label {
+  color: var(--g-color-danger-text);
+  font-weight: var(--g-font-weight-medium);
+}
+
+.retry {
+  display: inline-flex;
+  align-items: center;
+  height: var(--g-control-min-height);
+  padding: 0 var(--g-space-2);
+  border: none;
+  border-radius: var(--g-radius-sm);
+  background: transparent;
+  color: var(--g-color-danger-text);
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color var(--g-duration-fast) var(--g-easing),
+    color var(--g-duration-fast) var(--g-easing);
+}
+
+.retry:hover {
+  background: rgba(153, 27, 27, 0.1);
+  color: var(--g-color-danger);
+}
+
+.retry:focus-visible {
+  outline: 2px solid var(--g-focus-color);
+  outline-offset: 2px;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .retry {
+    transition: none;
+  }
+}
