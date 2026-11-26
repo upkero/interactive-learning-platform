@@ -1,6 +1,9 @@
 """Syntax and recovery of directive slots in a main-pass draft."""
 
+from pathlib import Path
+
 import pytest
+from markdown_it import MarkdownIt
 
 from src.app.services.solver.main_pass.directive_parser import check_draft, extract_markers, sanitize_draft
 from src.app.services.solver.main_pass.directives import Directive, PageDraft
@@ -150,7 +153,7 @@ def test_sanitize_removes_dangling_duplicates_unknown_and_excess() -> None:
     assert sanitize_draft(cleaned, max_widgets=1, max_quizzes=1, image_aliases={"img_1"}) == cleaned
 
 
-def test_empty_after_sanitizing_does_not_throw() -> None:
+def test_empty_after_sanitizing_cannot_be_published() -> None:
     broken = PageDraft.model_construct(markdown='::widget{ref="w1"}', directives=[], key_terms=["missing"])
     with pytest.raises(ValueError, match="cannot preserve the output schema"):
         sanitize_draft(broken, max_widgets=0)
@@ -287,3 +290,55 @@ def test_unicode_separator_is_not_indentation_or_line_break(separator: str) -> N
     text = separator + '::widget{ref="w1"}'
     assert extract_markers(text) == ([], [])
     assert text in sanitize_draft(draft(text, []), max_widgets=6).markdown
+
+
+@pytest.mark.parametrize(
+    "example",
+    [
+        "Use `:widget[one]\n:quiz[two]\n:widget[three]` here.",
+        "Use ``a `tick\n:widget[label]\nend`` here.",
+        "> Use ``\n> :quiz[x]\n> `` in a quote.",
+        "- Use `\n  :widget[label]\n  ` in a list.",
+        "Heading `\n:widget[label]\nclose`\n===",
+        "Use `\n  ::quiz not a block\nclose` here.",
+    ],
+)
+def test_commonmark_inline_code_masks_only_its_source_spans(example: str) -> None:
+    text = example + "\n\nOther text :quiz[outside]"
+    assert len(extract_markers(text)[1]) == 1
+    assert sanitize_draft(draft(text, []), max_widgets=6).markdown.startswith(example + "\n\nOther text \n")
+
+
+@pytest.mark.parametrize(
+    "example",
+    [r"Escaped \`", "An unmatched `` opener", "Use ` then a different closing run ``"],
+)
+def test_non_code_backticks_do_not_hide_inline_directives(example: str) -> None:
+    text = example + "\n:widget[label]"
+    assert len(extract_markers(text)[1]) == 1
+    assert sanitize_draft(draft(text, []), max_widgets=6).markdown.startswith(example + "\n\n")
+
+
+_SHARED_MARKDOWN = Path(__file__).resolve().parents[4] / "support" / "fixtures" / "main_pass" / "directives.md"
+
+
+@pytest.mark.parametrize(
+    ("name", "markers", "issues", "code"),
+    [
+        ("leaf-before-code", ["w1"], 0, [":quiz[example]\n"]),
+        ("quote-list-before-code", [], 1, [":widget[example]\n"]),
+        ("multiline-inline-code", [], 1, []),
+        ("wide-container", [], 2, [":widget[example]\n"]),
+        ("nested-containers", [], 4, []),
+        ("unclosed-container", [], 1, []),
+    ],
+)
+def test_shared_directive_fixtures(name: str, markers: list[str], issues: int, code: list[str]) -> None:
+    fixture = _SHARED_MARKDOWN.read_text(encoding="utf-8")
+    source = fixture.split(f"<!-- case: {name} -->\n", 1)[1].split("\n<!-- case: ", 1)[0].strip("\n")
+    found, violations = extract_markers(source)
+    assert [marker.ref for marker in found] == markers
+    assert len(violations) == issues
+    cleaned = sanitize_draft(draft(source, []), max_widgets=6)
+    assert extract_markers(cleaned.markdown) == ([], [])
+    assert [token.content for token in MarkdownIt().parse(cleaned.markdown) if token.type == "code_block"] == code

@@ -34,14 +34,18 @@ from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.interfaces.observability.metrics_collector import MetricsCollector
 from src.app.interfaces.repositories.widgets import PrimitiveRepositoryProtocol
 from src.app.llm.structured import call_structured
+from src.app.observability.decision_log import DecisionLog
 from src.app.services.solver.main_pass.directive_parser import (
     UnrecoverableDraftError,
-    check_draft,
+    Violation,
+    ViolationCode,
     extract_markers,
+    find_violations,
     sanitize_draft,
 )
-from src.app.services.solver.main_pass.directives import PageDraft
+from src.app.services.solver.main_pass.directives import PageDraft, RecoveredPageDraft
 from src.app.services.solver.main_pass.prompts import (
+    PROMPT_VERSION,
     build_main_pass_request,
     build_retry_request,
 )
@@ -69,20 +73,29 @@ class MainPassService:
         self._primitives = primitives
         self._settings = settings
         self._metrics = metrics
+        self._decisions = DecisionLog(metrics=metrics)
 
     async def run(self, payload: MainPassInput) -> MainPassResult:
         catalog = await self._load_catalog()
         request = self._request(payload, catalog)
         with bind_log_context(document_id=str(payload.document_id), part_id=str(payload.part_id)):
-            draft = await call_structured(self._llm, request, PageDraft)
-            violations = self._violations(draft, payload)
+            model_draft = await call_structured(self._llm, request, PageDraft)
+            draft: RecoveredPageDraft = model_draft
+            violations = self._violations(model_draft, payload)
             self._metrics.increment_counter(
                 "main_pass.drafts_total", labels={"first_answer": "violations" if violations else "clean"}
+            )
+            self._decisions.main_pass_first_draft(
+                prompt_version=PROMPT_VERSION,
+                violation_count=len(violations),
+                alternation_violation_count=sum(
+                    issue.code == ViolationCode.REPEATED_WIDGET_MODE for issue in violations
+                ),
             )
             retried = bool(violations)
             if violations:
                 self._record_violations(violations, attempt="first")
-                retry_request = self._retry_request(request, draft, violations)
+                retry_request = build_retry_request(request, model_draft, violations)
                 draft = await call_structured(self._llm, retry_request, PageDraft)
                 remaining = self._violations(draft, payload)
                 if remaining:
@@ -93,11 +106,6 @@ class MainPassService:
                         max_quizzes=self._settings.max_quizzes_per_part,
                         image_aliases={image.alias for image in payload.images},
                     )
-            # Never return an inconsistent or schema-invalid draft.
-            try:
-                draft = PageDraft.model_validate(draft.model_dump())
-            except ValueError as exc:
-                raise UnrecoverableDraftError("Invalid final draft") from exc
             if self._violations(draft, payload):
                 raise UnrecoverableDraftError("Unresolved final draft violations")
             markers, _ = extract_markers(draft.markdown)
@@ -126,11 +134,8 @@ class MainPassService:
     def _request(self, payload: MainPassInput, catalog: Sequence[PrimitiveRecord]) -> LLMRequest:
         return build_main_pass_request(payload, catalog, self._settings)
 
-    def _retry_request(self, request: LLMRequest, draft: PageDraft, violations: Sequence[str]) -> LLMRequest:
-        return build_retry_request(request, draft, violations)
-
-    def _violations(self, draft: PageDraft, payload: MainPassInput) -> list[str]:
-        return check_draft(
+    def _violations(self, draft: RecoveredPageDraft, payload: MainPassInput) -> list[Violation]:
+        return find_violations(
             draft.markdown,
             draft.directives,
             image_aliases={image.alias for image in payload.images},
@@ -140,7 +145,7 @@ class MainPassService:
             key_terms=draft.key_terms,
         )
 
-    def _record_violations(self, violations: Sequence[str], *, attempt: str) -> None:
+    def _record_violations(self, violations: Sequence[Violation], *, attempt: str) -> None:
         self._metrics.increment_counter(_VIOLATION_COUNTER, labels={"attempt": attempt}, by=len(violations))
         logger.warning(
             "Main pass rule violation.",
@@ -148,7 +153,7 @@ class MainPassService:
         )
 
     @staticmethod
-    def _image_ids(draft: PageDraft, images: Sequence[PartImage]) -> dict[str, UUID]:
+    def _image_ids(draft: RecoveredPageDraft, images: Sequence[PartImage]) -> dict[str, UUID]:
         by_alias = {image.alias: image.id for image in images}
         return {
             directive.image_id: by_alias[directive.image_id]

@@ -5,7 +5,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from src.app.services.solver.main_pass.directive_parser import check_draft, sanitize_draft
-from src.app.services.solver.main_pass.directives import Directive, PageDraft
+from src.app.services.solver.main_pass.directives import Directive, PageDraft, RecoveredPageDraft
 
 pytestmark = pytest.mark.unit
 
@@ -74,8 +74,27 @@ def test_sanitizer_invariants(case: tuple[PageDraft, set[str], int, int]) -> Non
         )
         == []
     )
-    assert PageDraft.model_validate(cleaned.model_dump()) == cleaned
+    assert RecoveredPageDraft.model_validate(cleaned.model_dump()) == cleaned
     assert sanitize_draft(cleaned, image_aliases=aliases, max_widgets=widgets, max_quizzes=quizzes) == cleaned
+
+
+@given(
+    st.integers(min_value=200, max_value=225),
+    st.integers(min_value=0, max_value=5),
+    st.sampled_from(["\n", "\r\n", "\r"]),
+)
+def test_sanitizer_crosses_generation_minimums(length: int, present_terms: int, newline: str) -> None:
+    marker = '::widget{ref="w1"}'
+    body = "one two three four five ".ljust(length - len(marker) - len(newline), "x")
+    terms = body.split()[:present_terms]
+    draft = PageDraft(markdown=body + newline + marker, key_terms=terms + ["missing"] * (5 - present_terms))
+
+    cleaned = sanitize_draft(draft, max_widgets=6)
+    assert cleaned.markdown == body + newline
+    assert len(cleaned.markdown) == length - len(marker)
+    assert cleaned.key_terms == terms
+    assert check_draft(cleaned.markdown, cleaned.directives, key_terms=cleaned.key_terms) == []
+    assert sanitize_draft(cleaned, max_widgets=6) == cleaned
 
 
 @given(
@@ -90,6 +109,6 @@ def test_unicode_separators_do_not_change_code_or_offsets(separators: list[str],
     directive = Directive(ref="q1", kind="quiz", intent="Explain the concept", source_span="A source quotation")
     original = PageDraft(markdown=source, directives=[directive], key_terms=["body"] * 5)
     cleaned = sanitize_draft(original, max_widgets=6)
-    assert cleaned == original
+    assert cleaned.model_dump() == original.model_dump()
     assert code in cleaned.markdown
     assert check_draft(cleaned.markdown, cleaned.directives) == []

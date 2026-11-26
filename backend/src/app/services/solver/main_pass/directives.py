@@ -47,16 +47,20 @@ class Directive(BaseModel):
         return self
 
 
-class PageDraft(BaseModel):
-    """Model response; cross-field consistency is checked by the service."""
+class RecoveredPageDraft(BaseModel):
+    """Final draft after invalid slots and key terms have been removed."""
 
     model_config = ConfigDict(extra="forbid")
 
-    markdown: str = Field(min_length=200, description="The rewritten part in Markdown.")
+    markdown: str = Field(min_length=1, description="The rewritten part in Markdown.")
     directives: list[Directive] = Field(default_factory=list, max_length=24)
-    key_terms: list[_KeyTerm] = Field(
-        min_length=MIN_KEY_TERMS, max_length=MAX_KEY_TERMS, description="Terms appearing verbatim in Markdown."
-    )
+    key_terms: list[_KeyTerm] = Field(max_length=MAX_KEY_TERMS, description="Terms appearing verbatim in Markdown.")
+
+    @model_validator(mode="after")
+    def _has_content(self) -> Self:
+        if not self.markdown.strip():
+            raise ValueError("The page must contain Markdown content")
+        return self
 
     def to_draft(self) -> MainPassDraft:
         return MainPassDraft(
@@ -66,4 +70,13 @@ class PageDraft(BaseModel):
         )
 
 
-__all__ = ["Directive", "PageDraft"]
+class PageDraft(RecoveredPageDraft):
+    """Model response with the length and terminology targets for generation."""
+
+    markdown: str = Field(min_length=200, description="The rewritten part in Markdown.")
+    key_terms: list[_KeyTerm] = Field(
+        min_length=MIN_KEY_TERMS, max_length=MAX_KEY_TERMS, description="Terms appearing verbatim in Markdown."
+    )
+
+
+__all__ = ["Directive", "PageDraft", "RecoveredPageDraft"]

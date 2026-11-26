@@ -3,20 +3,28 @@
 import re
 from collections.abc import Collection, Iterator, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from itertools import pairwise
 from typing import cast
 
 from markdown_it import MarkdownIt
 from markdown_it.rules_block import StateBlock
+from markdown_it.rules_inline import StateInline, backtick
+from markdown_it.token import Token
 from pydantic import ValidationError
 
 from src.app.contracts.solver.main_pass import DirectiveKind
-from src.app.services.solver.main_pass.directives import Directive, PageDraft
+from src.app.services.solver.main_pass.directives import Directive, RecoveredPageDraft
 
 _DIRECTIVE = re.compile(r'^::(widget|image|quiz)\{(ref|id)="([^"]+)"\}[ \t]*$')
-_CANDIDATE = re.compile(r"^[ \t]*(?:>[ \t]*)*(?:(?:[-+*]|\d+[.)])[ \t]+)*:{2,3}(widget|image|quiz)\b")
+_CANDIDATE = re.compile(r"^[ \t]*(?:(?:>[ \t]*|(?:[-+*]|[0-9]{1,9}[.)])[ \t]+))*(:{2,}(?:widget|image|quiz)\b)")
 _INLINE = re.compile(r"(?<![\\:]):(?:widget|image|quiz)(?:\[[^\]\r\n]*\](?:\{[^}\r\n]*\})?|\{[^}\r\n]*\})")
-_CODE_SPAN = re.compile(r"(`+)(?!`)(.*?)(?<!`)\1(?!`)")
+_BLOCK = re.compile(
+    r"(:{2,})([^\W_](?:[\w-]*[^\W_])?)"
+    r"(?:\[(?:\\.|[^\\\[\]]|\[[^]]*\])*\])?"
+    r"""(?:\{(?:[^{}"'\\]|\\.|"[^"]*"|'[^']*')*\})?[ \t]*"""
+)
+_CLOSE = re.compile(r"(:{3,})[ \t]*")
 
 
 def _source_lines(markdown: str) -> Iterator[str]:
@@ -26,43 +34,99 @@ def _source_lines(markdown: str) -> Iterator[str]:
             yield match.group()
 
 
-def _inline_directives(line: str) -> list[re.Match[str]]:
-    masked = _CODE_SPAN.sub(lambda match: " " * len(match.group()), line)
-    return list(_INLINE.finditer(masked))
-
-
-_LEAF_BLOCK = re.compile(r"^::(?:widget|image|quiz)(?:\[[^]\r\n]*\])?(?:\{[^}\r\n]*\})?[ \t]*$")
-
-
-def _leaf_directive(state: StateBlock, start_line: int, end_line: int, silent: bool) -> bool:
-    """Recognize leaf blocks before CommonMark decides where code starts."""
+def _directive_block(state: StateBlock, start_line: int, end_line: int, silent: bool) -> bool:
+    """Recognize directive boundaries before CommonMark decides where code starts."""
     if state.is_code_block(start_line):
         return False
     start = state.bMarks[start_line] + state.tShift[start_line]
-    if not _LEAF_BLOCK.fullmatch(state.src[start : state.eMarks[start_line]]):
+    end = state.eMarks[start_line]
+    text = state.src[start:end]
+    match = _BLOCK.fullmatch(text) or _CLOSE.fullmatch(text)
+    if not match:
         return False
+    width = len(match[1])
+    if width >= 3:
+        # Each list item or quote has its own directive fences.
+        parent = (
+            next(
+                (token for token in reversed(state.tokens) if token.nesting == 1 and token.level == state.level - 1),
+                None,
+            )
+            if state.level
+            else None
+        )
+        containers: dict[int, list[int]] = state.env.setdefault("solver_containers", {})
+        widths = containers.get(id(parent), [])
+        if match.lastindex == 1:
+            closing = next((i for i, opening_width in enumerate(widths) if opening_width <= width), None)
+            if closing is None:
+                return False
+            if not silent:
+                del widths[closing:]
+        elif not silent:
+            containers.setdefault(id(parent), []).append(width)
     if silent:
         return True
     state.line = start_line + 1
     token = state.push("solver_directive", "", 0)
     token.map = [start_line, state.line]
+    token.content = text
     return True
 
 
-def _block_lines(markdown: str) -> tuple[set[int], set[int]]:
-    """Find code and directive blocks with list and blockquote context."""
+def _backtick_with_offsets(state: StateInline, silent: bool) -> bool:
+    start, token_count = state.pos, len(state.tokens)
+    matched = backtick(state, silent)
+    if matched and len(state.tokens) > token_count and state.tokens[-1].type == "code_inline":
+        state.tokens[-1].meta["source_span"] = (start, state.pos)
+    return matched
+
+
+def _mask_inline_code(token: Token, lines: list[str], masked: list[str]) -> None:
+    """Map CommonMark code spans back to source lines, including container prefixes."""
+    if not token.map or not token.children:
+        return
+    content = token.content
+    spans = [child.meta["source_span"] for child in token.children if "source_span" in child.meta]
+    if not spans:
+        return
+    pieces: list[str] = []
+    end = 0
+    for start, stop in spans:
+        pieces.append(content[end:start])
+        pieces.append(re.sub(r"[^\n]", " ", content[start:stop]))
+        end = stop
+    pieces.append(content[end:])
+    for i, (plain, hidden) in enumerate(zip(content.split("\n"), "".join(pieces).split("\n"), strict=True)):
+        if plain == hidden:
+            continue
+        number = token.map[0] + i
+        # Block parsing strips quote/list prefixes and can synthesize spaces from tabs.
+        plain = plain.lstrip(" ")
+        hidden = hidden[-len(plain) :] if plain else ""
+        start = lines[number].replace("\x00", "\ufffd").rfind(plain)
+        if start >= 0 and hidden:
+            masked[number] = lines[number][:start] + hidden + lines[number][start + len(plain) :]
+
+
+def _markdown_context(markdown: str, lines: list[str]) -> tuple[set[int], dict[int, int], list[str]]:
     parser = MarkdownIt("commonmark")
-    parser.block.ruler.before("paragraph", "solver_directive", _leaf_directive, {"alt": ["paragraph"]})
+    parser.block.ruler.before("paragraph", "solver_directive", _directive_block, {"alt": ["paragraph"]})
+    parser.inline.ruler.at("backticks", _backtick_with_offsets)
     code: set[int] = set()
-    directives: set[int] = set()
+    directives: dict[int, int] = {}
+    masked = lines.copy()
     for token in parser.parse(markdown):
         if token.map is None:
             continue
+        number = token.map[0]
         if token.type in {"fence", "code_block"}:
-            code.update(range(token.map[0] + 1, token.map[1] + 1))
+            code.update(range(number, token.map[1]))
         elif token.type == "solver_directive":
-            directives.add(token.map[0] + 1)
-    return code, directives
+            directives[number] = len(lines[number]) - len(token.content)
+        elif token.type == "inline":
+            _mask_inline_code(token, lines, masked)
+    return code, directives, masked
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,27 +138,77 @@ class Marker:
     line: int
 
 
-def extract_markers(markdown: str) -> tuple[list[Marker], list[str]]:
+class ViolationCode(StrEnum):
+    INVALID_BLOCK_DIRECTIVE = "invalid_block_directive"
+    INLINE_DIRECTIVE = "inline_directive"
+    DUPLICATE_DIRECTIVE_ENTRY = "duplicate_directive_entry"
+    DUPLICATE_MARKER = "duplicate_marker"
+    MARKER_WITHOUT_ENTRY = "marker_without_entry"
+    DIRECTIVE_KIND_MISMATCH = "directive_kind_mismatch"
+    UNKNOWN_IMAGE = "unknown_image"
+    DUPLICATE_IMAGE = "duplicate_image"
+    ENTRY_WITHOUT_MARKER = "entry_without_marker"
+    TOO_MANY_WIDGETS = "too_many_widgets"
+    TOO_MANY_QUIZZES = "too_many_quizzes"
+    REPEATED_WIDGET_MODE = "repeated_widget_mode"
+    KEY_TERM_ABSENT = "key_term_absent"
+
+
+@dataclass(frozen=True, slots=True)
+class Violation:
+    code: ViolationCode
+    message: str
+    line: int | None = None
+    directive_index: int | None = None
+    key_term_index: int | None = None
+
+
+def _scan(markdown: str) -> tuple[list[Marker], list[Violation], list[tuple[int, int]]]:
     markers: list[Marker] = []
-    issues: list[str] = []
+    issues: list[Violation] = []
+    removals: list[tuple[int, int]] = []
+    source = list(_source_lines(markdown))
+    lines = [raw.rstrip("\r\n") for raw in source]
+    code_lines, block_directives, masked = _markdown_context(markdown, lines)
     offset = 0
-    code_lines, block_directives = _block_lines(markdown)
-    for number, raw in enumerate(_source_lines(markdown), 1):
-        line = raw.rstrip("\r\n")
+    for index, raw in enumerate(source):
+        number = index + 1
+        line = lines[index]
         start = offset
         offset += len(raw)
-        if number in code_lines:
+        if index in code_lines:
             continue
-        if _inline_directives(line):
-            issues.append(f"line {number}: inline directives are not supported")
-        if number not in block_directives and not _CANDIDATE.match(line):
+        column = block_directives.get(index)
+        candidate = _CANDIDATE.match(line)
+        if column is None and candidate and masked[index][candidate.start(1)] == ":":
+            column = candidate.start(1)
+        if column is not None:
+            match = _DIRECTIVE.fullmatch(line)
+            if match and (match[1] == "image") == (match[2] == "id"):
+                markers.append(Marker(match[3], cast(DirectiveKind, match[1]), start, start + len(line), number))
+            else:
+                issues.append(
+                    Violation(
+                        ViolationCode.INVALID_BLOCK_DIRECTIVE,
+                        f"line {number}: directive must be an unindented leaf with only ref or image id",
+                        line=number,
+                    )
+                )
+                removals.append((start + column, start + len(line)))
             continue
-        match = _DIRECTIVE.fullmatch(line)
-        if not match or (match[1] == "image") != (match[2] == "id"):
-            issues.append(f"line {number}: directive must be an unindented leaf with only ref or image id")
-            continue
-        markers.append(Marker(match[3], cast(DirectiveKind, match[1]), start, start + len(line), number))
-    return markers, issues
+        for inline in _INLINE.finditer(masked[index]):
+            issues.append(
+                Violation(
+                    ViolationCode.INLINE_DIRECTIVE, f"line {number}: inline directives are not supported", line=number
+                )
+            )
+            removals.append((start + inline.start(), start + inline.end()))
+    return markers, issues, removals
+
+
+def extract_markers(markdown: str) -> tuple[list[Marker], list[str]]:
+    markers, issues, _ = _scan(markdown)
+    return markers, [issue.message for issue in issues]
 
 
 def check_draft(
@@ -107,65 +221,146 @@ def check_draft(
     alternation: bool = False,
     key_terms: Sequence[str] | None = None,
 ) -> list[str]:
-    markers, issues = extract_markers(markdown)
+    return [
+        issue.message
+        for issue in find_violations(
+            markdown,
+            directives,
+            image_aliases=image_aliases,
+            max_widgets=max_widgets,
+            max_quizzes=max_quizzes,
+            alternation=alternation,
+            key_terms=key_terms,
+        )
+    ]
+
+
+def find_violations(
+    markdown: str,
+    directives: Sequence[Directive],
+    *,
+    image_aliases: Collection[str] | None = None,
+    max_widgets: int | None = None,
+    max_quizzes: int | None = None,
+    alternation: bool = False,
+    key_terms: Sequence[str] | None = None,
+) -> list[Violation]:
+    markers, issues, _ = _scan(markdown)
     declared: dict[str, Directive] = {}
-    for entry in directives:
+    declared_indices: dict[str, int] = {}
+    for index, entry in enumerate(directives):
         if entry.ref in declared:
-            issues.append(f"duplicate directive ref {entry.ref!r} in the directive list")
+            issues.append(
+                Violation(
+                    ViolationCode.DUPLICATE_DIRECTIVE_ENTRY,
+                    f"duplicate directive ref {entry.ref!r} in the directive list",
+                    directive_index=index,
+                )
+            )
         else:
             declared[entry.ref] = entry
+            declared_indices[entry.ref] = index
     seen: set[str] = set()
     images: set[str] = set()
     for marker in markers:
         if marker.ref in seen:
-            issues.append(f"directive ref {marker.ref!r} appears more than once in the markdown")
+            issues.append(
+                Violation(
+                    ViolationCode.DUPLICATE_MARKER,
+                    f"directive ref {marker.ref!r} appears more than once in the markdown",
+                    line=marker.line,
+                )
+            )
         seen.add(marker.ref)
         target = declared.get(marker.ref)
         if target is None:
-            issues.append(f"markdown directive {marker.ref!r} has no entry in the directive list")
+            issues.append(
+                Violation(
+                    ViolationCode.MARKER_WITHOUT_ENTRY,
+                    f"markdown directive {marker.ref!r} has no entry in the directive list",
+                    line=marker.line,
+                )
+            )
         elif target.kind != marker.kind:
-            issues.append(f"directive {marker.ref!r} has different kinds in markdown and list")
+            issues.append(
+                Violation(
+                    ViolationCode.DIRECTIVE_KIND_MISMATCH,
+                    f"directive {marker.ref!r} has different kinds in markdown and list",
+                    line=marker.line,
+                )
+            )
         if marker.kind == "image":
             if image_aliases is not None and marker.ref not in image_aliases:
-                issues.append(f"unknown image id {marker.ref!r}")
+                issues.append(
+                    Violation(ViolationCode.UNKNOWN_IMAGE, f"unknown image id {marker.ref!r}", line=marker.line)
+                )
             if marker.ref in images:
-                issues.append(f"image id {marker.ref!r} is used more than once")
+                issues.append(
+                    Violation(
+                        ViolationCode.DUPLICATE_IMAGE,
+                        f"image id {marker.ref!r} is used more than once",
+                        line=marker.line,
+                    )
+                )
             images.add(marker.ref)
-    for ref in declared.keys() - seen:
-        issues.append(f"directive {ref!r} missing from the markdown")
-    for kind, limit in (("widget", max_widgets), ("quiz", max_quizzes)):
-        count = sum(m.kind == kind for m in markers)
-        if limit is not None and count > limit:
-            issues.append(f"too many {kind} directives: {count} > {limit}")
+    for ref, index in declared_indices.items():
+        if ref not in seen:
+            issues.append(
+                Violation(
+                    ViolationCode.ENTRY_WITHOUT_MARKER,
+                    f"directive {ref!r} missing from the markdown",
+                    directive_index=index,
+                )
+            )
+    for kind, limit, code in (
+        ("widget", max_widgets, ViolationCode.TOO_MANY_WIDGETS),
+        ("quiz", max_quizzes, ViolationCode.TOO_MANY_QUIZZES),
+    ):
+        slots = [m for m in markers if m.kind == kind]
+        if limit is not None and len(slots) > limit:
+            issues.append(
+                Violation(code, f"too many {kind} directives: {len(slots)} > {limit}", line=slots[limit].line)
+            )
     if alternation:
         widgets = [
-            declared[m.ref]
+            (m, declared[m.ref])
             for m in markers
             if m.kind == "widget" and m.ref in declared and declared[m.ref].kind == "widget"
         ]
-        for previous, current in pairwise(widgets):
+        for (_, previous), (marker, current) in pairwise(widgets):
             if (
                 previous.primitive_hint is not None
                 and previous.mode_hint is not None
                 and (previous.primitive_hint, previous.mode_hint) == (current.primitive_hint, current.mode_hint)
             ):
-                issues.append(f"widgets {previous.ref!r} and {current.ref!r} have identical primitive and mode")
+                issues.append(
+                    Violation(
+                        ViolationCode.REPEATED_WIDGET_MODE,
+                        f"widgets {previous.ref!r} and {current.ref!r} have identical primitive and mode",
+                        line=marker.line,
+                    )
+                )
     if key_terms is not None:
-        for term in key_terms:
+        for index, term in enumerate(key_terms):
             if term not in markdown:
-                issues.append(f"key term {term!r} is absent from markdown")
+                issues.append(
+                    Violation(
+                        ViolationCode.KEY_TERM_ABSENT,
+                        f"key term {term!r} is absent from markdown",
+                        key_term_index=index,
+                    )
+                )
     return issues
 
 
 def sanitize_draft(
-    draft: PageDraft, *, max_widgets: int, max_quizzes: int = 5, image_aliases: Collection[str] | None = None
-) -> PageDraft:
-    markers, _ = extract_markers(draft.markdown)
+    draft: RecoveredPageDraft, *, max_widgets: int, max_quizzes: int = 5, image_aliases: Collection[str] | None = None
+) -> RecoveredPageDraft:
+    markers, _, removed = _scan(draft.markdown)
     entries: dict[str, Directive] = {}
     for directive in draft.directives:
         entries.setdefault(directive.ref, directive)
     kept: list[Directive] = []
-    removed: list[tuple[int, int]] = []
     used: set[str] = set()
     counts = {"widget": 0, "quiz": 0}
     previous_widget: Directive | None = None
@@ -179,12 +374,8 @@ def sanitize_draft(
             if counts[marker.kind] >= limit:
                 valid = False
         if not valid or entry is None:
-            end = marker.end
-            if draft.markdown[end : end + 2] == "\r\n":
-                end += 2
-            elif draft.markdown[end : end + 1] in {"\r", "\n"}:
-                end += 1
-            removed.append((marker.start, end))
+            # Leave the original line ending so adjacent prose and code stay separate.
+            removed.append((marker.start, marker.end))
             continue
         used.add(marker.ref)
         if marker.kind in counts:
@@ -200,25 +391,10 @@ def sanitize_draft(
                 entry = entry.model_copy(update={"mode_hint": None})
             previous_widget = entry
         kept.append(entry)
-    # Remove malformed directive lines too, so the frontend cannot render unknown slots.
-    offset = 0
-    code_lines, block_directives = _block_lines(draft.markdown)
-    marker_lines = {m.line for m in markers}
-    for number, raw in enumerate(_source_lines(draft.markdown), 1):
-        line = raw.rstrip("\r\n")
-        if number not in code_lines and number not in marker_lines:
-            if number in block_directives or _CANDIDATE.match(line):
-                removed.append((offset, offset + len(raw)))
-            else:
-                removed.extend((offset + item.start(), offset + item.end()) for item in _inline_directives(line))
-        offset += len(raw)
     markdown = draft.markdown
     for start, end in sorted(removed, reverse=True):
         # Remove the colons of a newly exposed marker; keep whitespace and surrounding text.
-        removed_text = markdown[start:end]
-        following = (
-            re.match(r"([ \t]*)::", markdown[end:]) if "\n" not in removed_text and "\r" not in removed_text else None
-        )
+        following = re.match(r"([ \t]*)::", markdown[end:])
         replacement = ""
         if following:
             whitespace = following.group(1)
@@ -226,7 +402,7 @@ def sanitize_draft(
             replacement = whitespace
         markdown = markdown[:start] + replacement + markdown[end:]
     try:
-        return PageDraft.model_validate(
+        return RecoveredPageDraft.model_validate(
             {
                 "markdown": markdown,
                 "directives": kept,

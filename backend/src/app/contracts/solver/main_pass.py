@@ -114,7 +114,7 @@ class MainPassInput:
 
 @dataclass(frozen=True, slots=True)
 class MainPassDraft:
-    """Validated page draft: the page and the slots to resolve."""
+    """Nonblank page and its slots. Recovery may leave fewer terms, including none."""
 
     markdown: str
     directives: tuple[MainPassDirective, ...]

@@ -34,9 +34,10 @@ from src.app.exceptions.llm import LLMSchemaError
 from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.llm.factory import create_llm_client
 from src.app.observability.noop_metrics_collector import NoopMetricsCollector
-from src.app.services.solver.main_pass.directive_parser import check_draft
+from src.app.services.solver.main_pass.directive_parser import ViolationCode, find_violations
 from src.app.services.solver.main_pass.directives import PageDraft
 from src.app.services.solver.main_pass.main_pass import MainPassService
+from src.app.services.solver.main_pass.prompts import PROMPT_VERSION
 from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.repositories.widgets import FakePrimitiveRepository
 from tests.support.fixtures.main_pass import build_input, build_primitives
@@ -106,20 +107,19 @@ class FirstDraftRecorder(LLMClient):
 
 
 def classify_first_draft(draft: PageDraft, payload: MainPassInput, settings: SolverSettings) -> dict[str, list[str]]:
-    def check(alternation: bool) -> list[str]:
-        return check_draft(
-            draft.markdown,
-            draft.directives,
-            image_aliases={image.alias for image in payload.images},
-            max_widgets=settings.max_widgets_per_part,
-            max_quizzes=settings.max_quizzes_per_part,
-            key_terms=draft.key_terms,
-            alternation=alternation,
-        )
-
-    other = check(False)
-    all_issues = check(True)
-    return {"alternation": [issue for issue in all_issues if issue not in other], "other": other}
+    issues = find_violations(
+        draft.markdown,
+        draft.directives,
+        image_aliases={image.alias for image in payload.images},
+        max_widgets=settings.max_widgets_per_part,
+        max_quizzes=settings.max_quizzes_per_part,
+        key_terms=draft.key_terms,
+        alternation=True,
+    )
+    return {
+        "alternation": [issue.message for issue in issues if issue.code == ViolationCode.REPEATED_WIDGET_MODE],
+        "other": [issue.message for issue in issues if issue.code != ViolationCode.REPEATED_WIDGET_MODE],
+    }
 
 
 def load_cases(root: Path = _FIXTURES) -> list[Case]:
@@ -166,7 +166,8 @@ def _prompt_version() -> str:
     prompt_path = (
         Path(__file__).resolve().parents[1] / "src" / "app" / "services" / "solver" / "main_pass" / "prompts.py"
     )
-    return "sha256:" + hashlib.sha256(prompt_path.read_bytes()).hexdigest()
+    # Text-mode reading normalizes checkout line endings to the repository's LF.
+    return "sha256:" + hashlib.sha256(prompt_path.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
 
 
 async def run_cases(
@@ -236,6 +237,9 @@ async def run_cases(
                     )
     violations = metrics.answers.count("violations")
     summary = {
+        "model": model,
+        "prompt_version": prompt_version,
+        "prompt_label": PROMPT_VERSION,
         "cases": len(cases),
         "clean_first_cases": clean_first_cases,
         "completed": len(cases) - len(failures),

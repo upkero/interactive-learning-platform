@@ -58,3 +58,41 @@ A B C
 ```
 ::widget{ref="w1"}
 ```
+
+<!-- case: leaf-before-code -->
+
+A regular paragraph before an unbound widget.
+::widget{ref="w1"}
+    :quiz[example]
+
+<!-- case: quote-list-before-code -->
+
+> - A paragraph in a quoted list.
+>   ::quiz{ref="q1"}
+>       :widget[example]
+
+<!-- case: multiline-inline-code -->
+
+Use ``a literal `
+:widget[label]
+end`` and :quiz[unsupported].
+
+<!-- case: wide-container -->
+
+::::widget[caption]{ref="w1" note="}"}
+Keep this explanation.
+::::
+	:widget[example]
+
+<!-- case: nested-containers -->
+
+:::::note
+::::quiz{ref="q1"}
+Keep this explanation too.
+::::
+:::::
+
+<!-- case: unclosed-container -->
+
+::::::::image{id="img_1"}
+Keep this explanation until the end of the page.
