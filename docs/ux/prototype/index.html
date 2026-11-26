@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grasp — Прототип мастера генерации (Э2→Э3→Э4→Э5→Э6)</title>
+<style>
+:root {
+  --g-bg: #f8f9fa;
+  --g-surface: #ffffff;
+  --g-border: #e1e4e8;
+  --g-text: #24292e;
+  --g-text-muted: #586069;
+  --g-primary: #0366d6;
+  --g-primary-hover: #0256b9;
+  --g-primary-light: #eef6ff;
+  --g-success: #28a745;
+  --g-success-light: #e6ffe6;
+  --g-warning: #ffa62b;
+  --g-warning-light: #fff5e6;
+  --g-danger: #cb2431;
+  --g-danger-light: #ffe6e8;
+  --g-radius: 8px;
+  --g-radius-sm: 4px;
+  --g-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  --g-transition: 150ms ease;
+  --g-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --g-mono: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--g-font); background: var(--g-bg); color: var(--g-text); line-height: 1.5; min-height: 100vh; }
+a { color: var(--g-primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Layout */
+.app { display: grid; grid-template-rows: auto 1fr auto; min-height: 100vh; }
+.header { background: var(--g-surface); border-bottom: 1px solid var(--g-border); padding: 12px 24px; position: sticky; top: 0; z-index: 100; }
+.header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.logo { font-weight: 600; font-size: 1.1rem; color: var(--g-text); }
+.main { max-width: 900px; margin: 0 auto; padding: 24px; width: 100%; }
+.footer { background: var(--g-surface); border-top: 1px solid var(--g-border); padding: 16px 24px; text-align: center; color: var(--g-text-muted); font-size: 0.85rem; }
+
+/* Scenario Panel */
+.scenario-panel { background: var(--g-surface); border: 1px solid var(--g-border); border-radius: var(--g-radius); padding: 16px; margin-bottom: 24px; }
+.scenario-panel summary { cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.scenario-panel summary::-webkit-details-marker { display: none; }
+.scenario-panel[open] summary::before { transform: rotate(90deg); }
+.scenario-panel summary::before { content: "▶"; font-size: 0.7rem; color: var(--g-text-muted); transition: transform var(--g-transition); }
+.scenario-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-top: 12px; }
+.scenario-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--g-bg); border-radius: var(--g-radius-sm); border: 1px solid var(--g-border); }
+.scenario-item label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9rem; width: 100%; }
+.scenario-item input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--g-primary); flex-shrink: 0; }
+.scenario-item .desc { color: var(--g-text-muted); font-size: 0.8rem; margin-left: auto; white-space: nowrap; }
+
+/* URL Bar */
+.url-bar { background: var(--g-surface); border: 1px solid var(--g-border); border-radius: var(--g-radius); padding: 12px 16px; margin-bottom: 24px; font-family: var(--g-mono); font-size: 0.9rem; display: flex; align-items: center; gap: 12px; }
+.url-bar .label { color: var(--g-text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; }
+.url-bar .url { flex: 1; background: var(--g-bg); padding: 8px 12px; border-radius: var(--g-radius-sm); border: 1px solid var(--g-border); word-break: break-all; }
+.url-bar .screen-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+.url-bar .screen-badge.e2 { background: var(--g-primary-light); color: var(--g-primary); }
+.url-bar .screen-badge.e3 { background: var(--g-warning-light); color: #b06000; }
+.url-bar .screen-badge.e4 { background: #e0e7ff; color: #3730a3; }
+.url-bar .screen-badge.e5 { background: #f3e8ff; color: #7c3aed; }
+.url-bar .screen-badge.e6 { background: var(--g-success-light); color: var(--g-success); }
+
+/* Screens */
+.screen { display: none; animation: fadeIn 200ms ease; }
+.screen.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+.card { background: var(--g-surface); border: 1px solid var(--g-border); border-radius: var(--g-radius); padding: 24px; box-shadow: var(--g-shadow); }
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--g-border); flex-wrap: wrap; gap: 12px; }
+.card-title { font-size: 1.25rem; font-weight: 600; }
+.card-subtitle { color: var(--g-text-muted); font-size: 0.9rem; }
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 20px; border-radius: var(--g-radius-sm); font-size: 0.9rem; font-weight: 500; border: 1px solid transparent; cursor: pointer; transition: all var(--g-transition); text-decoration: none; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary { background: var(--g-primary); color: white; }
+.btn-primary:hover:not(:disabled) { background: var(--g-primary-hover); }
+.btn-secondary { background: var(--g-surface); color: var(--g-text); border-color: var(--g-border); }
+.btn-secondary:hover:not(:disabled) { background: var(--g-bg); }
+.btn-danger { background: var(--g-danger-light); color: var(--g-danger); border-color: var(--g-danger); }
+.btn-danger:hover:not(:disabled) { background: var(--g-danger); color: white; }
+.btn-success { background: var(--g-success-light); color: var(--g-success); border-color: var(--g-success); }
+.btn-success:hover:not(:disabled) { background: var(--g-success); color: white; }
+.btn-sm { padding: 6px 12px; font-size: 0.8rem; }
+
+/* Form */
+.form-group { margin-bottom: 16px; }
+.form-label { display: block; font-weight: 500; margin-bottom: 6px; }
+.form-input, .form-select { width: 100%; padding: 10px 12px; border: 1px solid var(--g-border); border-radius: var(--g-radius-sm); font-size: 0.95rem; font-family: inherit; background: var(--g-surface); transition: border-color var(--g-transition), box-shadow var(--g-transition); }
+.form-input:focus, .form-select:focus { outline: none; border-color: var(--g-primary); box-shadow: 0 0 0 3px var(--g-primary-light); }
+.form-hint { color: var(--g-text-muted); font-size: 0.8rem; margin-top: 4px; }
+.form-error { color: var(--g-danger); font-size: 0.85rem; margin-top: 4px; }
+.radio-group { display: flex; flex-wrap: wrap; gap: 12px; }
+.radio-item { flex: 1; min-width: 140px; }
+.radio-item label { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border: 2px solid var(--g-border); border-radius: var(--g-radius); cursor: pointer; transition: all var(--g-transition); background: var(--g-surface); }
+.radio-item input { display: none; }
+.radio-item input:checked + span { color: var(--g-primary); font-weight: 600; }
+.radio-item:has(input:checked) { border-color: var(--g-primary); background: var(--g-primary-light); }
+.radio-item .radio-desc { color: var(--g-text-muted); font-size: 0.8rem; }
+
+/* Dropzone */
+.dropzone { border: 2px dashed var(--g-border); border-radius: var(--g-radius); padding: 40px 24px; text-align: center; transition: all var(--g-transition); background: var(--g-bg); cursor: pointer; }
+.dropzone:hover, .dropzone.active { border-color: var(--g-primary); background: var(--g-primary-light); }
+.dropzone-icon { font-size: 2.5rem; margin-bottom: 12px; color: var(--g-text-muted); }
+.dropzone-title { font-weight: 600; margin-bottom: 4px; }
+.dropzone-hint { color: var(--g-text-muted); font-size: 0.9rem; }
+.dropzone-input { display: none; }
+
+/* Parsing Card */
+.parsing-card { display: none; }
+.parsing-card.active { display: block; animation: fadeIn 300ms; }
+.parsing-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.parsing-status { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.spinner { width: 20px; height: 20px; border: 2px solid var(--g-border); border-top-color: var(--g-primary); border-radius: 50%; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.parsing-steps { display: flex; flex-direction: column; gap: 10px; }
+.parsing-step { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: var(--g-bg); border-radius: var(--g-radius-sm); transition: all var(--g-transition); }
+.parsing-step.completed { background: var(--g-success-light); border-color: var(--g-success); }
+.parsing-step.active { background: var(--g-primary-light); border-color: var(--g-primary); }
+.parsing-step-icon { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0; }
+.parsing-step.completed .parsing-step-icon { background: var(--g-success); color: white; }
+.parsing-step.active .parsing-step-icon { background: var(--g-primary); color: white; animation: pulse 1.5s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+.parsing-step.pending .parsing-step-icon { background: var(--g-border); color: var(--g-text-muted); }
+.parsing-step-title { font-weight: 500; }
+.parsing-step-desc { color: var(--g-text-muted); font-size: 0.85rem; }
+
+/* Topic Tree */
+.topic-tree { display: flex; flex-direction: column; gap: 8px; }
+.topic-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--g-bg); border-radius: var(--g-radius-sm); border: 1px solid var(--g-border); transition: all var(--g-transition); }
+.topic-item:hover { border-color: var(--g-primary); }
+.topic-item.selected { border-color: var(--g-primary); background: var(--g-primary-light); }
+.topic-checkbox { width: 20px; height: 20px; accent-color: var(--g-primary); flex-shrink: 0; }
+.topic-info { flex: 1; }
+.topic-title { font-weight: 500; }
+.topic-meta { color: var(--g-text-muted); font-size: 0.8rem; }
+.topic-cost { color: var(--g-primary); font-weight: 600; font-family: var(--g-mono); }
+
+/* Cost Summary */
+.cost-summary { display: flex; align-items: center; justify-content: space-between; padding: 16px; background: var(--g-bg); border-radius: var(--g-radius-sm); margin: 16px 0; flex-wrap: wrap; gap: 12px; }
+.cost-info { display: flex; flex-direction: column; gap: 4px; }
+.cost-label { color: var(--g-text-muted); font-size: 0.85rem; }
+.cost-value { font-size: 1.5rem; font-weight: 700; font-family: var(--g-mono); color: var(--g-text); }
+.cost-value.warning { color: var(--g-danger); }
+.cost-value.success { color: var(--g-success); }
+.cost-quota { font-size: 0.85rem; color: var(--g-text-muted); }
+.cost-quota.warning { color: var(--g-danger); font-weight: 600; }
+
+/* Plan Preview */
+.plan-preview { margin-top: 16px; }
+.plan-title { font-weight: 600; margin-bottom: 12px; }
+.plan-parts { display: flex; flex-direction: column; gap: 8px; }
+.plan-part { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--g-surface); border: 1px solid var(--g-border); border-radius: var(--g-radius-sm); }
+.plan-part-index { font-family: var(--g-mono); color: var(--g-text-muted); font-size: 0.85rem; }
+.plan-part-title { flex: 1; margin-left: 12px; font-weight: 500; }
+.plan-part-tokens { color: var(--g-text-muted); font-size: 0.8rem; font-family: var(--g-mono); }
+
+/* Questions */
+.question-card { margin-bottom: 20px; }
+.question-title { font-weight: 600; margin-bottom: 4px; }
+.question-required { color: var(--g-danger); font-size: 0.8rem; }
+.question-hint { color: var(--g-text-muted); font-size: 0.85rem; margin-top: 4px; }
+.question-source { font-size: 0.75rem; color: var(--g-text-muted); background: var(--g-bg); padding: 2px 8px; border-radius: 999px; display: inline-block; margin-top: 8px; }
+
+/* Confirm Spend */
+.confirm-spend { background: var(--g-primary-light); border: 1px solid var(--g-primary); border-radius: var(--g-radius); padding: 16px; margin: 20px 0; }
+.confirm-spend-title { font-weight: 600; color: var(--g-primary); margin-bottom: 8px; }
+.confirm-spend-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.9rem; }
+.confirm-spend-row.total { border-top: 1px solid var(--g-primary); margin-top: 8px; padding-top: 12px; font-weight: 600; }
+
+/* Progress Screen */
+.progress-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+.progress-eta { font-family: var(--g-mono); font-size: 1.1rem; font-weight: 600; color: var(--g-primary); background: var(--g-primary-light); padding: 8px 16px; border-radius: var(--g-radius-sm); }
+.progress-parts { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.part-card { background: var(--g-surface); border: 1px solid var(--g-border); border-radius: var(--g-radius); overflow: hidden; display: flex; flex-direction: column; }
+.part-card-header { padding: 14px 16px; border-bottom: 1px solid var(--g-border); display: flex; align-items: center; justify-content: space-between; background: var(--g-bg); }
+.part-card-title { font-weight: 600; font-size: 0.95rem; }
+.part-status { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
+.part-status.queued { background: var(--g-bg); color: var(--g-text-muted); }
+.part-status.generating { background: var(--g-primary-light); color: var(--g-primary); }
+.part-status.published { background: var(--g-success-light); color: var(--g-success); }
+.part-status.failed { background: var(--g-danger-light); color: var(--g-danger); }
+.part-card-body { padding: 16px; flex: 1; display: flex; flex-direction: column; gap: 12px; }
+.part-progress { height: 6px; background: var(--g-bg); border-radius: 3px; overflow: hidden; }
+.part-progress-bar { height: 100%; border-radius: 3px; transition: width 300ms ease; }
+.part-progress-bar.generating { background: var(--g-primary); }
+.part-progress-bar.published { background: var(--g-success); }
+.part-progress-bar.failed { background: var(--g-danger); }
+.part-progress-bar.queued { background: var(--g-border); }
+.part-card-actions { display: flex; gap: 8px; padding-top: 8px; }
+.part-action-btn { flex: 1; }
+.part-error-text { color: var(--g-danger); font-size: 0.85rem; background: var(--g-danger-light); padding: 10px 12px; border-radius: var(--g-radius-sm); }
+.part-continue-hint { color: var(--g-text-muted); font-size: 0.85rem; background: var(--g-warning-light); padding: 10px 12px; border-radius: var(--g-radius-sm); border-left: 3px solid var(--g-warning); }
+
+/* Stage Log */
+.stage-log { margin-top: 24px; }
+.stage-log-title { font-weight: 600; margin-bottom: 12px; }
+.stage-log-list { display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; }
+.stage-log-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--g-bg); border-radius: var(--g-radius-sm); font-size: 0.85rem; }
+.stage-log-icon { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; flex-shrink: 0; }
+.stage-log-item.completed .stage-log-icon { background: var(--g-success); color: white; }
+.stage-log-item.active .stage-log-icon { background: var(--g-primary); color: white; animation: pulse 1.5s ease-in-out infinite; }
+.stage-log-item.pending .stage-log-icon { background: var(--g-border); color: var(--g-text-muted); }
+
+/* Alert Banner */
+.alert { padding: 14px 16px; border-radius: var(--g-radius); margin-bottom: 20px; display: flex; align-items: flex-start; gap: 12px; }
+.alert-warning { background: var(--g-warning-light); border: 1px solid var(--g-warning); color: #856404; }
+.alert-danger { background: var(--g-danger-light); border: 1px solid var(--g-danger); color: var(--g-danger); }
+.alert-success { background: var(--g-success-light); border: 1px solid var(--g-success); color: var(--g-success); }
+.alert-info { background: var(--g-primary-light); border: 1px solid var(--g-primary); color: var(--g-primary); }
+.alert-icon { flex-shrink: 0; margin-top: 2px; }
+.alert-content { flex: 1; }
+.alert-title { font-weight: 600; margin-bottom: 4px; }
+.alert-text { font-size: 0.9rem; line-height: 1.5; }
+.alert-actions { display: flex; gap: 8px; margin-top: 12px; }
+
+/* Key Terms */
+.key-terms { margin-top: 24px; }
+.key-terms-title { font-weight: 600; margin-bottom: 12px; }
+.key-terms-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.key-term { background: var(--g-primary-light); color: var(--g-primary); padding: 6px 12px; border-radius: var(--g-radius-sm); font-size: 0.85rem; font-weight: 500; }
+
+/* E6 Preview */
+.e6-preview { margin-top: 24px; padding: 20px; background: var(--g-success-light); border: 1px solid var(--g-success); border-radius: var(--g-radius); }
+.e6-preview-title { font-weight: 600; color: var(--g-success); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.e6-preview-text { color: var(--g-success); font-size: 0.9rem; margin-bottom: 12px; }
+.e6-preview-url { font-family: var(--g-mono); font-size: 0.85rem; background: rgba(0,0,0,0.05); padding: 8px 12px; border-radius: var(--g-radius-sm); display: inline-block; margin-bottom: 12px; }
+
+/* Navigation */
+.screen-nav { display: flex; justify-content: space-between; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--g-border); flex-wrap: wrap; gap: 12px; }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .main { padding: 16px; }
+  .header { padding: 12px 16px; }
+  .card { padding: 16px; }
+  .scenario-grid { grid-template-columns: 1fr; }
+  .radio-group { flex-direction: column; }
+  .radio-item { min-width: 0; }
+  .cost-summary { flex-direction: column; align-items: flex-start; }
+  .progress-parts { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <div class="header-inner">
+      <span class="logo">Grasp</span>
+      <nav style="display:flex; gap:16px; font-size:0.85rem; color:var(--g-text-muted);">
+        <span>Прототип мастера генерации</span>
+        <a href="../../wizard-prototype.md" target="_blank">Документация</a>
+        <a href="../screens.md" target="_blank">Карта экранов</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- Scenario Panel -->
+    <details class="scenario-panel" open>
+      <summary>🎛 Панель симуляции сценариев</summary>
+      <div class="scenario-grid">
+        <div class="scenario-item">
+          <label>
+            <input type="checkbox" id="scenario-quota-ok" checked>
+            <span>Квота: хватает</span>
+          </label>
+          <span class="desc">На Э3 и Э4 хватает генераций</span>
+        </div>
+        <div class="scenario-item">
+          <label>
+            <input type="checkbox" id="scenario-race-condition">
+            <span>Гонка вкладок: не хватает квоты на Э4</span>
+          </label>
+          <span class="desc">При отправке Э4 — 402 Quota Exceeded</span>
+        </div>
+        <div class="scenario-item">
+          <label>
+            <input type="checkbox" id="scenario-gdocs-error">
+            <span>Google Docs: ошибка gdocs_not_public</span>
+          </label>
+          <span class="desc">При импорте Google Docs на Э2</span>
+        </div>
+        <div class="scenario-item">
+          <label>
+            <input type="checkbox" id="scenario-part-failed">
+            <span>Э5: одна часть упала (failed)</span>
+          </label>
+          <span class="desc">Часть 2 получает status=failed</span>
+        </div>
+      </div>
+    </details>
+
+    <!-- URL Bar -->
+    <div class="url-bar" role="status" aria-live="polite">
+      <span class="label">Текущий маршрут:</span>
+      <span class="url" id="urlDisplay">/materials</span>
+      <span class="screen-badge" id="screenBadge">Э1</span>
+    </div>
+
+    <!-- Screen E2: Upload -->
+    <section class="screen" id="screen-e2" role="region" aria-label="Экран загрузки (Э2)">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h1 class="card-title">Загрузка материала</h1>
+            <p class="card-subtitle">Э2 — перетащите файл или вставьте ссылку на Google Docs</p>
+          </div>
+          <span class="screen-badge e2">Э2</span>
+        </div>
+
+        <div id="e2-upload-form">
+          <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Область загрузки файла">
+            <div class="dropzone-icon">📄</div>
+            <div class="dropzone-title">Перетащите файл сюда или нажмите для выбора</div>
+            <div class="dropzone-hint">Поддерживаются форматы PDF, DOCX, MD до 50 МБ</div>
+            <input type="file" class="dropzone-input" id="fileInput" accept=".pdf,.docx,.md">
+          </div>
+          <div class="form-hint" style="margin-top:12px; text-align:center;">или</div>
+          <div class="form-group" style="margin-top:12px;">
+            <label class="form-label" for="gdocsUrl">Ссылка на Google Docs</label>
+            <input type="url" class="form-input" id="gdocsUrl" placeholder="https://docs.google.com/document/d/...">
+            <div class="form-hint">Документ должен быть доступен для просмотра по ссылке</div>
+          </div>
+          <div class="screen-nav">
+            <button class="btn btn-primary" id="btnImport" disabled>Импортировать</button>
+            <button class="btn btn-secondary" id="btnBackToE1">← Назад к материалам</button>
+          </div>
+        </div>
+
+        <div id="e2-parsing" class="parsing-card" role="status" aria-live="polite" aria-label="Прогресс разбора документа">
+          <div class="parsing-header">
+            <div class="parsing-status">
+              <span class="spinner" aria-hidden="true"></span>
+              <span>Разбираем структуру документа…</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" id="btnCancelParsing">Отменить</button>
+          </div>
+          <div class="parsing-steps" id="parsingSteps">
+            <div class="parsing-step active" data-step="uploaded">
+              <div class="parsing-step-icon">⬆</div>
+              <div>
+                <div class="parsing-step-title">Загрузка файла</div>
+                <div class="parsing-step-desc">Файл загружается на сервер</div>
+              </div>
+            </div>
+            <div class="parsing-step pending" data-step="parsing">
+              <div class="parsing-step-icon">⏳</div>
+              <div>
+                <div class="parsing-step-title">Разбор структуры</div>
+                <div class="parsing-step-desc">Извлечение текста и определение тем</div>
+              </div>
+            </div>
+            <div class="parsing-step pending" data-step="parsed">
+              <div class="parsing-step-icon">✓</div>
+              <div>
+                <div class="parsing-step-title">Разбор завершён</div>
+                <div class="parsing-step-desc">Темы готовы к выбору</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="e2-gdocs-error" class="alert alert-danger" style="display:none;" role="alert">
+          <span class="alert-icon">⚠</span>
+          <div class="alert-content">
+            <div class="alert-title">Не удалось получить доступ к Google Docs</div>
+            <div class="alert-text">Код ошибки: <code>gdocs_not_public</code>. Проверьте, открыт ли доступ к документу по ссылке для просмотра.</div>
+            <div class="alert-actions">
+              <button class="btn btn-primary" id="btnRetryGdocs">Попробовать другую ссылку</button>
+              <button class="btn btn-secondary" id="btnBackToUpload">← Выбрать файл</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Screen E3: Topics -->
+    <section class="screen" id="screen-e3" role="region" aria-label="Экран выбора тем (Э3)">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h1 class="card-title">Выбор тем для конспекта</h1>
+            <p class="card-subtitle">Э3 — отметьте темы, которые хотите включить в материал</p>
+          </div>
+          <span class="screen-badge e3">Э3</span>
+        </div>
+
+        <div id="e3-quota-warning" class="alert alert-warning" style="display:none;" role="alert">
+          <span class="alert-icon">⚠</span>
+          <div class="alert-content">
+            <div class="alert-title">Недостаточно генераций</div>
+            <div class="alert-text" id="e3QuotaText"></div>
+            <div class="form-hint" style="margin-top:8px;">Снимите выделение с некоторых тем, чтобы стоимость не превышала доступный лимит.</div>
+          </div>
+        </div>
+
+        <div class="topic-tree" id="topicTree" role="listbox" aria-label="Список тем">
+          <!-- Topics rendered by JS -->
+        </div>
+
+        <div class="cost-summary" id="costSummary">
+          <div class="cost-info">
+            <div class="cost-label">Будет использовано <span id="usedCount">0</span> из <span id="totalCount">5</span> генераций</div>
+            <div class="cost-value" id="costValue">0</div>
+            <div class="form-hint">Генерация вернётся, если обработка сорвётся по вине системы</div>
+          </div>
+          <div>
+            <div class="cost-quota" id="quotaDisplay">Остаток: 10 генераций</div>
+          </div>
+        </div>
+
+        <div class="plan-preview" id="planPreview">
+          <div class="plan-title">Структура частей конспекта (превью)</div>
+          <div class="plan-parts" id="planParts"></div>
+        </div>
+
+        <div class="screen-nav">
+          <button class="btn btn-secondary" id="btnE3Back">← Назад к загрузке</button>
+          <button class="btn btn-primary" id="btnE3Next" disabled>Далее →</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Screen E4: Questions -->
+    <section class="screen" id="screen-e4" role="region" aria-label="Экран параметров генерации (Э4)">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h1 class="card-title">Параметры генерации</h1>
+            <p class="card-subtitle">Э4 — укажите уровень, глубину и цель обучения</p>
+          </div>
+          <span class="screen-badge e4">Э4</span>
+        </div>
+
+        <div id="e4-race-warning" class="alert alert-warning" style="display:none;" role="alert">
+          <span class="alert-icon">⚠</span>
+          <div class="alert-content">
+            <div class="alert-title">Квота исчерпана (гонка вкладок)</div>
+            <div class="alert-text">Во время заполнения формы квота изменилась. Освободите генерации или подождите следующего периода.</div>
+            <div class="alert-actions">
+              <button class="btn btn-secondary" id="btnE4BackFromRace">← Вернуться к темам</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="question-card">
+          <div class="question-title">1. Уровень подготовки <span class="question-required">*</span></div>
+          <div class="question-hint">Обязательный вопрос — без ответа генерация не запустится</div>
+          <div class="radio-group" id="levelOptions" role="radiogroup" aria-label="Уровень подготовки">
+            <div class="radio-item"><input type="radio" name="level" id="level-novice" value="novice"><span>Новичок</span><span class="radio-desc">Базовые знания, первый раз вижу тему</span></div>
+            <div class="radio-item"><input type="radio" name="level" id="level-intermediate" value="intermediate" checked><span>Средний</span><span class="radio-desc">Есть базовые знания, хочу систематизировать</span></div>
+            <div class="radio-item"><input type="radio" name="level" id="level-advanced" value="advanced"><span>Продвинутый</span><span class="radio-desc">Хорошо знаю тему, нужны детали и нюансы</span></div>
+          </div>
+          <div class="question-source">Источник: GET /api/v1/me → last_answers.level</div>
+        </div>
+
+        <div class="question-card">
+          <div class="question-title">2. Глубина изложения</div>
+          <div class="radio-group" id="depthOptions" role="radiogroup" aria-label="Глубина изложения">
+            <div class="radio-item"><input type="radio" name="depth" id="depth-overview" value="overview"><span>Обзорно</span><span class="radio-desc">Краткое введение, ключевые идеи</span></div>
+            <div class="radio-item"><input type="radio" name="depth" id="depth-standard" value="standard" checked><span>Стандартно</span><span class="radio-desc">Полное изложение с примерами</span></div>
+            <div class="radio-item"><input type="radio" name="depth" id="depth-deep" value="deep"><span>Глубоко</span><span class="radio-desc">Детальный разбор всех аспектов</span></div>
+          </div>
+          <div class="question-source">Источник: GET /api/v1/me → last_answers.depth</div>
+        </div>
+
+        <div class="question-card">
+          <div class="question-title">3. Цель изучения</div>
+          <div class="radio-group" id="goalOptions" role="radiogroup" aria-label="Цель изучения">
+            <div class="radio-item"><input type="radio" name="goal" id="goal-refresh" value="refresh"><span>Освежить память</span><span class="radio-desc">Быстро повторить основное</span></div>
+            <div class="radio-item"><input type="radio" name="goal" id="goal-exam" value="exam" checked><span>Подготовка к экзамену</span><span class="radio-desc">Глубокое понимание для сдачи</span></div>
+            <div class="radio-item"><input type="radio" name="goal" id="goal-practice" value="practice"><span>Применение на практике</span><span class="radio-desc">Акцент на примерах и кейсах</span></div>
+          </div>
+          <div class="question-source">Источник: GET /api/v1/me → last_answers.goal</div>
+        </div>
+
+        <div class="confirm-spend" id="confirmSpend">
+          <div class="confirm-spend-title">Подтверждение списания</div>
+          <div class="confirm-spend-row"><span>К списанию:</span><span id="spendCost">3</span></div>
+          <div class="confirm-spend-row"><span>Остаток после запуска:</span><span id="spendRemaining">7</span></div>
+          <div class="confirm-spend-row total"><span>Всего доступно:</span><span id="spendTotal">10</span></div>
+        </div>
+
+        <div class="screen-nav">
+          <button class="btn btn-secondary" id="btnE4Back">← Назад к темам</button>
+          <button class="btn btn-primary" id="btnE4Start">Запустить генерацию</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Screen E5: Progress -->
+    <section class="screen" id="screen-e5" role="region" aria-label="Экран прогресса генерации (Э5)">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h1 class="card-title">Создаём материал</h1>
+            <p class="card-subtitle">Э5 — генерация частей конспекта в реальном времени</p>
+          </div>
+          <span class="screen-badge e5">Э5</span>
+        </div>
+
+        <div class="progress-header">
+          <div class="progress-eta" id="progressEta">Оценка времени: ~45 сек</div>
+          <button class="btn btn-secondary" id="btnE5BackToE1">← Вернуться к материалам</button>
+        </div>
+
+        <div class="progress-parts" id="progressParts" role="list" aria-label="Части материала">
+          <!-- Part cards rendered by JS -->
+        </div>
+
+        <div class="stage-log" id="stageLog">
+          <div class="stage-log-title">Журнал этапов</div>
+          <div class="stage-log-list" id="stageLogList"></div>
+        </div>
+
+        <div class="key-terms" id="keyTerms" style="display:none;">
+          <div class="key-terms-title">Ключевые термины</div>
+          <div class="key-terms-list" id="keyTermsList"></div>
+        </div>
+
+        <div id="e5-complete-hint" class="alert alert-success" style="display:none;" role="status">
+          <span class="alert-icon">✓</span>
+          <div class="alert-content">
+            <div class="alert-title">Генерация завершена</div>
+            <div class="alert-text">Все части готовы. Нажмите «Открыть» у любой опубликованной части, чтобы перейти к материалу.</div>
+          </div>
+        </div>
+
+        <div id="e5-part-failed-hint" class="alert alert-warning" style="display:none;" role="status">
+          <span class="alert-icon">⚠</span>
+          <div class="alert-content">
+            <div class="alert-title">Одна из частей не сгенерировалась</div>
+            <div class="alert-text">Генерация возвращена. Остальные части продолжают генерироваться. Вы можете вернуться к <strong>выбору тем (Э3)</strong>, чтобы запустить генерацию для упавшей части заново.</div>
+            <div class="alert-actions">
+              <button class="btn btn-primary" id="btnE5BackToE3">← Вернуться к выбору тем</button>
+              <button class="btn btn-secondary" id="btnE5BackToE1FromFailed">← Вернуться к материалам</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Screen E6 Preview -->
+    <section class="screen" id="screen-e6" role="region" aria-label="Превью перехода на Э6 (Материал)">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h1 class="card-title">Переход на Э6 — Материал</h1>
+            <p class="card-subtitle">Превью экрана части материала (/parts/{id})</p>
+          </div>
+          <span class="screen-badge e6">Э6</span>
+        </div>
+
+        <div class="e6-preview">
+          <div class="e6-preview-title">📄 Часть материала открыта</div>
+          <div class="e6-preview-text">Вы перешли по кнопке «Открыть» у части со статусом <strong>published</strong>. В MVP переход происходит сразу к конкретной части, а не к общему документу.</div>
+          <div class="e6-preview-url" id="e6PreviewUrl">/parts/part-uuid-123</div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-secondary" id="btnE6BackToE5">← Вернуться к прогрессу</button>
+            <button class="btn btn-secondary" id="btnE6BackToE1">← Вернуться к материалам</button>
+            <button class="btn btn-primary" id="btnE6OpenQuiz">Пройти тест по части →</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    Grasp — Прототип мастера генерации (Э2→Э3→Э4→Э5→Э6) | <a href="../../wizard-prototype.md">Документация</a> | <a href="../screens.md">Карта экранов</a>
+  </footer>
+</div>
+
+<script>
+// ==================== STATE & CONFIG ====================
+const state = {
+  currentScreen: 'e1',
+  documentId: 'doc-uuid-' + Math.random().toString(36).slice(2, 10),
+  selectedTopics: new Set(),
+  answers: { level: 'intermediate', depth: 'standard', goal: 'exam' },
+  parts: [],
+  parsingStage: 0,
+  generationStage: 0,
+  scenarios: {
+    quotaOk: true,
+    raceCondition: false,
+    gdocsError: false,
+    partFailed: false
+  }
+};
+
+const topics = [
+  { id: 't1', title: 'Введение в машинное обучение', tokens: 1200, cost: 1, parts: ['Что такое ML', 'Типы обучения'] },
+  { id: 't2', title: 'Линейная регрессия', tokens: 1800, cost: 2, parts: ['Модель', 'Функция потерь', 'Градиентный спуск'] },
+  { id: 't3', title: 'Логистическая регрессия', tokens: 1500, cost: 1, parts: ['Сигмоида', 'Классификация'] },
+  { id: 't4', title: 'Деревья решений', tokens: 2200, cost: 2, parts: ['Инефоинция', 'Гини', 'Приuning'] },
+  { id: 't5', title: 'Ансамбли и случайный лес', tokens: 2500, cost: 3, parts: ['Бэггинг', 'Бустинг', 'Random Forest'] }
+];
+
+const totalGenerations = 10;
+const totalTopics = topics.length;
+
+// ==================== DOM ELEMENTS ====================
+const urlDisplay = document.getElementById('urlDisplay');
+const screenBadge = document.getElementById('screenBadge');
+const screens = {
+  e2: document.getElementById('screen-e2'),
+  e3: document.getElementById('screen-e3'),
+  e4: document.getElementById('screen-e4'),
+  e5: document.getElementById('screen-e5'),
+  e6: document.getElementById('screen-e6')
+};
+
+// E2 elements
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const gdocsUrl = document.getElementById('gdocsUrl');
+const btnImport = document.getElementById('btnImport');
+const btnBackToE1 = document.getElementById('btnBackToE1');
+const e2UploadForm = document.getElementById('e2-upload-form');
+const e2Parsing = document.getElementById('e2-parsing');
+const e2GdocsError = document.getElementById('e2-gdocs-error');
+const parsingSteps = document.getElementById('parsingSteps');
+const btnCancelParsing = document.getElementById('btnCancelParsing');
+const btnRetryGdocs = document.getElementById('btnRetryGdocs');
+const btnBackToUpload = document.getElementById('btnBackToUpload');
+
+// E3 elements
+const topicTree = document.getElementById('topicTree');
+const costValue = document.getElementById('costValue');
+const usedCount = document.getElementById('usedCount');
+const totalCount = document.getElementById('totalCount');
+const quotaDisplay = document.getElementById('quotaDisplay');
+const planParts = document.getElementById('planParts');
+const e3QuotaWarning = document.getElementById('e3-quota-warning');
+const e3QuotaText = document.getElementById('e3QuotaText');
+const btnE3Back = document.getElementById('btnE3Back');
+const btnE3Next = document.getElementById('btnE3Next');
+
+// E4 elements
+const levelOptions = document.getElementById('levelOptions');
+const depthOptions = document.getElementById('depthOptions');
+const goalOptions = document.getElementById('goalOptions');
+const spendCost = document.getElementById('spendCost');
+const spendRemaining = document.getElementById('spendRemaining');
+const spendTotal = document.getElementById('spendTotal');
+const e4RaceWarning = document.getElementById('e4-race-warning');
+const btnE4Back = document.getElementById('btnE4Back');
+const btnE4Start = document.getElementById('btnE4Start');
+const btnE4BackFromRace = document.getElementById('btnE4BackFromRace');
+
+// E5 elements
+const progressParts = document.getElementById('progressParts');
+const progressEta = document.getElementById('progressEta');
+const stageLogList = document.getElementById('stageLogList');
+const keyTerms = document.getElementById('keyTerms');
+const keyTermsList = document.getElementById('keyTermsList');
+const e5CompleteHint = document.getElementById('e5-complete-hint');
+const e5PartFailedHint = document.getElementById('e5-part-failed-hint');
+const btnE5BackToE1 = document.getElementById('btnE5BackToE1');
+const btnE5BackToE3 = document.getElementById('btnE5BackToE3');
+const btnE5BackToE1FromFailed = document.getElementById('btnE5BackToE1FromFailed');
+
+// E6 elements
+const e6PreviewUrl = document.getElementById('e6PreviewUrl');
+const btnE6BackToE5 = document.getElementById('btnE6BackToE5');
+const btnE6BackToE1 = document.getElementById('btnE6BackToE1');
+const btnE6OpenQuiz = document.getElementById('btnE6OpenQuiz');
+
+// Scenario checkboxes
+const scenarioQuotaOk = document.getElementById('scenario-quota-ok');
+const scenarioRaceCondition = document.getElementById('scenario-race-condition');
+const scenarioGdocsError = document.getElementById('scenario-gdocs-error');
+const scenarioPartFailed = document.getElementById('scenario-part-failed');
+
+// ==================== UTILS ====================
+function updateUrlBar() {
+  const routes = {
+    e2: `/upload?document=${state.documentId}`,
+    e3: `/documents/${state.documentId}/topics`,
+    e4: `/documents/${state.documentId}/questions?topics=${Array.from(state.selectedTopics).join(',')}`,
+    e5: `/documents/${state.documentId}/progress`,
+    e6: `/parts/part-uuid-${Math.random().toString(36).slice(2, 8)}`
+  };
+  const badges = { e2: 'e2', e3: 'e3', e4: 'e4', e5: 'e5', e6: 'e6' };
+  const labels = { e2: 'Э2', e3: 'Э3', e4: 'Э4', e5: 'Э5', e6: 'Э6' };
+  urlDisplay.textContent = routes[state.currentScreen] || '/materials';
+  screenBadge.textContent = labels[state.currentScreen] || 'Э1';
+  screenBadge.className = 'screen-badge ' + (badges[state.currentScreen] || '');
+}
+
+function showScreen(screenKey) {
+  Object.values(screens).forEach(s => s.classList.remove('active'));
+  if (screens[screenKey]) screens[screenKey].classList.add('active');
+  state.currentScreen = screenKey;
+  updateUrlBar();
+  window.scrollTo(0, 0);
+}
+
+function calcCost() {
+  let cost = 0;
+  state.selectedTopics.forEach(id => {
+    const t = topics.find(x => x.id === id);
+    if (t) cost += t.cost;
+  });
+  return cost;
+}
+
+function updateE3UI() {
+  const cost = calcCost();
+  const used = state.selectedTopics.size;
+  const remaining = totalGenerations - cost;
+  
+  costValue.textContent = cost;
+  costValue.className = 'cost-value' + (cost > totalGenerations ? ' warning' : cost > 0 ? ' success' : '');
+  usedCount.textContent = used;
+  quotaDisplay.textContent = `Остаток: ${Math.max(0, remaining)} генераций`;
+  quotaDisplay.className = 'cost-quota' + (remaining < 0 ? ' warning' : '');
+  
+  // Plan preview
+  planParts.innerHTML = '';
+  const selectedTopicsArr = topics.filter(t => state.selectedTopics.has(t.id));
+  let partIndex = 1;
+  selectedTopicsArr.forEach(t => {
+    t.parts.forEach(p => {
+      const div = document.createElement('div');
+      div.className = 'plan-part';
+      div.innerHTML = `
+        <span class="plan-part-index">${partIndex}</span>
+        <span class="plan-part-title">${p}</span>
+        <span class="plan-part-tokens">~${Math.round(t.tokens / t.parts.length)} токенов</span>
+      `;
+      planParts.appendChild(div);
+      partIndex++;
+    });
+  });
+  if (partIndex === 1) {
+    planParts.innerHTML = '<div class="plan-part" style="color:var(--g-text-muted); justify-content:center;">Выберите темы для превью структуры</div>';
+  }
+  
+  // Quota warning
+  const quotaOk = state.scenarios.quotaOk;
+  const hasQuota = cost <= totalGenerations && quotaOk;
+  e3QuotaWarning.style.display = (!quotaOk || cost > totalGenerations) ? 'flex' : 'none';
+  if (!quotaOk || cost > totalGenerations) {
+    const needed = cost - totalGenerations;
+    e3QuotaText.textContent = `Нужно ${cost} генераций, доступно ${totalGenerations}. Не хватает ${needed}.`;
+  }
+  
+  btnE3Next.disabled = used === 0 || !hasQuota;
+}
+
+function updateE4UI() {
+  const cost = calcCost();
+  spendCost.textContent = cost;
+  spendRemaining.textContent = Math.max(0, totalGenerations - cost);
+  spendTotal.textContent = totalGenerations;
+  
+  // Race condition warning
+  if (state.scenarios.raceCondition) {
+    e4RaceWarning.style.display = 'flex';
+    btnE4Start.disabled = true;
+  } else {
+    e4RaceWarning.style.display = 'none';
+    btnE4Start.disabled = false;
+  }
+}
+
+function renderTopics() {
+  topicTree.innerHTML = '';
+  topics.forEach(t => {
+    const div = document.createElement('div');
+    div.className = 'topic-item' + (state.selectedTopics.has(t.id) ? ' selected' : '');
+    div.setAttribute('role', 'option');
+    div.setAttribute('aria-selected', state.selectedTopics.has(t.id));
+    div.innerHTML = `
+      <input type="checkbox" class="topic-checkbox" ${state.selectedTopics.has(t.id) ? 'checked' : ''} data-topic="${t.id}">
+      <div class="topic-info">
+        <div class="topic-title">${t.title}</div>
+        <div class="topic-meta">${t.parts.length} частей · ~${t.tokens} токенов</div>
+      </div>
+      <span class="topic-cost">${t.cost} генераций</span>
+    `;
+    topicTree.appendChild(div);
+  });
+  
+  topicTree.querySelectorAll('.topic-checkbox').forEach(cb => {
+    cb.addEventListener('change', (e) => {
+      const id = e.target.dataset.topic;
+      if (e.target.checked) state.selectedTopics.add(id);
+      else state.selectedTopics.delete(id);
+      renderTopics();
+      updateE3UI();
+    });
+  });
+}
+
+function renderParts() {
+  progressParts.innerHTML = '';
+  state.parts.forEach((part, idx) => {
+    const div = document.createElement('div');
+    div.className = 'part-card';
+    div.setAttribute('role', 'listitem');
+    const isPublished = part.status === 'published';
+    const isFailed = part.status === 'failed';
+    const isGenerating = part.status === 'generating';
+    const isQueued = part.status === 'queued';
+    
+    let progressWidth = '0%';
+    let progressClass = 'queued';
+    if (isQueued) { progressWidth = '0%'; progressClass = 'queued'; }
+    else if (isGenerating) { progressWidth = Math.floor(Math.random() * 80) + 10 + '%'; progressClass = 'generating'; }
+    else if (isPublished) { progressWidth = '100%'; progressClass = 'published'; }
+    else if (isFailed) { progressWidth = '100%'; progressClass = 'failed'; }
+    
+    div.innerHTML = `
+      <div class="part-card-header">
+        <span class="part-card-title">${part.title}</span>
+        <span class="part-status ${part.status}">${part.status}</span>
+      </div>
+      <div class="part-card-body">
+        <div class="part-progress">
+          <div class="part-progress-bar ${progressClass}" style="width: ${progressWidth}"></div>
+        </div>
+        ${isFailed ? `<div class="part-error-text">⚠ Генерация не удалась. Генерация возвращена.</div>` : ''}
+        ${isPublished ? `
+          <div class="part-card-actions">
+            <button class="btn btn-primary part-action-btn" data-part="${idx}">Открыть →</button>
+          </div>
+        ` : isGenerating ? `
+          <div class="part-continue-hint">Генерация в процессе…</div>
+        ` : `
+          <div class="part-continue-hint">В очереди на генерацию</div>
+        `}
+      </div>
+    `;
+    progressParts.appendChild(div);
+  });
+  
+  progressParts.querySelectorAll('.part-action-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const partIdx = parseInt(btn.dataset.part);
+      showE6Preview(state.parts[partIdx]);
+    });
+  });
+}
+
+function renderStageLog() {
+  const stages = [
+    { name: 'Планирование частей', done: true },
+    { name: 'Генерация части 1', done: state.generationStage > 0 },
+    { name: 'Генерация части 2', done: state.generationStage > 1 },
+    { name: 'Генерация части 3', done: state.generationStage > 2 },
+    { name: 'Сборка и публикация', done: state.generationStage > 3 }
+  ];
+  stageLogList.innerHTML = '';
+  stages.forEach((stage, idx) => {
+    const div = document.createElement('div');
+    div.className = 'stage-log-item ' + (stage.done ? 'completed' : (idx === state.generationStage ? 'active' : 'pending'));
+    div.innerHTML = `
+      <div class="stage-log-icon">${stage.done ? '✓' : (idx === state.generationStage ? '⏳' : idx)}</div>
+      <span>${stage.name}</span>
+    `;
+    stageLogList.appendChild(div);
+  });
+}
+
+function showE6Preview(part) {
+  e6PreviewUrl.textContent = `/parts/${part.id || 'part-uuid-' + Math.random().toString(36).slice(2, 10)}`;
+  showScreen('e6');
+}
+
+// ==================== EVENT HANDLERS ====================
+// Scenario checkboxes
+[scenarioQuotaOk, scenarioRaceCondition, scenarioGdocsError, scenarioPartFailed].forEach(cb => {
+  cb.addEventListener('change', () => {
+    state.scenarios.quotaOk = scenarioQuotaOk.checked;
+    state.scenarios.raceCondition = scenarioRaceCondition.checked;
+    state.scenarios.gdocsError = scenarioGdocsError.checked;
+    state.scenarios.partFailed = scenarioPartFailed.checked;
+    
+    // Mutually exclusive: race condition implies quota not ok on E4
+    if (state.scenarios.raceCondition) {
+      scenarioQuotaOk.checked = false;
+      state.scenarios.quotaOk = false;
+    }
+    if (state.scenarios.gdocsError) {
+      scenarioQuotaOk.checked = false;
+      state.scenarios.quotaOk = false;
+    }
+    updateE3UI();
+    updateE4UI();
+  });
+});
+
+// E2: Dropzone
+['dragenter', 'dragover'].forEach(evt => {
+  dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.add('active'); });
+});
+['dragleave', 'drop'].forEach(evt => {
+  dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.remove('active'); });
+});
+dropzone.addEventListener('drop', e => {
+  const file = e.dataTransfer.files[0];
+  if (file) handleFileSelect(file);
+});
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFileSelect(e.target.files[0]); });
+gdocsUrl.addEventListener('input', () => { btnImport.disabled = !gdocsUrl.value.trim(); });
+
+function handleFileSelect(file) {
+  if (file.size > 50 * 1024 * 1024) {
+    alert('Файл слишком большой (макс. 50 МБ)');
+    return;
+  }
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['pdf', 'docx', 'md'].includes(ext)) {
+    alert('Неподдерживаемый формат. Используйте PDF, DOCX или MD');
+    return;
+  }
+  startParsing('file');
+}
+
+btnImport.addEventListener('click', () => {
+  if (gdocsUrl.value.trim()) startParsing('gdocs');
+});
+
+function startParsing(type) {
+  e2UploadForm.style.display = 'none';
+  e2Parsing.classList.add('active');
+  e2GdocsError.style.display = 'none';
+  state.parsingStage = 0;
+  updateParsingUI();
+  
+  const steps = [
+    { stage: 'uploaded', delay: 800 },
+    { stage: 'parsing', delay: 1500 },
+    { stage: 'parsed', delay: 1200 }
+  ];
+  
+  let totalDelay = 0;
+  steps.forEach((step, idx) => {
+    totalDelay += step.delay;
+    setTimeout(() => {
+      state.parsingStage = idx + 1;
+      updateParsingUI();
+      if (idx === steps.length - 1) {
+        // Check for gdocs error
+        if (type === 'gdocs' && state.scenarios.gdocsError) {
+          setTimeout(() => {
+            e2Parsing.classList.remove('active');
+            e2GdocsError.style.display = 'flex';
+          }, 500);
+        } else {
+          setTimeout(() => {
+            state.selectedTopics.clear();
+            renderTopics();
+            updateE3UI();
+            showScreen('e3');
+          }, 500);
+        }
+      }
+    }, totalDelay);
+  });
+}
+
+function updateParsingUI() {
+  const steps = parsingSteps.querySelectorAll('.parsing-step');
+  steps.forEach((step, idx) => {
+    step.classList.remove('active', 'completed', 'pending');
+    if (idx < state.parsingStage) step.classList.add('completed');
+    else if (idx === state.parsingStage) step.classList.add('active');
+    else step.classList.add('pending');
+  });
+}
+
+btnCancelParsing.addEventListener('click', () => {
+  e2Parsing.classList.remove('active');
+  e2UploadForm.style.display = 'block';
+});
+
+btnRetryGdocs.addEventListener('click', () => {
+  e2GdocsError.style.display = 'none';
+  e2UploadForm.style.display = 'block';
+  gdocsUrl.value = '';
+  btnImport.disabled = true;
+});
+
+btnBackToUpload.addEventListener('click', () => {
+  e2GdocsError.style.display = 'none';
+  e2UploadForm.style.display = 'block';
+});
+
+btnBackToE1.addEventListener('click', () => {
+  showScreen('e1');
+  // In prototype, E1 is just the URL bar showing /materials
+});
+
+// E3
+btnE3Back.addEventListener('click', () => {
+  e2UploadForm.style.display = 'block';
+  e2Parsing.classList.remove('active');
+  showScreen('e2');
+});
+
+btnE3Next.addEventListener('click', () => {
+  // Pre-fill answers from "last_answers" (simulated)
+  state.answers = { level: 'intermediate', depth: 'standard', goal: 'exam' };
+  updateAnswerUI();
+  showScreen('e4');
+});
+
+// E4
+function updateAnswerUI() {
+  document.querySelector(`#levelOptions input[value="${state.answers.level}"]`).checked = true;
+  document.querySelector(`#depthOptions input[value="${state.answers.depth}"]`).checked = true;
+  document.querySelector(`#goalOptions input[value="${state.answers.goal}"]`).checked = true;
+  document.querySelectorAll('.radio-item').forEach(item => {
+    const input = item.querySelector('input');
+    if (input.checked) item.classList.add('checked');
+    else item.classList.remove('checked');
+  });
+}
+
+[levelOptions, depthOptions, goalOptions].forEach(container => {
+  container.addEventListener('change', e => {
+    if (e.target.type === 'radio') {
+      state.answers[e.target.name] = e.target.value;
+      updateAnswerUI();
+    }
+  });
+});
+
+btnE4Back.addEventListener('click', () => showScreen('e3'));
+
+btnE4Start.addEventListener('click', () => {
+  // Simulate POST /documents/{id}/generate -> 202
+  state.parts = topics
+    .filter(t => state.selectedTopics.has(t.id))
+    .flatMap(t => t.parts.map((p, i) => ({
+      id: `part-${t.id}-${i}`,
+      title: p,
+      status: 'queued'
+    })));
+  
+  // If partFailed scenario, mark one part as failed later
+  state.generationStage = 0;
+  renderParts();
+  renderStageLog();
+  showScreen('e5');
+  startGenerationSimulation();
+});
+
+btnE4BackFromRace.addEventListener('click', () => showScreen('e3'));
+
+// E5
+function startGenerationSimulation() {
+  const intervals = [];
+  state.parts.forEach((part, idx) => {
+    // Stagger start times
+    const startDelay = idx * 800;
+    const duration = 2000 + Math.random() * 1500;
+    
+    setTimeout(() => {
+      part.status = 'generating';
+      renderParts();
+    }, startDelay);
+    
+    setTimeout(() => {
+      // Check if this part should fail (partFailed scenario, second part)
+      if (state.scenarios.partFailed && idx === 1) {
+        part.status = 'failed';
+      } else {
+        part.status = 'published';
+      }
+      renderParts();
+      state.generationStage = Math.max(state.generationStage, idx + 1);
+      renderStageLog();
+      
+      // Check if all done
+      const allDone = state.parts.every(p => p.status === 'published' || p.status === 'failed');
+      if (allDone) {
+        clearInterval(intervals);
+        if (state.scenarios.partFailed && state.parts.some(p => p.status === 'failed')) {
+          e5CompleteHint.style.display = 'none';
+          e5PartFailedHint.style.display = 'flex';
+        } else {
+          e5CompleteHint.style.display = 'flex';
+          e5PartFailedHint.style.display = 'none';
+          // Show key terms
+          keyTerms.style.display = 'block';
+          keyTermsList.innerHTML = '';
+          ['ML', 'Градиентный спуск', 'Overfitting', 'Энтропия', 'Ансамблирование'].forEach(term => {
+            const span = document.createElement('span');
+            span.className = 'key-term';
+            span.textContent = term;
+            keyTermsList.appendChild(span);
+          });
+        }
+      }
+    }, startDelay + duration);
+  });
+}
+
+btnE5BackToE1.addEventListener('click', () => {
+  showScreen('e1');
+  resetWizard();
+});
+
+btnE5BackToE3.addEventListener('click', () => {
+  showScreen('e3');
+});
+
+btnE5BackToE1FromFailed.addEventListener('click', () => {
+  showScreen('e1');
+  resetWizard();
+});
+
+// E6
+btnE6BackToE5.addEventListener('click', () => showScreen('e5'));
+btnE6BackToE1.addEventListener('click', () => { showScreen('e1'); resetWizard(); });
+btnE6OpenQuiz.addEventListener('click', () => alert('Переход на Э7: /parts/{id}/quiz (не реализовано в прототипе)'));
+
+// ==================== INIT ====================
+function resetWizard() {
+  state.selectedTopics.clear();
+  state.answers = { level: 'intermediate', depth: 'standard', goal: 'exam' };
+  state.parts = [];
+  state.parsingStage = 0;
+  state.generationStage = 0;
+  e2UploadForm.style.display = 'block';
+  e2Parsing.classList.remove('active');
+  e2GdocsError.style.display = 'none';
+  e5CompleteHint.style.display = 'none';
+  e5PartFailedHint.style.display = 'none';
+  keyTerms.style.display = 'none';
+  gdocsUrl.value = '';
+  btnImport.disabled = true;
+  fileInput.value = '';
+  renderTopics();
+  updateE3UI();
+  updateE4UI();
+  updateAnswerUI();
+}
+
+renderTopics();
+updateE3UI();
+updateE4UI();
+updateAnswerUI();
+updateUrlBar();
+
+console.log('Grasp Wizard Prototype loaded. Open scenario panel to test edge cases.');
+</script>
+</body>
+</html>
