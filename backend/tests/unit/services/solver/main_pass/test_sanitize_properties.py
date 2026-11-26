@@ -76,3 +76,20 @@ def test_sanitizer_invariants(case: tuple[PageDraft, set[str], int, int]) -> Non
     )
     assert PageDraft.model_validate(cleaned.model_dump()) == cleaned
     assert sanitize_draft(cleaned, image_aliases=aliases, max_widgets=widgets, max_quizzes=quizzes) == cleaned
+
+
+@given(
+    st.lists(st.sampled_from(["\u2028", "\u2029", "\x85", "\x0b", "\x0c"]), min_size=1, max_size=8),
+    st.sampled_from(["\n", "\r\n", "\r"]),
+)
+@settings(max_examples=100, deadline=None)
+def test_unicode_separators_do_not_change_code_or_offsets(separators: list[str], newline: str) -> None:
+    prefix = "body " * 50 + "".join("A" + separator for separator in separators) + "Z"
+    code = newline.join(["```", '::widget{ref="w1"}', "```"])
+    source = prefix + newline * 2 + code + newline + '::quiz{ref="q1"}'
+    directive = Directive(ref="q1", kind="quiz", intent="Explain the concept", source_span="A source quotation")
+    original = PageDraft(markdown=source, directives=[directive], key_terms=["body"] * 5)
+    cleaned = sanitize_draft(original, max_widgets=6)
+    assert cleaned == original
+    assert code in cleaned.markdown
+    assert check_draft(cleaned.markdown, cleaned.directives) == []

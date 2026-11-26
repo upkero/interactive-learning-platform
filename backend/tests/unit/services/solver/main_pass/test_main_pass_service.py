@@ -327,3 +327,28 @@ async def test_nested_directive_repair_preserves_adjacent_code(fragment: str, ex
     assert '::quiz{ref="q1"}' not in result.draft.markdown
     if expected_code is not None:
         assert expected_code in result.draft.markdown
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+async def test_unicode_separator_before_fence_preserves_code(newline: str) -> None:
+    code = newline.join(["```", '::widget{ref="w1"}', "```"])
+    text = "body " * 50 + "A\u2028B\u2028C" + newline * 2 + code
+    draft = PageDraft(markdown=text, directives=[], key_terms=["body"] * 5)
+    llm = FakeLLMClient(structured=[draft])
+    result = await _service(llm=llm, primitives=await _primitive_repo()).run(build_input())
+    assert len(llm.requests) == 1
+    assert result.draft.markdown == text
+    assert code in result.draft.markdown
+    assert result.draft.directives == ()
+
+
+async def test_unicode_fence_preserved_when_another_violation_requires_sanitizing() -> None:
+    code = '```\n::widget{ref="w1"}\n```'
+    text = "body " * 50 + "A\u2028B\u2028C\n\n" + code + '\n::quiz{ref="q1"}'
+    draft = PageDraft(markdown=text, directives=[], key_terms=["body"] * 5)
+    llm = FakeLLMClient(structured=[draft, draft])
+    result = await _service(llm=llm, primitives=await _primitive_repo()).run(build_input())
+    assert len(llm.requests) == 2
+    assert code in result.draft.markdown
+    assert '::quiz{ref="q1"}' not in result.draft.markdown
+    assert result.draft.directives == ()

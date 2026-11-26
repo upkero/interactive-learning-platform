@@ -1,7 +1,7 @@
 """Parse and validate the supported remark-directive subset."""
 
 import re
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Iterator, Sequence
 from dataclasses import dataclass
 from itertools import pairwise
 from typing import cast
@@ -13,10 +13,17 @@ from pydantic import ValidationError
 from src.app.contracts.solver.main_pass import DirectiveKind
 from src.app.services.solver.main_pass.directives import Directive, PageDraft
 
-_DIRECTIVE = re.compile(r'^::(widget|image|quiz)\{(ref|id)="([^"]+)"\}\s*$')
-_CANDIDATE = re.compile(r"^\s*(?:>\s*)*(?:(?:[-+*]|\d+[.)])\s+)*:{2,3}(widget|image|quiz)\b")
+_DIRECTIVE = re.compile(r'^::(widget|image|quiz)\{(ref|id)="([^"]+)"\}[ \t]*$')
+_CANDIDATE = re.compile(r"^[ \t]*(?:>[ \t]*)*(?:(?:[-+*]|\d+[.)])[ \t]+)*:{2,3}(widget|image|quiz)\b")
 _INLINE = re.compile(r"(?<![\\:]):(?:widget|image|quiz)(?:\[[^\]\r\n]*\](?:\{[^}\r\n]*\})?|\{[^}\r\n]*\})")
 _CODE_SPAN = re.compile(r"(`+)(?!`)(.*?)(?<!`)\1(?!`)")
+
+
+def _source_lines(markdown: str) -> Iterator[str]:
+    """Split only on CommonMark line endings, retaining original characters and offsets."""
+    for match in re.finditer(r"[^\r\n]*(?:\r\n|\r|\n|$)", markdown):
+        if match.group():
+            yield match.group()
 
 
 def _inline_directives(line: str) -> list[re.Match[str]]:
@@ -24,7 +31,7 @@ def _inline_directives(line: str) -> list[re.Match[str]]:
     return list(_INLINE.finditer(masked))
 
 
-_LEAF_BLOCK = re.compile(r"^::(?:widget|image|quiz)(?:\[[^]\r\n]*\])?(?:\{[^}\r\n]*\})?\s*$")
+_LEAF_BLOCK = re.compile(r"^::(?:widget|image|quiz)(?:\[[^]\r\n]*\])?(?:\{[^}\r\n]*\})?[ \t]*$")
 
 
 def _leaf_directive(state: StateBlock, start_line: int, end_line: int, silent: bool) -> bool:
@@ -72,7 +79,7 @@ def extract_markers(markdown: str) -> tuple[list[Marker], list[str]]:
     issues: list[str] = []
     offset = 0
     code_lines, block_directives = _block_lines(markdown)
-    for number, raw in enumerate(markdown.splitlines(keepends=True), 1):
+    for number, raw in enumerate(_source_lines(markdown), 1):
         line = raw.rstrip("\r\n")
         start = offset
         offset += len(raw)
@@ -175,7 +182,7 @@ def sanitize_draft(
             end = marker.end
             if draft.markdown[end : end + 2] == "\r\n":
                 end += 2
-            elif draft.markdown[end : end + 1] == "\n":
+            elif draft.markdown[end : end + 1] in {"\r", "\n"}:
                 end += 1
             removed.append((marker.start, end))
             continue
@@ -197,7 +204,7 @@ def sanitize_draft(
     offset = 0
     code_lines, block_directives = _block_lines(draft.markdown)
     marker_lines = {m.line for m in markers}
-    for number, raw in enumerate(draft.markdown.splitlines(keepends=True), 1):
+    for number, raw in enumerate(_source_lines(draft.markdown), 1):
         line = raw.rstrip("\r\n")
         if number not in code_lines and number not in marker_lines:
             if number in block_directives or _CANDIDATE.match(line):
@@ -208,7 +215,10 @@ def sanitize_draft(
     markdown = draft.markdown
     for start, end in sorted(removed, reverse=True):
         # Remove the colons of a newly exposed marker; keep whitespace and surrounding text.
-        following = re.match(r"([ \t]*)::", markdown[end:]) if "\n" not in markdown[start:end] else None
+        removed_text = markdown[start:end]
+        following = (
+            re.match(r"([ \t]*)::", markdown[end:]) if "\n" not in removed_text and "\r" not in removed_text else None
+        )
         replacement = ""
         if following:
             whitespace = following.group(1)

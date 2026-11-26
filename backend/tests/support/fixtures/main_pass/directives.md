@@ -50,3 +50,11 @@ Indented code immediately following a leaf directive remains code:
 
 ::quiz{ref="q1"}
     ::widget{ref="w1"}
+
+Unicode line separators inside a paragraph do not end a CommonMark line:
+
+A B C
+
+```
+::widget{ref="w1"}
+```

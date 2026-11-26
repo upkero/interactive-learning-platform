@@ -256,3 +256,34 @@ def test_attribute_free_leaf_still_delimits_following_code() -> None:
     cleaned = sanitize_draft(draft(text, []), max_widgets=6)
     assert '    ::widget{ref="w1"}' in cleaned.markdown
     assert extract_markers(cleaned.markdown) == ([], [])
+
+
+@pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\x85", "\x0b", "\x0c"])
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+def test_unicode_separators_preserve_code_and_source_offsets(separator: str, newline: str) -> None:
+    code = newline.join(["```", '::widget{ref="w1"}', "```"])
+    source = separator.join(["A", "B", "C"]) + newline * 2 + code + newline + '::quiz{ref="q1"}'
+    markers, issues = extract_markers(source)
+    assert issues == []
+    assert [marker.ref for marker in markers] == ["q1"]
+    marker = markers[0]
+    assert marker.line == 6
+    assert source[marker.start : marker.end] == '::quiz{ref="q1"}'
+    cleaned = sanitize_draft(draft(source, [entry("q1", "quiz")]), max_widgets=6)
+    assert code in cleaned.markdown
+    assert extract_markers(cleaned.markdown)[1] == []
+
+
+def test_removing_cr_terminated_directive_keeps_following_marker() -> None:
+    source = 'intro\r::widget{ref="w1"}\r::quiz{ref="q1"}\r'
+    cleaned = sanitize_draft(draft(source, [entry("q1", "quiz")]), max_widgets=6)
+    assert '::widget{ref="w1"}' not in cleaned.markdown
+    assert '::quiz{ref="q1"}' in cleaned.markdown
+    assert [marker.ref for marker in extract_markers(cleaned.markdown)[0]] == ["q1"]
+
+
+@pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\x85", "\x0b", "\x0c"])
+def test_unicode_separator_is_not_indentation_or_line_break(separator: str) -> None:
+    text = separator + '::widget{ref="w1"}'
+    assert extract_markers(text) == ([], [])
+    assert text in sanitize_draft(draft(text, []), max_widgets=6).markdown
