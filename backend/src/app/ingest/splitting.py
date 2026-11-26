@@ -1,19 +1,32 @@
 """Deterministic, model-free packing of parsed topics into generation parts."""
 
 import re
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from itertools import pairwise
 
 from src.app.contracts.documents import TopicNode
 from src.app.contracts.documents.part_plan import PartPlan
-from src.app.ingest.tokens import TokenCounter
+from src.app.ingest.markdown_syntax import parse_markdown
+from src.app.ingest.tokens import TokenCounting
+
+_MARKDOWN_BLOCK = re.compile(r"^(?:[ \t]*(?:`{3,}|~{3,}|::image)|(?: {4}|\t)\S)|\|", re.MULTILINE)
+_BLANK_LINES = re.compile(r"\n(?:[ \t]*\r?\n)+")
+_HEADING_AND_GAP = re.compile(
+    r"(?:[ \t]*#{1,6}(?:[ \t]+[^\n]*|[ \t]*)|[^\n]+\n[ \t]*(?:=+|-+)[ \t]*\r?)"
+    r"(?:\n|\Z)(?:[ \t]*\r?\n)*"
+)
+_SENTENCE_END = re.compile(r"(?<=[.!?…])\s+")
 
 
 @dataclass(frozen=True, slots=True)
 class SplitLimits:
-    target: int = 15_000
-    maximum: int = 22_000
+    target: int
+    maximum: int
+
+    def __post_init__(self) -> None:
+        if not 0 < self.target <= self.maximum:
+            raise ValueError("Expected 0 < split target <= maximum.")
 
     @property
     def min_fill(self) -> int:
@@ -32,9 +45,23 @@ class Unit:
     start: int
     end: int
     tokens: int
+    leading_topics: tuple[tuple[str, str], ...] = ()
 
 
-def pack_units(units: list[Unit], limits: SplitLimits) -> list[list[Unit]]:
+@dataclass(frozen=True, slots=True)
+class _Span:
+    start: int
+    end: int
+    tokens: int
+
+
+def _tokens(units: list[Unit]) -> int:
+    return sum(unit.tokens for unit in units)
+
+
+def pack_units(
+    units: list[Unit], limits: SplitLimits, *, measure: Callable[[list[Unit]], int] = _tokens
+) -> list[list[Unit]]:
     parts: list[list[Unit]] = []
     current: list[Unit] = []
     size = 0
@@ -42,13 +69,36 @@ def pack_units(units: list[Unit], limits: SplitLimits) -> list[list[Unit]]:
         if unit.tokens > limits.maximum:
             raise ValueError(f"Unit {unit.topic_id} exceeds maximum; split it first.")
         if current and _should_close(current, size, unit, limits):
-            parts.append(current)
+            parts.extend(_bounded_part(current, limits.maximum, measure))
             current, size = [], 0
         current.append(unit)
         size += unit.tokens
     if current:
-        parts.append(current)
-    return _glue_tail(parts, limits)
+        parts.extend(_bounded_part(current, limits.maximum, measure))
+    if len(parts) > 1 and measure(parts[-1]) < limits.tail:
+        joined = parts[-2] + parts[-1]
+        if measure(joined) <= limits.maximum:
+            parts[-2:] = [joined]
+    return parts
+
+
+def _bounded_part(units: list[Unit], maximum: int, measure: Callable[[list[Unit]], int]) -> list[list[Unit]]:
+    parts: list[list[Unit]] = []
+    while units and measure(units) > maximum:
+        # Each individual unit has already been measured. Check prefixes
+        # only if the assembled Markdown pushes a proposed part over M.
+        low, high = 1, len(units)
+        while low + 1 < high:
+            middle = (low + high) // 2
+            if measure(units[:middle]) <= maximum:
+                low = middle
+            else:
+                high = middle
+        parts.append(units[:low])
+        units = units[low:]
+    if units:
+        parts.append(units)
+    return parts
 
 
 def _should_close(current: list[Unit], size: int, unit: Unit, limits: SplitLimits) -> bool:
@@ -62,40 +112,44 @@ def _should_close(current: list[Unit], size: int, unit: Unit, limits: SplitLimit
     return size >= limits.min_fill
 
 
-def _glue_tail(parts: list[list[Unit]], limits: SplitLimits) -> list[list[Unit]]:
-    if len(parts) < 2:
-        return parts
-    last, previous = _tokens(parts[-1]), _tokens(parts[-2])
-    if last < limits.tail and previous + last <= limits.maximum:
-        return [*parts[:-2], parts[-2] + parts[-1]]
-    return parts
+def _part_markdown(units: list[Unit], markdown: str) -> str:
+    sections: list[str] = []
+    first, end = units[0].start, units[0].end
+    for unit in units[1:]:
+        if unit.start != end:
+            sections.append(markdown[first:end])
+            first = unit.start
+        end = unit.end
+    sections.append(markdown[first:end])
+    if len(sections) == 1:
+        return sections[0]
+    return "\n\n".join(section.strip("\r\n") for section in sections)
 
 
-def _tokens(units: list[Unit]) -> int:
-    return sum(unit.tokens for unit in units)
-
-
-def to_plans(parts: list[list[Unit]], markdown: str) -> list[PartPlan]:
+def to_plans(parts: list[list[Unit]], markdown: str, measure: Callable[[list[Unit]], int]) -> list[PartPlan]:
     result: list[PartPlan] = []
     for index, units in enumerate(parts):
-        topic_ids = tuple(dict.fromkeys(unit.topic_id for unit in units))
-        first, last = units[0].title, units[-1].title
-        text = "\n\n".join(markdown[start:end].strip("\n") for start, end in ((u.start, u.end) for u in units))
+        topics = dict.fromkeys(
+            topic_id for unit in units for topic_id, _ in (*unit.leading_topics, (unit.topic_id, unit.title))
+        )
+        first = units[0].leading_topics[0][1] if units[0].leading_topics else units[0].title
+        last = units[-1].title
+        text = _part_markdown(units, markdown)
         result.append(
             PartPlan(
-                index,
-                first if first == last else f"{first} — {last}",
-                topic_ids,
-                tuple((unit.start, unit.end) for unit in units),
-                _tokens(units),
-                text,
+                index=index,
+                title=first if first == last else f"{first} — {last}",
+                topic_ids=tuple(topics),
+                spans=tuple((unit.start, unit.end) for unit in units),
+                tokens=measure(units),
+                markdown=text,
             )
         )
     return result
 
 
 def collect_units(
-    roots: Sequence[TopicNode], selected: set[str], markdown: str, counter: TokenCounter, limits: SplitLimits
+    roots: Sequence[TopicNode], selected: set[str], markdown: str, counter: TokenCounting, limits: SplitLimits
 ) -> list[Unit]:
     units: list[Unit] = []
     for root in roots:
@@ -108,119 +162,192 @@ def _walk(
     chapter_id: str,
     selected: set[str],
     markdown: str,
-    counter: TokenCounter,
+    counter: TokenCounting,
     limits: SplitLimits,
     out: list[Unit],
     *,
     chosen: bool,
+    prefix_start: int | None = None,
+    leading_topics: tuple[tuple[str, str], ...] = (),
 ) -> None:
     chosen = chosen or node.id in selected
     if not chosen:
         for child in node.children:
             _walk(child, chapter_id, selected, markdown, counter, limits, out, chosen=False)
         return
-    unit = _unit(node, chapter_id, node.start, node.end, markdown, counter)
-    if unit.tokens <= limits.maximum:
-        out.append(unit)
-        return
+
+    start = node.start if prefix_start is None else prefix_start
+    if node.total_tokens <= limits.maximum:
+        tokens = counter.count(markdown[start : node.end])
+        if tokens <= limits.maximum:
+            out.append(Unit(node.id, chapter_id, node.title, start, node.end, tokens, leading_topics))
+            return
+
     own_end = node.children[0].start if node.children else node.end
-    for start, end in split_by_paragraphs(markdown, node.start, own_end, counter, limits):
-        out.append(_unit(node, chapter_id, start, end, markdown, counter))
+    if node.children and counter.count(markdown[start:own_end]) < limits.min_fill:
+        # Carry a short chapter introduction into the first descendant, so
+        # packing can never leave it behind at the end of a previous part.
+        first, *rest = node.children
+        _walk(
+            first,
+            chapter_id,
+            selected,
+            markdown,
+            counter,
+            limits,
+            out,
+            chosen=True,
+            prefix_start=start,
+            leading_topics=(*leading_topics, (node.id, node.title)),
+        )
+        for child in rest:
+            _walk(child, chapter_id, selected, markdown, counter, limits, out, chosen=True)
+        return
+    for span in _paragraph_units(markdown, start, own_end, counter, limits):
+        out.append(Unit(node.id, chapter_id, node.title, span.start, span.end, span.tokens, leading_topics))
+        leading_topics = ()
     for child in node.children:
         _walk(child, chapter_id, selected, markdown, counter, limits, out, chosen=True)
 
 
-def _unit(node: TopicNode, chapter_id: str, start: int, end: int, markdown: str, counter: TokenCounter) -> Unit:
-    return Unit(node.id, chapter_id, node.title, start, end, counter.count(markdown[start:end]))
-
-
 def split_by_paragraphs(
-    markdown: str, start: int, end: int, counter: TokenCounter, limits: SplitLimits
+    markdown: str, start: int, end: int, counter: TokenCounting, limits: SplitLimits
 ) -> list[tuple[int, int]]:
-    paragraphs = _paragraph_spans(markdown, start, end)
-    result: list[tuple[int, int]] = []
-    current_start: int | None = None
-    current_end = start
-    for paragraph_start, paragraph_end in paragraphs:
-        paragraph_tokens = counter.count(markdown[paragraph_start:paragraph_end])
+    return [(span.start, span.end) for span in _paragraph_units(markdown, start, end, counter, limits)]
+
+
+def _paragraph_units(markdown: str, start: int, end: int, counter: TokenCounting, limits: SplitLimits) -> list[_Span]:
+    result: list[_Span] = []
+    current: list[_Span] = []
+    size = 0
+
+    def close() -> None:
+        if len(current) == 1:
+            result.extend(current)
+        elif current:
+            first, last = current[0].start, current[-1].end
+            actual = counter.count(markdown[first:last])
+            if actual <= limits.target:
+                result.append(_Span(first, last, actual))
+            else:
+                # Subword tokenization can grow at a join. Each component is
+                # already known to fit M, including an indivisible block > T.
+                result.extend(current)
+        current.clear()
+
+    for paragraph_start, paragraph_end in _paragraph_spans(markdown, start, end, counter, limits.maximum):
+        tokens = counter.count(markdown[paragraph_start:paragraph_end])
         spans = (
-            [(paragraph_start, paragraph_end)]
-            if paragraph_tokens <= limits.maximum
-            else _split_large(markdown, paragraph_start, paragraph_end, counter, limits)
+            [_Span(paragraph_start, paragraph_end, tokens)]
+            if tokens <= limits.maximum
+            else _split_large(markdown, paragraph_start, paragraph_end, counter, limits.maximum)
         )
-        for span_start, span_end in spans:
-            if current_start is not None and counter.count(markdown[current_start:span_end]) > limits.target:
-                result.append((current_start, current_end))
-                current_start = None
-            if current_start is None:
-                current_start = span_start
-            current_end = span_end
-    if current_start is not None:
-        result.append((current_start, current_end))
+        for span in spans:
+            if current and size + span.tokens > limits.target:
+                close()
+                size = 0
+            current.append(span)
+            size += span.tokens
+    close()
     return result
 
 
-def _paragraph_spans(markdown: str, start: int, end: int) -> list[tuple[int, int]]:
-    spans: list[tuple[int, int]] = []
-    cursor = start
-    in_fence = False
-    paragraph_start = start
-    for line in re.finditer(r".*(?:\n|$)", markdown[start:end]):
-        line_start = start + line.start()
-        line_end = start + line.end()
-        stripped = line.group().strip()
-        if stripped.startswith(("```", "~~~")):
-            in_fence = not in_fence
-        if not in_fence and not stripped and line_start > paragraph_start:
-            spans.append((paragraph_start, line_end))
-            paragraph_start = line_end
-        cursor = line_end
-    if paragraph_start < min(cursor, end):
-        spans.append((paragraph_start, min(cursor, end)))
-    if not spans and start < end:
-        spans.append((start, end))
-    # Keep image directives with the preceding paragraph, even when the source
-    # contains a blank line before the directive.
-    merged: list[tuple[int, int]] = []
-    for span_start, span_end in spans:
-        if markdown[span_start:span_end].lstrip().startswith("::image") and merged:
-            previous_start, _ = merged[-1]
-            merged[-1] = (previous_start, span_end)
-        else:
-            merged.append((span_start, span_end))
-    return merged
+def _heading_end(text: str) -> int:
+    end = 0
+    while match := _HEADING_AND_GAP.match(text, end):
+        end = match.end()
+    return end
 
 
-def _split_large(
-    markdown: str, start: int, end: int, counter: TokenCounter, limits: SplitLimits
+def _paragraph_spans(
+    markdown: str, start: int, end: int, counter: TokenCounting, maximum: int
 ) -> list[tuple[int, int]]:
-    boundaries = [start, *(start + match.end() for match in re.finditer(r"(?<=[.!?…])\s+", markdown[start:end])), end]
+    text = markdown[start:end]
+    boundaries = {match.end() for match in _BLANK_LINES.finditer(text)}
+    markers: set[int] = set()
+    atomic_blocks: dict[int, int] = {}
+    if _MARKDOWN_BLOCK.search(text):
+        structure = parse_markdown(text)
+        for block in structure.blocks:
+            if block.kind in {"fence", "code_block", "table_open"}:
+                atomic_blocks[block.start] = block.end
+                boundaries.difference_update(
+                    boundary.end() for boundary in _BLANK_LINES.finditer(text, block.start, block.end)
+                )
+                boundaries.update((block.start, block.end))
+        markers = {offset for offset, _ in structure.markers}
+    # Consecutive headings belong to the first body paragraph. An image
+    # paragraph belongs to the preceding content even across blank lines.
+    heading_end = _heading_end(text)
     spans: list[tuple[int, int]] = []
-    for sentence_start, sentence_end in pairwise(boundaries):
-        if sentence_start == sentence_end:
+    left = 0
+    for right in sorted({*boundaries, len(text)}):
+        if left == right:
             continue
-        while counter.count(markdown[sentence_start:sentence_end]) > limits.maximum:
-            # Search character boundaries so UTF-8 code points remain intact.
-            low, high = sentence_start, sentence_end
-            while low + 1 < high:
-                middle = (low + high) // 2
-                encoded = counter.encode(markdown[sentence_start:middle])
-                decoded = counter.decode(encoded)
-                if counter.count(decoded) <= limits.maximum:
-                    low = middle
-                else:
-                    high = middle
-            if low == sentence_start:
-                raise ValueError("Split limit cannot accommodate one Unicode character.")
-            spans.append((sentence_start, low))
-            sentence_start = low
-        spans.append((sentence_start, sentence_end))
-    return spans or [(start, end)]
+        if (
+            right <= heading_end
+            and right != len(text)
+            and (right not in atomic_blocks or counter.count(text[: atomic_blocks[right]]) <= maximum)
+        ):
+            continue
+        if spans and (left in markers or not text[left:right].strip()):
+            spans[-1] = (spans[-1][0], start + right)
+        else:
+            spans.append((start + left, start + right))
+        left = right
+    return spans
+
+
+def _split_large(markdown: str, start: int, end: int, counter: TokenCounting, maximum: int) -> list[_Span]:
+    text = markdown[start:end]
+    protected: list[tuple[int, int]] = []
+    heading_end = _heading_end(text)
+    if 0 < heading_end < len(text) and counter.count(text[: heading_end + 1]) <= maximum:
+        protected.append((0, heading_end + 1))
+    if "::image" in text:
+        for offset, _ in parse_markdown(text).markers:
+            previous = offset - 1
+            while previous >= 0 and text[previous].isspace():
+                previous -= 1
+            end_of_marker = text.find("\n", offset)
+            protected.append((max(0, previous), len(text) if end_of_marker == -1 else end_of_marker))
+    boundaries = [
+        0,
+        *(
+            match.end()
+            for match in _SENTENCE_END.finditer(text)
+            if match.end() < len(text) and all(not left < match.end() < right for left, right in protected)
+        ),
+        len(text),
+    ]
+    spans: list[_Span] = []
+    for left, right in pairwise(boundaries):
+        sentence = text[left:right]
+        tokens = counter.count(sentence)
+        if tokens <= maximum:
+            spans.append(_Span(start + left, start + right, tokens))
+            continue
+        local = tuple((a - left, b - left) for a, b in protected if a < right and b > left)
+        for a, b in counter.chunk_spans(sentence, maximum, local):
+            spans.append(_Span(start + left + a, start + left + b, counter.count(sentence[a:b])))
+    return spans
 
 
 def split_document(
-    tree: Sequence[TopicNode], selected: set[str], markdown: str, counter: TokenCounter, limits: SplitLimits
+    tree: Sequence[TopicNode], selected: set[str], markdown: str, counter: TokenCounting, limits: SplitLimits
 ) -> list[PartPlan]:
     if not selected:
         return []
-    return to_plans(pack_units(collect_units(tree, selected, markdown, counter, limits), limits), markdown)
+    units = collect_units(tree, selected, markdown, counter, limits)
+    measured: dict[tuple[tuple[int, int], ...], int] = {}
+
+    def measure(part: list[Unit]) -> int:
+        if len(part) == 1:
+            return part[0].tokens
+        spans = tuple((unit.start, unit.end) for unit in part)
+        if spans not in measured:
+            measured[spans] = counter.count(_part_markdown(part, markdown))
+        return measured[spans]
+
+    parts = pack_units(units, limits, measure=measure)
+    return to_plans(parts, markdown, measure)

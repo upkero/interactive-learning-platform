@@ -62,3 +62,37 @@ def test_unit_over_maximum_is_rejected() -> None:
 def test_limits_derive_fill_and_tail() -> None:
     assert LIMITS.min_fill == 7_500
     assert LIMITS.tail == 5_000
+
+
+@pytest.mark.parametrize(("target", "maximum"), [(0, 8), (9, 8), (1, 0)])
+def test_invalid_split_limits(target: int, maximum: int) -> None:
+    with pytest.raises(ValueError, match="split target <= maximum"):
+        SplitLimits(target, maximum)
+
+
+@pytest.mark.parametrize(
+    ("spec", "expected"),
+    [
+        ((("1.1", 5), ("2.1", 5)), [5, 5]),  # exact minimum fill closes on a chapter change
+        ((("1.1", 5), ("1.2", 5)), [10]),  # exact target
+        ((("1.1", 4), ("1.2", 9)), [13]),  # between target and maximum, current below minimum
+        ((("1.1", 4), ("1.2", 10)), [14]),  # exact maximum
+        ((("1.1", 8), ("1.2", 3)), [8, 3]),  # exact tail threshold
+        ((("1.1", 12), ("1.2", 2)), [14]),  # glue to exactly the maximum
+    ],
+)
+def test_packing_boundaries(spec: tuple[tuple[str, int], ...], expected: list[int]) -> None:
+    assert sizes(pack_units(units(*spec), SplitLimits(10, 14))) == expected
+
+
+@pytest.mark.parametrize(("tokens", "expected"), [((4, 4, 4), [8, 4]), ((6, 6, 0), [6, 6])])
+def test_packing_checks_assembled_markdown_near_maximum(tokens: tuple[int, ...], expected: list[int]) -> None:
+    source = units(*((f"1.{index}", count) for index, count in enumerate(tokens)))
+
+    def measure(part: list[Unit]) -> int:
+        return sum(unit.tokens for unit in part) + len(part) - 1
+
+    parts = pack_units(source, SplitLimits(12, 12), measure=measure)
+    assert sizes(parts) == expected
+    assert all(measure(part) <= 12 for part in parts)
+    assert [unit for part in parts for unit in part] == source

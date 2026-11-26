@@ -31,6 +31,7 @@ from src.app.contracts.documents import (
 )
 from src.app.contracts.quota import LedgerOp
 from src.app.contracts.widgets import UsageStatus, WidgetKind, WidgetUsageDraft
+from src.app.core.settings.ingest import IngestSettings
 from src.app.exceptions.tasks import TaskDispatchError
 from src.app.ingest.tokens import get_token_counter
 from src.app.models.document import Document
@@ -653,6 +654,8 @@ async def test_topics_of_a_foreign_document_is_404(client: TestClient) -> None:
 async def test_plan_preview_is_stable_and_leaves_the_quota_journal_untouched(
     client: TestClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
+    container = cast(ApplicationContainer, cast(FastAPI, client.app).state.container)
+    container.__dict__["ingest_settings"] = IngestSettings(SPLIT_TARGET_TOKENS=250, SPLIT_MAX_TOKENS=500)
     _register(client)
     created = _upload(client, filename="lecture.pdf")
     document_id = UUID(created.json()["id"])
@@ -672,9 +675,9 @@ async def test_plan_preview_is_stable_and_leaves_the_quota_journal_untouched(
     assert first.json() == second.json()
 
     body = first.json()
-    assert body["cost"] == len(body["parts"]) == 1
+    assert body["cost"] == len(body["parts"]) == 2
     counter = get_token_counter()
-    assert body["parts"][0]["tokens"] == sum(counter.count(text) for text in _PARSED_TOPIC_TEXTS)
+    assert [part["tokens"] for part in body["parts"]] == [counter.count(text) for text in _PARSED_TOPIC_TEXTS]
     assert body["available"] == 20  # default monthly limit
 
     # the journal is untouched: nothing was reserved by the preview

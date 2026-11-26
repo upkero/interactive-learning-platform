@@ -16,9 +16,11 @@ from src.app.core.settings.smtp import SMTPSettings
 from src.app.exceptions.documents import DocumentNotFoundError, DocumentNotReadyError
 from src.app.exceptions.quota import QuotaExceededError
 from src.app.exceptions.tasks import TaskDispatchError
+from src.app.ingest.part_planner import DocumentPartPlanner
+from src.app.ingest.splitting import SplitLimits
+from src.app.ingest.tokens import TokenCounter
 from src.app.interfaces.storage.object_storage_client import StorageBucket
 from src.app.services.documents.generation_service import GenerationService
-from src.app.services.documents.topic_per_part_planner import TopicPerPartPlanner
 from src.app.services.notifications.notification_service import NotificationService
 from src.app.services.quota.quota_ledger import QuotaLedger
 from tests.support.fakes.core.clock import FixedClock
@@ -37,6 +39,7 @@ from tests.support.fakes.services.task_dispatcher import FakeTaskDispatcher
 from tests.support.fakes.storage.object_storage_client import FakeObjectStorageClient
 
 pytestmark = pytest.mark.unit
+_DEFAULT_LIMITS = SplitLimits(15_000, 22_000)
 
 _TREE: list[dict[str, object]] = [
     {
@@ -97,7 +100,9 @@ def _ledger(users: FakeUserRepository, ledger_repo: FakeGenerationLedgerReposito
     )
 
 
-def _service() -> tuple[
+def _service(
+    limits: SplitLimits = _DEFAULT_LIMITS,
+) -> tuple[
     GenerationService,
     FakeDocumentRepository,
     FakeUserMaterialRepository,
@@ -117,7 +122,7 @@ def _service() -> tuple[
         materials=lambda _: materials,
         parts=lambda _: parts,
         users=lambda _: users,
-        planner=TopicPerPartPlanner(),
+        planner=DocumentPartPlanner(TokenCounter(), limits),
         storage=_ParsedStorage(),
         ledger=_ledger(users, ledger_repo),
         dispatcher=FakeTaskDispatcher(),
@@ -197,7 +202,7 @@ async def test_plan_returns_preview_cost_and_available() -> None:
     # Small topics from different chapters share a part while it is below the
     # minimum fill threshold; generation therefore costs one unit.
     assert len(plan.parts) == 1
-    assert plan.parts[0].tokens == 426
+    assert plan.parts[0].tokens == TokenCounter().count(plan.parts[0].markdown)
     assert plan.parts[0].title == "Adaptive learning — Quota and generation pipeline"
     assert available == 20  # default monthly limit, nothing reserved
 
@@ -271,7 +276,7 @@ async def test_start_reserves_and_dispatches_after_commit() -> None:
         materials=lambda _: materials,
         parts=lambda _: parts,
         users=lambda _: users,
-        planner=TopicPerPartPlanner(),
+        planner=DocumentPartPlanner(TokenCounter(), SplitLimits(15_000, 22_000)),
         storage=_ParsedStorage(),
         ledger=_ledger(users, ledger_repo),
         dispatcher=dispatcher,
@@ -334,7 +339,7 @@ async def test_generate_fresh_parsed_document_without_existing_parts() -> None:
 
 @pytest.mark.parametrize("anchor", [None, date(2000, 1, 31)])
 async def test_start_assigns_reservation_period_to_every_part(anchor: date | None) -> None:
-    service, documents, materials, parts, ledger_repo, users = _service()
+    service, documents, materials, parts, ledger_repo, users = _service(SplitLimits(250, 500))
     owner, document_id = await _parsed_document(users, documents, materials, parts)
     users._users[owner] = replace(users._users[owner], period_anchor=anchor)
     state = await _ledger(users, ledger_repo).available(cast(AsyncSession, FakeSession()), user_id=owner)
@@ -346,7 +351,7 @@ async def test_start_assigns_reservation_period_to_every_part(anchor: date | Non
             answers=GenerationAnswers(level="novice", goal="exam", depth="standard"),
         )
     )
-    assert started.cost == len(started.part_ids) == 1
+    assert started.cost == len(started.part_ids) == 2
     assert all(parts.drafts[part_id].quota_period_start == state.period.start for part_id in started.part_ids)
     assert ledger_repo.entries[0].period_start == state.period.start
 
@@ -381,7 +386,7 @@ async def test_queue_failure_keeps_committed_parts_and_reservation() -> None:
         materials=lambda _: materials,
         parts=lambda _: parts,
         users=lambda _: users,
-        planner=TopicPerPartPlanner(),
+        planner=DocumentPartPlanner(TokenCounter(), SplitLimits(15_000, 22_000)),
         storage=_ParsedStorage(),
         ledger=_ledger(users, ledger_repo),
         dispatcher=FakeTaskDispatcher(fail_with=TaskDispatchError()),
@@ -415,7 +420,7 @@ async def test_start_rejects_insufficient_quota_without_writes() -> None:
         materials=lambda _: materials,
         parts=lambda _: parts,
         users=lambda _: users,
-        planner=TopicPerPartPlanner(),
+        planner=DocumentPartPlanner(TokenCounter(), SplitLimits(15_000, 22_000)),
         storage=_ParsedStorage(),
         ledger=_ledger(users, ledger_repo),
         dispatcher=dispatcher,
@@ -462,7 +467,7 @@ async def test_start_requires_owner_even_when_processing_limit_is_full() -> None
         materials=lambda _: materials,
         parts=lambda _: parts,
         users=lambda _: users,
-        planner=TopicPerPartPlanner(),
+        planner=DocumentPartPlanner(TokenCounter(), SplitLimits(15_000, 22_000)),
         storage=_ParsedStorage(),
         ledger=_ledger(users, ledger_repo),
         dispatcher=FakeTaskDispatcher(),
@@ -495,7 +500,7 @@ async def test_two_generations_send_two_emails_but_duplicate_completion_sends_on
         materials=lambda _: materials,
         parts=lambda _: parts,
         users=lambda _: users,
-        planner=TopicPerPartPlanner(),
+        planner=DocumentPartPlanner(TokenCounter(), SplitLimits(15_000, 22_000)),
         storage=_ParsedStorage(),
         ledger=_ledger(users, ledger_repo),
         dispatcher=FakeTaskDispatcher(),
@@ -543,7 +548,7 @@ async def test_notification_reset_outage_does_not_prevent_dispatch(caplog: pytes
         materials=lambda _: materials,
         parts=lambda _: parts,
         users=lambda _: users,
-        planner=TopicPerPartPlanner(),
+        planner=DocumentPartPlanner(TokenCounter(), SplitLimits(15_000, 22_000)),
         storage=_ParsedStorage(),
         ledger=_ledger(users, ledger_repo),
         dispatcher=dispatcher,

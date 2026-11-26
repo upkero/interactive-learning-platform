@@ -25,6 +25,8 @@ from src.app.ingest.parsers.base import DocumentParser as IngestDocumentParser
 from src.app.ingest.parsers.base import ParserRegistry
 from src.app.ingest.parsers.gdocs_importer import GDocsImporter
 from src.app.ingest.parsers.markdown_parser import MarkdownParser
+from src.app.ingest.part_planner import DocumentPartPlanner
+from src.app.ingest.splitting import SplitLimits
 from src.app.ingest.tokens import get_token_counter
 from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.interfaces.observability.metrics_collector import MetricsCollector
@@ -57,7 +59,6 @@ from src.app.services.documents.import_service import ImportService
 from src.app.services.documents.material_query_service import MaterialQueryService
 from src.app.services.documents.part_query_service import PartQueryService
 from src.app.services.documents.quiz_check_service import QuizCheckService
-from src.app.services.documents.topic_per_part_planner import TopicPerPartPlanner
 from src.app.services.documents.topic_segmenter import TopicSegmenter
 from src.app.services.documents.upload_service import UploadService
 from src.app.services.notifications.email_sender import EmailSender
@@ -270,7 +271,10 @@ class ApplicationContainer:
             materials=UserMaterialRepository,
             parts=DocumentPartRepository,
             users=UserRepository,
-            planner=TopicPerPartPlanner(counter=get_token_counter(), settings=self.ingest_settings),
+            planner=DocumentPartPlanner(
+                get_token_counter(),
+                SplitLimits(self.ingest_settings.split_target_tokens, self.ingest_settings.split_max_tokens),
+            ),
             storage=self.object_storage,
             ledger=self.quota_ledger,
             dispatcher=self.task_dispatcher,
