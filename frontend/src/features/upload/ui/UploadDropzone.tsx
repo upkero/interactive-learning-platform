@@ -1,58 +1,83 @@
-'use client';
+"use client";
 
-import { useCallback, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
-import { ActionLink } from '@/shared/ui';
-import { useUploadDocument } from '@/entities/document';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { ApiError } from '@/shared/api/errors';
-import styles from './UploadDropzone.module.css';
+import { useCallback, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
+import { ActionLink } from "@/shared/ui";
+import { useUploadDocument, useImportGdocs } from "@/features/upload/api";
+import { useRouter } from "@/shared/i18n/navigation-client";
+import { ApiError } from "@/shared/api/errors";
+import styles from "./UploadDropzone.module.css";
 
-const ALLOWED_TYPES = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/markdown'];
+const ALLOWED_EXTENSIONS = [".pdf", ".docx", ".md"];
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+const GOOGLE_DOCS_URL_PATTERN =
+  /^https:\/\/docs\.google\.com\/document\/d\/[a-zA-Z0-9-_]+/;
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes.toString()} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function validateFileExtension(file: File): string | null {
+  const name = file.name.toLowerCase();
+  const hasValidExtension = ALLOWED_EXTENSIONS.some((ext) =>
+    name.endsWith(ext)
+  );
+  if (!hasValidExtension) {
+    return "unsupported_file_type";
+  }
+  if (file.size > MAX_FILE_SIZE) {
+    return "file_too_large";
+  }
+  return null;
+}
+
+function validateGoogleDocsUrl(url: string): string | null {
+  const trimmed = url.trim();
+  if (!trimmed) return "noUrlEntered";
+  if (!GOOGLE_DOCS_URL_PATTERN.test(trimmed)) {
+    return "invalid_gdocs_url";
+  }
+  return null;
+}
 
 export function UploadDropzone() {
-  const t = useTranslations('upload');
-  const tErrors = useTranslations('errors');
-  const tCommon = useTranslations('common');
+  const t = useTranslations("upload");
+  const tErrors = useTranslations("errors");
+  const tCommon = useTranslations("common");
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const locale = searchParams.get('locale') || 'ru';
   const fileInputRef = useRef<HTMLInputElement>(null);
   const urlInputRef = useRef<HTMLInputElement>(null);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [googleDocUrl, setGoogleDocUrl] = useState('');
+  const [googleDocUrl, setGoogleDocUrl] = useState("");
   const [fileError, setFileError] = useState<string | null>(null);
   const [urlError, setUrlError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'file' | 'url'>('file');
+  const [activeTab, setActiveTab] = useState<"file" | "url">("file");
 
-  const uploadMutation = useUploadDocument();
-
-  const validateFile = useCallback((file: File): string | null => {
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      return tErrors('unsupported_file_type');
-    }
-    if (file.size > MAX_FILE_SIZE) {
-      return tErrors('file_too_large');
-    }
-    return null;
-  }, [tErrors]);
+  const uploadMutation = useUploadDocument({
+    onProgress: (percent) => {
+      setUploadProgress(percent);
+    },
+  });
+  const importGdocsMutation = useImportGdocs();
 
   const handleFileSelect = useCallback(
     (file: File | null) => {
       setFileError(null);
       if (!file) return;
-      const error = validateFile(file);
-      if (error) {
-        setFileError(error);
+      const errorCode = validateFileExtension(file);
+      if (errorCode) {
+        setFileError(tErrors(errorCode));
         setSelectedFile(null);
       } else {
         setSelectedFile(file);
       }
     },
-    [validateFile]
+    [tErrors]
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -75,10 +100,13 @@ export function UploadDropzone() {
     [handleFileSelect]
   );
 
-  const handleUrlChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setGoogleDocUrl(e.target.value);
-    setUrlError(null);
-  }, []);
+  const handleUrlChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setGoogleDocUrl(e.target.value);
+      setUrlError(null);
+    },
+    []
+  );
 
   const handleFileInputClick = useCallback(() => {
     fileInputRef.current?.click();
@@ -92,87 +120,93 @@ export function UploadDropzone() {
   );
 
   const handleSubmit = useCallback(async () => {
-    if (activeTab === 'file') {
+    if (activeTab === "file") {
       if (!selectedFile) {
-        setFileError(t('noFileSelected'));
+        setFileError(t("noFileSelected"));
         return;
       }
       setIsSubmitting(true);
+      setUploadProgress(0);
+      setFileError(null);
       try {
         const formData = new FormData();
-        formData.append('file', selectedFile);
+        formData.append("file", selectedFile);
         const document = await uploadMutation.mutateAsync(formData);
-        if (!document) throw new Error('Upload failed');
-        router.push(`/${locale}/upload?doc=${document.id}`);
+        router.replace(`/upload?document=${document.id}`);
       } catch (error) {
         if (error instanceof ApiError) {
           setFileError(tErrors(error.code));
         } else {
-          setFileError(tErrors('unknown_error'));
+          setFileError(tErrors("unknown_error"));
         }
       } finally {
         setIsSubmitting(false);
+        setUploadProgress(null);
       }
     } else {
-      if (!googleDocUrl.trim()) {
-        setUrlError(t('noUrlEntered'));
+      const urlErrorCode = validateGoogleDocsUrl(googleDocUrl);
+      if (urlErrorCode) {
+        setUrlError(tErrors(urlErrorCode));
         return;
       }
       setIsSubmitting(true);
+      setUrlError(null);
       try {
-        const formData = new FormData();
-        formData.append('google_doc_url', googleDocUrl.trim());
-        const document = await uploadMutation.mutateAsync(formData);
-        if (!document) throw new Error('Import failed');
-        router.push(`/${locale}/upload?doc=${document.id}`);
+        const document = await importGdocsMutation.mutateAsync(
+          googleDocUrl.trim()
+        );
+        router.replace(`/upload?document=${document.id}`);
       } catch (error) {
         if (error instanceof ApiError) {
           setUrlError(tErrors(error.code));
         } else {
-          setUrlError(tErrors('unknown_error'));
+          setUrlError(tErrors("unknown_error"));
         }
       } finally {
         setIsSubmitting(false);
       }
     }
-  }, [activeTab, selectedFile, googleDocUrl, uploadMutation, router, locale, t, tErrors]);
-
-  const handleReset = useCallback(() => {
-    setSelectedFile(null);
-    setGoogleDocUrl('');
-    setFileError(null);
-    setUrlError(null);
-    setIsSubmitting(false);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  }, []);
+  }, [
+    activeTab,
+    selectedFile,
+    googleDocUrl,
+    uploadMutation,
+    importGdocsMutation,
+    router,
+    t,
+    tErrors,
+  ]);
 
   return (
     <div className={styles.container}>
-      <div className={styles.tabs} role="tablist" aria-label={t('title')}>
+      <div className={styles.tabs} role="tablist" aria-label={t("title")}>
         <button
           role="tab"
-          aria-selected={activeTab === 'file'}
-          className={`${styles.tab} ${activeTab === 'file' ? styles.active : ''}`}
-          onClick={() => { setActiveTab('file'); }}
+          aria-selected={activeTab === "file"}
+          className={`${styles.tab} ${activeTab === "file" ? styles.active : ""}`}
+          onClick={() => {
+            setActiveTab("file");
+          }}
         >
-          {t('dropzoneTitle')}
+          {t("dropzoneTitle")}
         </button>
         <button
           role="tab"
-          aria-selected={activeTab === 'url'}
-          className={`${styles.tab} ${activeTab === 'url' ? styles.active : ''}`}
-          onClick={() => { setActiveTab('url'); }}
+          aria-selected={activeTab === "url"}
+          className={`${styles.tab} ${activeTab === "url" ? styles.active : ""}`}
+          onClick={() => {
+            setActiveTab("url");
+          }}
         >
-          {t('urlLabel')}
+          {t("urlLabel")}
         </button>
       </div>
 
-      {activeTab === 'file' && (
+      {activeTab === "file" && (
         <div className={styles.fileTab}>
           <div
-            className={`${styles.dropzone} ${selectedFile ? styles.hasFile : ''} ${isSubmitting ? styles.submitting : ''}`}
+            data-testid="dropzone-area"
+            className={`${styles.dropzone} ${selectedFile ? styles.hasFile : ""} ${isSubmitting ? styles.submitting : ""}`}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
@@ -185,13 +219,13 @@ export function UploadDropzone() {
               onChange={handleFileInputChange}
               disabled={isSubmitting}
               className={styles.fileInput}
-              aria-label={t('dropzoneTitle')}
+              aria-label={t("dropzoneTitle")}
             />
             {selectedFile ? (
               <div className={styles.fileInfo}>
                 <span className={styles.fileName}>{selectedFile.name}</span>
                 <span className={styles.fileSize}>
-                  {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
+                  {formatFileSize(selectedFile.size)}
                 </span>
                 <button
                   type="button"
@@ -201,23 +235,48 @@ export function UploadDropzone() {
                     handleFileSelect(null);
                   }}
                   disabled={isSubmitting}
-                  aria-label={t('replaceFileButton')}
+                  aria-label={t("replaceFileButton")}
                 >
                   ×
                 </button>
               </div>
             ) : (
               <>
-                <p className={styles.dropzoneText}>{t('dropzoneTitle')}</p>
-                <p className={styles.dropzoneHint}>{t('dropzoneHint')}</p>
+                <p className={styles.dropzoneText}>{t("dropzoneTitle")}</p>
+                <p className={styles.dropzoneHint}>{t("dropzoneHint")}</p>
               </>
             )}
           </div>
-          {fileError && <p className={styles.error} role="alert">{fileError}</p>}
+          {uploadProgress !== null && (
+            <div
+              className={styles.progressWrapper}
+              role="progressbar"
+              aria-valuenow={uploadProgress}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={t("uploadProgress")}
+            >
+              <div className={styles.progressBar}>
+                <div
+                  className={styles.progressFill}
+                  style={{ width: `${String(uploadProgress)}%` }}
+                />
+              </div>
+              <span className={styles.progressText}>{uploadProgress}%</span>
+            </div>
+          )}
+          {(fileError || uploadMutation.isError) && (
+            <p className={styles.error} role="alert">
+              {fileError ||
+                (uploadMutation.error instanceof ApiError
+                  ? tErrors(uploadMutation.error.code)
+                  : tErrors("unknown_error"))}
+            </p>
+          )}
         </div>
       )}
 
-      {activeTab === 'url' && (
+      {activeTab === "url" && (
         <div className={styles.urlTab}>
           <div className={styles.urlInputWrapper}>
             <input
@@ -225,44 +284,42 @@ export function UploadDropzone() {
               type="url"
               value={googleDocUrl}
               onChange={handleUrlChange}
-              placeholder={t('urlPlaceholder')}
+              placeholder={t("urlPlaceholder")}
               disabled={isSubmitting}
               className={styles.urlInput}
-              aria-label={t('urlLabel')}
+              aria-label={t("urlLabel")}
             />
           </div>
-          {urlError && <p className={styles.error} role="alert">{urlError}</p>}
+          {(urlError || importGdocsMutation.isError) && (
+            <p className={styles.error} role="alert">
+              {urlError ||
+                (importGdocsMutation.error instanceof ApiError
+                  ? tErrors(importGdocsMutation.error.code)
+                  : tErrors("unknown_error"))}
+            </p>
+          )}
         </div>
       )}
 
       <div className={styles.actions}>
         <ActionLink
-          href={`/${locale}/materials`}
+          href={`/materials`}
           variant="secondary"
           disabled={isSubmitting}
         >
-          {tCommon('cancel')}
+          {tCommon("cancel")}
         </ActionLink>
         <button
           type="button"
-          className={`${styles.submitButton} ${isSubmitting ? styles.submitting : ''}`}
-          onClick={() => { void handleSubmit(); }}
+          className={`${styles.submitButton} ${isSubmitting ? styles.submitting : ""}`}
+          onClick={() => {
+            void handleSubmit();
+          }}
           disabled={isSubmitting}
         >
-          {isSubmitting ? tCommon('loading') : t('importButton')}
+          {isSubmitting ? tCommon("loading") : t("importButton")}
         </button>
       </div>
-
-      {uploadMutation.isError && (
-        <div className={styles.mutationError} role="alert">
-          {uploadMutation.error instanceof ApiError
-            ? tErrors(uploadMutation.error.code)
-            : tErrors('unknown_error')}
-          <button type="button" className={styles.retryButton} onClick={handleReset}>
-            {tCommon('retry')}
-          </button>
-        </div>
-      )}
     </div>
   );
 }

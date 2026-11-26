@@ -1,4 +1,4 @@
-import { QuestionsFeature } from '@/features/questions';
+import { QuestionsFeature } from "@/features/questions";
 
 export default async function QuestionsPage({
   params,

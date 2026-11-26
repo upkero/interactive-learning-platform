@@ -103,6 +103,21 @@
   display: flex;
   justify-content: flex-start;
   margin-top: var(--g-space-4);
+  gap: var(--g-space-3);
+}
+
+.proceedButton {
+  margin-left: auto;
+}
+
+.quotaErrorBanner {
+  padding: var(--g-space-2) var(--g-space-3);
+  border-radius: var(--g-radius-md);
+  background: var(--g-color-danger-bg);
+  color: var(--g-color-danger-text);
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-weight-medium);
+  margin-bottom: var(--g-space-3);
 }
 
 .skeleton {
@@ -233,8 +248,12 @@
 }
 
 @keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

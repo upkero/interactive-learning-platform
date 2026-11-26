@@ -33,6 +33,10 @@
   outline-offset: 2px;
 }
 
+.label.focused {
+  background: var(--g-color-bg-alt);
+}
+
 .checkbox {
   flex-shrink: 0;
   width: 1.125rem;
@@ -69,6 +73,37 @@
   font-family: var(--g-font-mono);
 }
 
+.expandButton {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: var(--g-hairline) solid var(--g-color-border);
+  border-radius: var(--g-radius-sm);
+  background: var(--g-color-surface);
+  color: var(--g-color-text);
+  font-size: var(--g-text-lg);
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color var(--g-duration-fast) var(--g-easing);
+}
+
+.expandButton:hover:not(:disabled) {
+  background: var(--g-color-bg-alt);
+}
+
+.expandButton:focus-visible {
+  outline: 2px solid var(--g-focus-color);
+  outline-offset: 2px;
+}
+
+.expandButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .children {
   list-style: none;
   padding: 0;
@@ -92,7 +127,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .label {
+  .label,
+  .expandButton {
     transition: none;
   }
 }

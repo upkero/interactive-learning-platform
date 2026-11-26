@@ -1,9 +1,13 @@
 import tseslint from "typescript-eslint";
 import boundaries from "eslint-plugin-boundaries";
 import nextPlugin from "@next/eslint-plugin-next";
+import reactHooks from "eslint-plugin-react-hooks";
 
 export default tseslint.config(
   ...tseslint.configs.strictTypeChecked,
+  {
+    ignores: ["**/*.test.ts", "**/*.test.tsx", "src/__tests__/**"],
+  },
   {
     languageOptions: {
       parserOptions: {
@@ -11,7 +15,11 @@ export default tseslint.config(
         tsconfigRootDir: import.meta.dirname,
       },
     },
-    plugins: { boundaries, "@next/next": nextPlugin },
+    plugins: {
+      boundaries,
+      "@next/next": nextPlugin,
+      "react-hooks": reactHooks,
+    },
     settings: {
       "import/resolver": {
         typescript: {
@@ -30,6 +38,8 @@ export default tseslint.config(
     },
     rules: {
       ...nextPlugin.configs["core-web-vitals"].rules,
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "error",
       "boundaries/element-types": [
         "error",
         {

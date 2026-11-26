@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter, usePathname } from "@/shared/i18n/navigation-client";
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useCallback } from "react";
 import { useMe } from "@/entities/user";
 import { logout } from "../api";
 import { useQueryClient } from "@tanstack/react-query";
@@ -24,13 +24,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
     "status" in error &&
     (error as { status: number }).status === 401;
 
-  useEffect(() => {
-    if (isUnauthorized) {
-      void handleUnauthorized();
-    }
-  }, [isUnauthorized, pathname, locale, router, queryClient]);
-
-  async function handleUnauthorized() {
+  const handleUnauthorized = useCallback(async () => {
     try {
       await logout();
     } catch {
@@ -39,7 +33,13 @@ export function SessionGate({ children }: { children: ReactNode }) {
     queryClient.clear();
     const encodedNext = encodeURIComponent(pathname || `/${locale}/materials`);
     router.replace(`/${locale}/login?next=${encodedNext}`);
-  }
+  }, [pathname, locale, router, queryClient]);
+
+  useEffect(() => {
+    if (isUnauthorized) {
+      void handleUnauthorized();
+    }
+  }, [isUnauthorized, handleUnauthorized]);
 
   if (isLoading || isUnauthorized) {
     return (

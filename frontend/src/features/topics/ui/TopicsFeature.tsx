@@ -1,75 +1,112 @@
-'use client';
+"use client";
 
-import { useCallback, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useTranslations } from 'next-intl';
-import { useDocumentTopics } from '@/entities/document';
-import { useQuota } from '@/entities/user';
-import { useDocumentStatusGuard } from '@/entities/document/guard/useDocumentStatusGuard';
-import { ApiError } from '@/shared/api/errors';
-import { TopicTree } from './TopicTree';
-import { TopicSummary } from './TopicSummary';
-import { ActionLink } from '@/shared/ui/action-link/ActionLink';
-import { PageShell } from '@/shared/ui/page-shell/PageShell';
-import { Surface } from '@/shared/ui/surface/Surface';
-import type { TopicNodeOut } from '@/entities/document';
-import styles from './TopicsFeature.module.css';
+import { useCallback, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "@/shared/i18n/navigation-client";
+import { useTranslations } from "next-intl";
+import { useDebouncedValue } from "@/shared/lib/use-debounced-value";
+import { useTopics, usePlan } from "@/features/topics/api";
+import { useDocumentStatusGuard } from "@/entities/document";
+import { ApiError } from "@/shared/api/errors";
+import { TopicTree } from "./TopicTree";
+import { TopicSummary } from "./TopicSummary";
+import { ActionLink } from "@/shared/ui/action-link/ActionLink";
+import { PageShell } from "@/shared/ui/page-shell/PageShell";
+import { Surface } from "@/shared/ui/surface/Surface";
+import type { TopicNodeOut } from "@/entities/document";
+import styles from "./TopicsFeature.module.css";
 
-// Type aliases for compatibility with selection functions
 type TopicNode = TopicNodeOut;
 
 export function TopicsFeature({ documentId }: { documentId: string }) {
-  const t = useTranslations('topics');
-  const tCommon = useTranslations('common');
-  const tErrors = useTranslations('errors');
-  const tEmpty = useTranslations('empty');
+  const t = useTranslations("topics");
+  const tCommon = useTranslations("common");
+  const tErrors = useTranslations("errors");
 
   const router = useRouter();
   const searchParams = useSearchParams();
-  const locale = searchParams.get('locale') || 'ru';
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const topicsQuery = useDocumentTopics(documentId);
-  const quotaQuery = useQuota();
-
-  // Centralized status guard - topics step allows 'topics_required' status
-  const { isLoading, error, hasRedirected: guardRedirected } = useDocumentStatusGuard({
+  const topicsQuery = useTopics(documentId);
+  const debouncedSelectedIds = useDebouncedValue<string[]>(
+    Array.from(selectedIds),
+    300
+  );
+  const planQuery = usePlan(
     documentId,
-    currentStep: 'topics',
-  });
-
-  const topics = topicsQuery.data ?? [];
-
-  const { selectedCount, totalTokens } = useMemo(
-    () => calculateSelection(topics, selectedIds),
-    [topics, selectedIds]
+    debouncedSelectedIds.length > 0 ? debouncedSelectedIds : null
   );
 
-  const quotaAvailable = quotaQuery.data?.available ?? null;
-  const isOverQuota = quotaAvailable !== null && totalTokens > quotaAvailable;
+  // Centralized status guard - topics step allows 'parsed' status
+  const {
+    isLoading,
+    error,
+    hasRedirected: guardRedirected,
+  } = useDocumentStatusGuard({
+    documentId,
+    currentStep: "topics",
+  });
 
-  const quotaRemaining = quotaAvailable; // Alias for TopicSummary prop
-  const canProceed = selectedCount > 0 && !isOverQuota && !isSubmitting;
+  // Use topicsQuery.data directly for memoization to avoid new array reference each render
+  const memoizedTopics: TopicNode[] = useMemo(
+    () => topicsQuery.data ?? [],
+    [topicsQuery.data]
+  );
 
-  const handleTopicToggle = useCallback((id: string, checked: boolean) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (checked) {
-        addIdAndDescendants(next, id, topics);
-      } else {
-        removeIdAndDescendants(next, id, topics);
-      }
-      return next;
-    });
-  }, [topics]);
+  // Derive selected count from plan (server-authoritative)
+  const selectedCount = planQuery.data?.cost ?? 0;
+  const isOverQuota = planQuery.data
+    ? planQuery.data.cost > planQuery.data.available
+    : false;
+  const canProceed = selectedCount > 0 && !isOverQuota && !planQuery.isLoading;
+
+  // Use memoizedTopics for all references to avoid type issues
+  const topics = memoizedTopics;
+
+  // Show quota_exceeded error if coming from questions page
+  const showQuotaError = searchParams.get("error") === "quota_exceeded";
+
+  const handleNext = useCallback(() => {
+    if (!canProceed) return;
+
+    const selectedTopicIds = Array.from(selectedIds);
+    const encodedTopics = encodeURIComponent(selectedTopicIds.join(","));
+    router.push(`/documents/${documentId}/questions?topics=${encodedTopics}`);
+  }, [canProceed, documentId, router, selectedIds]);
+
+  const handleTopicToggle = useCallback(
+    (id: string, checked: boolean) => {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (checked) {
+          // We need to add all descendants - use the topics tree
+          const topic = findTopicById(memoizedTopics, id);
+          if (topic) {
+            const allIds = collectAllIds(topic);
+            for (const topicId of allIds) {
+              next.add(topicId);
+            }
+          }
+        } else {
+          // Remove all descendants
+          const topic = findTopicById(memoizedTopics, id);
+          if (topic) {
+            const allIds = collectAllIds(topic);
+            for (const topicId of allIds) {
+              next.delete(topicId);
+            }
+          }
+        }
+        return next;
+      });
+    },
+    [memoizedTopics]
+  );
 
   const handleSelectAll = useCallback(() => {
-    const allIds = new Set<string>();
-    collectAllIds(topics, allIds);
-    setSelectedIds(allIds);
-  }, [topics]);
+    const allIds = collectAllIdsArray(memoizedTopics);
+    setSelectedIds(new Set(allIds));
+  }, [memoizedTopics]);
 
   const handleDeselectAll = useCallback(() => {
     setSelectedIds(new Set());
@@ -79,44 +116,33 @@ export function TopicsFeature({ documentId }: { documentId: string }) {
     void topicsQuery.refetch();
   }, [topicsQuery]);
 
-  const handleNext = useCallback(() => {
-    if (!canProceed) return;
-
-    setIsSubmitting(true);
-    try {
-      // Store selected topic IDs in session storage for the next page
-      sessionStorage.setItem(`topics_${documentId}`, JSON.stringify(Array.from(selectedIds)));
-      // Navigate to questions page
-      router.push(`/${locale}/documents/${documentId}/questions`);
-    } catch {
-      // Navigation error - will be handled by router
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [canProceed, documentId, router, locale, selectedIds]);
-
   // Loading state
   if (isLoading) {
     return (
-      <PageShell title={t('title')}>
-        <TopicsSkeleton />
+      <PageShell title={t("title")}>
+        <TopicsSkeleton tCommon={tCommon} />
       </PageShell>
     );
   }
 
   // Error state for topics
   if (topicsQuery.isError) {
-    const message = topicsQuery.error instanceof ApiError
-      ? tErrors(topicsQuery.error.code)
-      : tErrors('unknown_error');
+    const message =
+      topicsQuery.error instanceof ApiError
+        ? tErrors(topicsQuery.error.code)
+        : tErrors("unknown_error");
 
     return (
-      <PageShell title={t('title')}>
+      <PageShell title={t("title")}>
         <Surface>
           <div className={styles.errorState} role="alert">
             <p className={styles.errorMessage}>{message}</p>
-            <button type="button" className={styles.retryButton} onClick={handleRetryTopics}>
-              {tCommon('retry')}
+            <button
+              type="button"
+              className={styles.retryButton}
+              onClick={handleRetryTopics}
+            >
+              {tCommon("retry")}
             </button>
           </div>
         </Surface>
@@ -127,18 +153,18 @@ export function TopicsFeature({ documentId }: { documentId: string }) {
   // Error state for guard
   if (error) {
     return (
-      <PageShell title={t('title')}>
+      <PageShell title={t("title")}>
         <Surface>
           <div className={styles.errorState} role="alert">
             <p className={styles.errorMessage}>
-              Не удалось загрузить документ. Возможно, он был удален или у вас нет доступа.
+              {tErrors("document_not_found")}
             </p>
             <ActionLink
-              href={`/${locale}/materials`}
+              href="/materials"
               variant="secondary"
               className={styles.retryButton}
             >
-              {tCommon('back')}
+              {tCommon("back")}
             </ActionLink>
           </div>
         </Surface>
@@ -146,19 +172,23 @@ export function TopicsFeature({ documentId }: { documentId: string }) {
     );
   }
 
-  // Empty topics
+  // Empty topics - M-17.1: allow proceeding as single topic
   if (topics.length === 0) {
     return (
-      <PageShell title={t('title')}>
-        <Surface title={t('planPreviewTitle')}>
-          <p className={styles.emptyText}>{tEmpty('topicsNone')}</p>
+      <PageShell title={t("title")}>
+        <Surface title={t("planPreviewTitle")}>
+          <p className={styles.emptyText}>{t("singleTopicNote")}</p>
         </Surface>
         <div className={styles.actions}>
+          <ActionLink href="/materials" variant="secondary">
+            {tCommon("back")}
+          </ActionLink>
           <ActionLink
-            href={`/${locale}/materials`}
-            variant="secondary"
+            href={`/documents/${documentId}/questions`}
+            variant="primary"
+            className={styles.proceedButton}
           >
-            {tCommon('back')}
+            {tCommon("next")}
           </ActionLink>
         </div>
       </PageShell>
@@ -171,20 +201,20 @@ export function TopicsFeature({ documentId }: { documentId: string }) {
 
   return (
     <PageShell
-      title={t('title')}
+      title={t("title")}
       actions={
         <ActionLink
-          href={`/${locale}/documents/${documentId}/questions`}
+          href={`/documents/${documentId}/questions?topics=${encodeURIComponent(Array.from(selectedIds).join(","))}`}
           variant="primary"
           onClick={handleNext}
-          disabled={!canProceed || isSubmitting}
-          aria-disabled={!canProceed || isSubmitting}
+          disabled={!canProceed || planQuery.isLoading}
+          aria-disabled={!canProceed || planQuery.isLoading}
         >
-          {isSubmitting ? tCommon('loading') : tCommon('next')}
+          {planQuery.isLoading ? tCommon("loading") : tCommon("next")}
         </ActionLink>
       }
     >
-      <Surface title={t('planPreviewTitle')}>
+      <Surface title={t("planPreviewTitle")}>
         <div className={styles.toolbar}>
           <div className={styles.toolbarActions}>
             <button
@@ -193,7 +223,7 @@ export function TopicsFeature({ documentId }: { documentId: string }) {
               onClick={handleSelectAll}
               disabled={selectedCount === topics.length}
             >
-              {t('selectAll')}
+              {t("selectAll")}
             </button>
             <button
               type="button"
@@ -201,7 +231,7 @@ export function TopicsFeature({ documentId }: { documentId: string }) {
               onClick={handleDeselectAll}
               disabled={selectedCount === 0}
             >
-              {t('deselectAll')}
+              {t("deselectAll")}
             </button>
           </div>
         </div>
@@ -210,24 +240,65 @@ export function TopicsFeature({ documentId }: { documentId: string }) {
           topics={topics}
           selectedIds={selectedIds}
           onToggle={handleTopicToggle}
-          disabled={isSubmitting}
+          disabled={planQuery.isLoading}
         />
       </Surface>
 
       <TopicSummary
-        topics={topics}
-        selectedIds={selectedIds}
-        quotaRemaining={quotaRemaining}
-        quotaLoading={quotaQuery.isPending}
-        quotaError={quotaQuery.isError}
+        plan={planQuery.data ?? null}
+        planLoading={planQuery.isLoading}
+        planError={planQuery.isError}
+        hasSelection={selectedCount > 0}
       />
+
+      {showQuotaError && (
+        <div className={styles.quotaErrorBanner} role="alert">
+          {tErrors("quota_exceeded")}
+        </div>
+      )}
     </PageShell>
   );
 }
 
-function TopicsSkeleton() {
+// Helper functions
+function findTopicById(topics: TopicNode[], id: string): TopicNode | undefined {
+  for (const topic of topics) {
+    if (topic.id === id) return topic;
+    if (topic.children.length > 0) {
+      const found = findTopicById(topic.children, id);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+function collectAllIds(node: TopicNode): string[] {
+  const ids: string[] = [node.id];
+  for (const child of node.children) {
+    ids.push(...collectAllIds(child));
+  }
+  return ids;
+}
+
+function collectAllIdsArray(topics: TopicNode[]): string[] {
+  const ids: string[] = [];
+  for (const topic of topics) {
+    ids.push(...collectAllIds(topic));
+  }
+  return ids;
+}
+
+function TopicsSkeleton({
+  tCommon,
+}: {
+  tCommon: ReturnType<typeof import("next-intl").useTranslations>;
+}) {
   return (
-    <div className={styles.skeleton} role="status" aria-label="Загрузка тем...">
+    <div
+      className={styles.skeleton}
+      role="status"
+      aria-label={tCommon("loading")}
+    >
       <Surface>
         <div className={styles.skeletonToolbar}>
           <div className={styles.skeletonButton} />
@@ -237,7 +308,7 @@ function TopicsSkeleton() {
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className={styles.skeletonItem}>
               <div className={styles.skeletonCheckbox} />
-              <div className={styles.skeletonTitle} style={{ width: '60%' }} />
+              <div className={styles.skeletonTitle} style={{ width: "60%" }} />
               <div className={styles.skeletonCost} />
             </div>
           ))}
@@ -261,80 +332,4 @@ function TopicsSkeleton() {
       </div>
     </div>
   );
-}
-
-interface SelectionStats {
-  selectedCount: number;
-  partsCount: number;
-  totalTokens: number;
-}
-
-function calculateSelection(topics: TopicNodeOut[], selectedIds: Set<string>): SelectionStats {
-  let selectedCount = 0;
-  let partsCount = 0;
-  let totalTokens = 0;
-
-  for (const topic of topics) {
-    if (selectedIds.has(topic.id)) {
-      selectedCount += 1;
-      partsCount += 1;
-      totalTokens += topic.tokens;
-    }
-    if (topic.children.length > 0) {
-      const childStats = calculateSelection(topic.children, selectedIds);
-      selectedCount += childStats.selectedCount;
-      partsCount += childStats.partsCount;
-      totalTokens += childStats.totalTokens;
-    }
-  }
-
-  return { selectedCount, partsCount, totalTokens };
-}
-
-function collectAllIds(topics: TopicNode[], ids: Set<string>) {
-  for (const topic of topics) {
-    ids.add(topic.id);
-    if (topic.children.length > 0) {
-      collectAllIds(topic.children, ids);
-    }
-  }
-}
-
-function addIdAndDescendants(ids: Set<string>, id: string, topics: TopicNode[]) {
-  for (const topic of topics) {
-    if (topic.id === id) {
-      ids.add(topic.id);
-      if (topic.children.length > 0) {
-        collectAllIds(topic.children, ids);
-      }
-      return;
-    }
-    if (topic.children.length > 0) {
-      addIdAndDescendants(ids, id, topic.children);
-    }
-  }
-}
-
-function removeIdAndDescendants(ids: Set<string>, id: string, topics: TopicNode[]) {
-  for (const topic of topics) {
-    if (topic.id === id) {
-      ids.delete(topic.id);
-      if (topic.children.length > 0) {
-        removeAllDescendants(ids, topic.children);
-      }
-      return;
-    }
-    if (topic.children.length > 0) {
-      removeIdAndDescendants(ids, id, topic.children);
-    }
-  }
-}
-
-function removeAllDescendants(ids: Set<string>, topics: TopicNode[]) {
-  for (const topic of topics) {
-    ids.delete(topic.id);
-    if (topic.children.length > 0) {
-      removeAllDescendants(ids, topic.children);
-    }
-  }
 }

@@ -10,162 +10,21 @@
   animation: pulse var(--g-duration-base) var(--g-easing) infinite alternate;
 }
 
-@keyframes pulse {
-  from { opacity: 0.7; }
-  to { opacity: 1; }
-}
-
-.stageLog {
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.emptyStage {
-  margin: 0;
-  color: var(--g-color-text-secondary);
-  font-size: var(--g-text-sm);
-  text-align: center;
-  padding: var(--g-space-4);
-}
-
-.stageList {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--g-space-2);
-}
-
-.stageItem {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--g-space-3);
-  padding: var(--g-space-2) var(--g-space-3);
-  background: var(--g-color-bg-alt);
-  border-radius: var(--g-radius-md);
-  font-size: var(--g-text-sm);
-  color: var(--g-color-text);
-  border: var(--g-hairline) solid var(--g-color-border);
-}
-
-.stageBullet {
-  flex-shrink: 0;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--g-color-accent);
-  margin-top: 6px;
-}
-
-.stageText {
-  line-height: 1.5;
-}
-
-.partsList {
-  display: flex;
-  flex-direction: column;
-  gap: var(--g-space-3);
-}
-
-.emptyParts {
-  margin: 0;
-  color: var(--g-color-text-secondary);
-  font-size: var(--g-text-sm);
-  text-align: center;
-  padding: var(--g-space-4);
-}
-
-.partCard {
-  padding: var(--g-space-4);
-  border: var(--g-hairline) solid var(--g-color-border);
-  border-radius: var(--g-radius-md);
-  background: var(--g-color-surface);
-  transition: border-color var(--g-duration-fast) var(--g-easing);
-}
-
-.partCard:hover {
-  border-color: var(--g-color-border-strong);
-}
-
-.partHeader {
+.connectionLostBanner {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--g-space-3);
-  margin-bottom: var(--g-space-3);
-}
-
-.partTitle {
-  margin: 0;
-  font-size: var(--g-text-md);
-  font-weight: var(--g-font-weight-semibold);
-  color: var(--g-color-text);
-}
-
-.partStatus {
-  display: inline-flex;
-  align-items: center;
-  padding: var(--g-space-1) var(--g-space-2);
-  border-radius: var(--g-radius-full);
-  font-size: var(--g-text-xs);
-  font-weight: var(--g-font-weight-semibold);
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  border: var(--g-hairline) solid var(--g-color-border);
-  background: var(--g-color-bg-alt);
-  color: var(--g-color-text-secondary);
-}
-
-.partProgress {
-  height: 4px;
-  border-radius: var(--g-radius-full);
-  background: var(--g-color-border);
-  overflow: hidden;
-}
-
-.partProgressFill {
-  height: 100%;
-  width: 0%;
-  background: var(--g-color-accent);
-  animation: progressIndeterminate 2s ease-in-out infinite;
-}
-
-@keyframes progressIndeterminate {
-  0% { width: 0%; margin-left: 0%; }
-  50% { width: 60%; margin-left: 0%; }
-  100% { width: 0%; margin-left: 100%; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .partProgressFill {
-    animation: none;
-    width: 50%;
-  }
-}
-
-.partError {
-  margin-top: var(--g-space-3);
-  padding: var(--g-space-3);
-  border-radius: var(--g-radius-md);
+  justify-content: center;
+  gap: var(--g-space-4);
+  padding: var(--g-space-3) var(--g-space-4);
   background: var(--g-color-danger-bg);
   border: var(--g-hairline) solid var(--g-color-danger);
-}
-
-.partErrorText {
-  margin: 0 0 var(--g-space-2);
+  border-radius: var(--g-radius-md);
   color: var(--g-color-danger-text);
   font-size: var(--g-text-sm);
+  font-weight: var(--g-font-weight-medium);
 }
 
-.partErrorHint {
-  margin: 0 0 var(--g-space-3);
-  color: var(--g-color-text-secondary);
-  font-size: var(--g-text-sm);
-}
-
-.retryPartButton {
+.retryButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -184,60 +43,23 @@
     color var(--g-duration-fast) var(--g-easing);
 }
 
-.retryPartButton:hover:not(:disabled) {
+.retryButton:hover:not(:disabled) {
   background: var(--g-color-border);
   color: var(--g-color-text);
 }
 
-.retryPartButton:focus-visible {
+.retryButton:focus-visible {
   outline: 2px solid var(--g-focus-color);
-  outline-offset: 2px.
+  outline-offset: 2px.;
 }
 
-.retryPartButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.keyTerms {
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.emptyKeyTerms {
-  margin: 0;
-  color: var(--g-color-text-secondary);
-  font-size: var(--g-text-sm);
-  text-align: center;
-  padding: var(--g-space-4);
-}
-
-.keyTermsList {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--g-space-3);
-}
-
-.keyTermItem {
-  padding: var(--g-space-3);
-  background: var(--g-color-bg-alt);
-  border-radius: var(--g-radius-md);
-  border: var(--g-hairline) solid var(--g-color-border);
-}
-
-.keyTermName {
-  margin: 0 0 var(--g-space-1);
-  font-size: var(--g-text-sm);
-  font-weight: var(--g-font-weight-bold);
-  color: var(--g-color-text);
-}
-
-.keyTermDef {
-  margin: 0;
-  font-size: var(--g-text-sm);
-  color: var(--g-color-text-secondary);
-  line-height: 1.5;
+@keyframes pulse {
+  from {
+    opacity: 0.7;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .errorState {
@@ -361,8 +183,12 @@
 }
 
 @keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -376,7 +202,7 @@
   .reconnectBanner,
   .partProgressFill,
   .actionButton,
-  .retryPartButton {
+  .retryButton {
     transition: none;
     animation: none;
   }

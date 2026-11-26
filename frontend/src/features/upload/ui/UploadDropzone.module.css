@@ -92,9 +92,14 @@
 
 .fileInput {
   position: absolute;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
   cursor: pointer;
 }
 
@@ -188,7 +193,8 @@
 .urlInput:focus-visible {
   outline: none;
   border-color: var(--g-color-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--g-color-accent) 20%, transparent);
+  box-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--g-color-accent) 20%, transparent);
 }
 
 .urlInput:disabled {
@@ -289,13 +295,45 @@
   outline-offset: 2px;
 }
 
+.progressWrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--g-space-3);
+  margin-top: var(--g-space-3);
+}
+
+.progressBar {
+  flex: 1;
+  height: 6px;
+  background: var(--g-color-border);
+  border-radius: var(--g-radius-full);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--g-color-accent);
+  border-radius: var(--g-radius-full);
+  transition: width var(--g-duration-normal) var(--g-easing);
+}
+
+.progressText {
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-weight-medium);
+  color: var(--g-color-text-secondary);
+  white-space: nowrap;
+  min-width: 3.5ch;
+  text-align: right;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tab,
   .dropzone,
   .removeFile,
   .urlInput,
   .submitButton,
-  .retryButton {
+  .retryButton,
+  .progressFill {
     transition: none;
   }
 }

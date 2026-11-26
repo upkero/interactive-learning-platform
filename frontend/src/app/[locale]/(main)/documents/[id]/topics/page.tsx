@@ -1,4 +1,4 @@
-import { TopicsFeature } from '@/features/topics';
+import { TopicsFeature } from "@/features/topics";
 
 export default async function TopicsPage({
   params,

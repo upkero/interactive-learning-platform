@@ -1,42 +1,48 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useTranslations } from 'next-intl';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useEventStream, type SseEventMessage } from '@/shared/lib/sse/useEventStream';
-import { useDocumentStatusGuard } from '@/entities/document/guard/useDocumentStatusGuard';
-import { useDocument } from '@/entities/document';
-import { ActionLink } from '@/shared/ui';
-import styles from './ParsingCard.module.css';
+import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
+import { useRouter } from "@/shared/i18n/navigation-client";
+import {
+  useEventStream,
+  type SseEventMessage,
+} from "@/shared/lib/sse/useEventStream";
+import { useDocumentStatusGuard } from "@/entities/document";
+import { useDocument } from "@/entities/document";
+import { ActionLink } from "@/shared/ui";
+import styles from "./ParsingCard.module.css";
 
 interface ParsingEventData {
   stage: string;
   progress?: number;
   message?: string;
   document_id: string;
-  status: 'parsing' | 'topics_required' | 'error';
+  status: "parsing" | "parsed" | "generating" | "done" | "failed";
   error_code?: string;
 }
 
 export function ParsingCard({ documentId }: { documentId: string }) {
-  const t = useTranslations('upload');
-  const tErrors = useTranslations('errors');
-  const tCommon = useTranslations('common');
-  const tProgress = useTranslations('progress');
+  const t = useTranslations("upload");
+  const tErrors = useTranslations("errors");
+  const tCommon = useTranslations("common");
+  const tProgress = useTranslations("progress");
 
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const locale = searchParams.get('locale') || 'ru';
 
   const [parsingProgress, setParsingProgress] = useState(0);
-  const [currentStage, setCurrentStage] = useState('');
+  const [currentStage, setCurrentStage] = useState("");
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [hasRedirected, setHasRedirected] = useState(false);
 
   // Centralized status guard - upload step allows 'parsing' status
-  const { status, isLoading, error, hasRedirected: guardRedirected } = useDocumentStatusGuard({
+  const {
+    status,
+    isLoading,
+    error,
+    hasRedirected: guardRedirected,
+  } = useDocumentStatusGuard({
     documentId,
-    currentStep: 'upload',
+    currentStep: "upload",
     onRedirect: () => {
       setHasRedirected(true);
     },
@@ -55,13 +61,17 @@ export function ParsingCard({ documentId }: { documentId: string }) {
     if (data.stage) {
       setCurrentStage(data.stage);
     }
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    if (data.status === 'topics_required' && !hasRedirected) {
+    // Handle real API statuses
+    if (data.status === "parsed") {
       setHasRedirected(true);
-      router.push(`/${locale}/documents/${documentId}/topics`);
-    } else if (data.status === 'error') {
-      setErrorCode(data.error_code || 'parsing_failed');
+      router.replace(`/documents/${documentId}/topics`);
+    } else if (data.status === "failed") {
+      setErrorCode(data.error_code || "parse_failed");
+    } else if (data.status === "generating") {
+      setHasRedirected(true);
+      router.replace(`/documents/${documentId}/progress`);
     }
+    // "done" status is handled by the guard
   };
 
   const sseUrl = `/api/v1/documents/${documentId}/events`;
@@ -69,7 +79,7 @@ export function ParsingCard({ documentId }: { documentId: string }) {
   const { status: sseStatus } = useEventStream<ParsingEventData>({
     url: sseUrl,
     enabled: !hasRedirected && !errorCode && !guardRedirected,
-    terminalEvents: ['parsing_done', 'document_done', 'fatal_error'],
+    // Use default event types from useEventStream
     onEvent: handleEvent,
   });
 
@@ -77,27 +87,29 @@ export function ParsingCard({ documentId }: { documentId: string }) {
   useEffect(() => {
     if (hasRedirected || errorCode || guardRedirected || !status) return;
 
-    if (status === 'topics_required') {
+    if (status === "parsed") {
       setHasRedirected(true);
-      router.push(`/${locale}/documents/${documentId}/topics`);
-    } else if (status === 'error') {
-      setErrorCode(document?.error_code || 'parsing_failed');
-    } else if (status !== 'parsing') {
-      // Redirect to appropriate route based on status
-      const routeMap: Record<string, string> = {
-        questions_required: `/documents/${documentId}/questions`,
-        generating: `/documents/${documentId}/progress`,
-        ready: `/documents/${documentId}`,
-      };
-      if (routeMap[status]) {
-        setHasRedirected(true);
-        router.push(`/${locale}${routeMap[status]}`);
-      }
+      router.replace(`/documents/${documentId}/topics`);
+    } else if (status === "failed") {
+      setErrorCode(document?.error_code || "parse_failed");
+    } else if (status === "generating") {
+      setHasRedirected(true);
+      router.replace(`/documents/${documentId}/progress`);
+    } else if (status === "done") {
+      // The guard will handle redirect to first published part or materials
     }
-  }, [status, hasRedirected, errorCode, guardRedirected, router, locale, documentId]);
+  }, [
+    status,
+    hasRedirected,
+    errorCode,
+    guardRedirected,
+    router,
+    documentId,
+    document?.error_code,
+  ]);
 
   const handleReplaceFile = () => {
-    router.push(`/${locale}/upload`);
+    router.replace("/upload");
   };
 
   if (isLoading) {
@@ -116,17 +128,15 @@ export function ParsingCard({ documentId }: { documentId: string }) {
     return (
       <div className={styles.card} role="alert">
         <div className={styles.errorState}>
-          <h2 className={styles.errorTitle}>{t('parsingFailed')}</h2>
-          <p className={styles.errorMessage}>
-            Не удалось загрузить документ. Возможно, он был удален или у вас нет доступа.
-          </p>
+          <h2 className={styles.errorTitle}>{t("parsingFailed")}</h2>
+          <p className={styles.errorMessage}>{t("documentLoadFailed")}</p>
           <div className={styles.errorActions}>
             <ActionLink
-              href={`/${locale}/materials`}
+              href="/materials"
               variant="secondary"
               className={styles.actionButton}
             >
-              {tCommon('back')}
+              {tCommon("back")}
             </ActionLink>
           </div>
         </div>
@@ -138,7 +148,7 @@ export function ParsingCard({ documentId }: { documentId: string }) {
     return (
       <div className={styles.card} role="alert">
         <div className={styles.errorState}>
-          <h2 className={styles.errorTitle}>{t('parsingFailed')}</h2>
+          <h2 className={styles.errorTitle}>{t("parsingFailed")}</h2>
           <p className={styles.errorMessage}>
             {tErrors(errorCode as keyof typeof tErrors)}
           </p>
@@ -148,14 +158,14 @@ export function ParsingCard({ documentId }: { documentId: string }) {
               className={`${styles.actionButton} ${styles.primary}`}
               onClick={handleReplaceFile}
             >
-              {t('replaceFileButton')}
+              {t("replaceFileButton")}
             </button>
             <ActionLink
-              href={`/${locale}/materials`}
+              href="/materials"
               variant="secondary"
               className={styles.actionButton}
             >
-              {tCommon('back')}
+              {tCommon("back")}
             </ActionLink>
           </div>
         </div>
@@ -169,22 +179,30 @@ export function ParsingCard({ documentId }: { documentId: string }) {
 
   return (
     <div className={styles.card} role="status" aria-live="polite">
-      <h2 className={styles.title}>{t('parsingTitle')}</h2>
+      <h2 className={styles.title}>{t("parsingTitle")}</h2>
 
       <div className={styles.progressWrapper}>
-        <div className={styles.progressBar} role="progressbar" aria-valuenow={parsingProgress} aria-valuemin={0} aria-valuemax={100} aria-label={t('parsingTitle')}>
-          <div className={styles.progressFill} style={{ width: `${String(parsingProgress)}%` }} />
+        <div
+          className={styles.progressBar}
+          role="progressbar"
+          aria-valuenow={parsingProgress}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={t("parsingTitle")}
+        >
+          <div
+            className={styles.progressFill}
+            style={{ width: `${String(parsingProgress)}%` }}
+          />
         </div>
         <span className={styles.progressText}>{parsingProgress}%</span>
       </div>
 
-      {currentStage && (
-        <p className={styles.stageText}>{currentStage}</p>
-      )}
+      {currentStage && <p className={styles.stageText}>{currentStage}</p>}
 
-      {sseStatus === 'reconnecting' && (
+      {sseStatus === "reconnecting" && (
         <div className={styles.reconnectBanner} role="status">
-          {tProgress('connectionLost')}
+          {tProgress("connectionLost")}
         </div>
       )}
     </div>

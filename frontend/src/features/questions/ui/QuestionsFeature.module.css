@@ -155,6 +155,58 @@
   display: flex;
   gap: var(--g-space-3);
   flex-wrap: wrap;
+  margin-top: var(--g-space-4);
+}
+
+.startButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--g-control-min-height);
+  padding: var(--g-space-2) var(--g-space-5);
+  border: none;
+  border-radius: var(--g-radius-md);
+  background: var(--g-color-accent);
+  color: var(--g-color-accent-contrast);
+  font-family: var(--g-font-sans);
+  font-size: var(--g-text-md);
+  font-weight: var(--g-font-weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color var(--g-duration-fast) var(--g-easing),
+    transform var(--g-duration-fast) var(--g-easing);
+}
+
+.startButton:hover:not(:disabled) {
+  background: var(--g-color-accent-hover);
+  transform: translateY(-1px);
+}
+
+.startButton:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.startButton:focus-visible {
+  outline: 2px solid var(--g-focus-color);
+  outline-offset: 2px;
+}
+
+.startButton.submitting,
+.startButton.disabled,
+.startButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.quotaErrorBanner {
+  padding: var(--g-space-2) var(--g-space-3);
+  border-radius: var(--g-radius-md);
+  background: var(--g-color-danger-bg);
+  color: var(--g-color-danger-text);
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-weight-medium);
+  margin-bottom: var(--g-space-3);
 }
 
 .emptyState {
@@ -260,8 +312,64 @@
 }
 
 @keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.planPartsPreview {
+  margin-top: var(--g-space-3);
+  padding-top: var(--g-space-3);
+  border-top: var(--g-hairline) solid var(--g-color-border);
+}
+
+.planPartsTitle {
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-weight-semibold);
+  color: var(--g-color-text-secondary);
+  margin-bottom: var(--g-space-2);
+}
+
+.planPartsList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-1);
+}
+
+.planPartItem {
+  display: flex;
+  align-items: center;
+  gap: var(--g-space-3);
+  padding: var(--g-space-2);
+  background: var(--g-color-bg-alt);
+  border-radius: var(--g-radius-md);
+}
+
+.planPartIndex {
+  min-width: 2rem;
+  font-weight: var(--g-font-weight-bold);
+  color: var(--g-color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--g-font-mono);
+}
+
+.planPartTitle {
+  flex: 1;
+  color: var(--g-color-text);
+  font-size: var(--g-text-md);
+}
+
+.planPartTokens {
+  color: var(--g-color-text-secondary);
+  font-size: var(--g-text-sm);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--g-font-mono);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -272,7 +380,8 @@
   }
 
   .radioLabel,
-  .retryButton {
+  .retryButton,
+  .startButton {
     transition: none;
   }
 }

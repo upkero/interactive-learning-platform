@@ -57,13 +57,24 @@ vi.mock("@/shared/api/client");
 const mockUseMe = vi.mocked(useMe);
 const mockApiClient = vi.mocked(apiClient);
 
+const testMessages = {
+  common: {
+    loading: "Загрузка...",
+    retry: "Повторить",
+    back: "Назад",
+  },
+  errors: {
+    unknown_error: "Произошла непредвиденная ошибка.",
+  },
+};
+
 const createWrapper = () => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>
-      <NextIntlClientProvider locale="ru" messages={{ common: {}, errors: {} }}>
+      <NextIntlClientProvider locale="ru" messages={testMessages}>
         {children}
       </NextIntlClientProvider>
     </QueryClientProvider>
@@ -208,9 +219,11 @@ describe("SessionGate", () => {
 
     expect(screen.getByRole("alert")).toBeInTheDocument();
     // The error is not an ApiError instance, so it falls back to unknown_error
-    expect(screen.getByText("errors.unknown_error")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "common.retry" })
+      screen.getByText("Произошла непредвиденная ошибка.")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Повторить" })
     ).toBeInTheDocument();
   });
 

@@ -1,66 +1,77 @@
-'use client';
+"use client";
 
-import { useTranslations } from 'next-intl';
-import type { TopicNodeOut } from '@/entities/document';
-import styles from './TopicSummary.module.css';
+import { useTranslations } from "next-intl";
+import type { PlannedPartOut } from "@/features/topics/api";
+import styles from "./TopicSummary.module.css";
 
 interface TopicSummaryProps {
-  topics: TopicNodeOut[];
-  selectedIds: Set<string>;
-  quotaRemaining: number | null;
-  quotaLoading: boolean;
-  quotaError: boolean;
+  /** Plan data from the API */
+  plan: {
+    cost: number;
+    available: number;
+    parts: PlannedPartOut[];
+  } | null;
+  /** Whether the plan is loading */
+  planLoading: boolean;
+  /** Whether there was an error loading the plan */
+  planError: boolean;
+  /** Whether there are selected topics */
+  hasSelection: boolean;
 }
 
 export function TopicSummary({
-  topics,
-  selectedIds,
-  quotaRemaining,
-  quotaLoading,
-  quotaError,
+  plan,
+  planLoading,
+  planError,
+  hasSelection,
 }: TopicSummaryProps) {
-  const t = useTranslations('topics');
-  const tCommon = useTranslations('common');
+  const t = useTranslations("topics");
+  const tCommon = useTranslations("common");
+  const tErrors = useTranslations("errors");
 
-  const { selectedCount, partsCount, totalTokens } = calculateSelection(topics, selectedIds);
-  const quotaAvailable = quotaRemaining;
-  const isOverQuota = quotaAvailable !== null && totalTokens > quotaAvailable;
+  const cost = plan?.cost ?? 0;
+  const available = plan?.available ?? 0;
+  const parts = plan?.parts ?? [];
+  const isOverQuota = cost > available;
 
-  if (quotaLoading) {
+  const partsCount = parts.length;
+  const selectedTopicsCount = parts.reduce((acc) => acc + 1, 0); // Each part = 1 topic selected
+
+  if (planLoading) {
     return (
       <div className={styles.summary} aria-busy="true">
         <div className={styles.row}>
-          <span className={styles.label}>{t('selectedSummary')}</span>
-          <span className={styles.value}>{tCommon('loading')}</span>
+          <span className={styles.label}>{t("selectedLabel")}</span>
+          <span className={styles.value}>{tCommon("loading")}</span>
         </div>
         <div className={styles.row}>
-          <span className={styles.label}>{t('costSummary')}</span>
-          <span className={styles.value}>{tCommon('loading')}</span>
+          <span className={styles.label}>{t("costLabel", { cost: 0 })}</span>
+          <span className={styles.value}>{tCommon("loading")}</span>
         </div>
         <div className={styles.quotaRow}>
-          <span className={styles.label}>{t('quotaLabel')}</span>
-          <span className={styles.value}>{tCommon('loading')}</span>
+          <span className={styles.label}>{t("quotaLabel")}</span>
+          <span className={styles.value}>{tCommon("loading")}</span>
         </div>
       </div>
     );
   }
 
-  if (quotaError) {
+  if (planError) {
     return (
       <div className={styles.summary} role="alert">
         <div className={styles.row}>
-          <span className={styles.label}>{t('selectedSummary')}</span>
+          <span className={styles.label}>{t("selectedLabel")}</span>
           <span className={styles.value}>
-            {t('selectedSummary', { topics: selectedCount, parts: partsCount })}
+            {hasSelection ? "—" : tCommon("loading")}
           </span>
         </div>
         <div className={styles.row}>
-          <span className={styles.label}>{t('costSummary')}</span>
-          <span className={styles.value}>{totalTokens}</span>
+          <span className={styles.label}>{t("costLabel", { cost: 0 })}</span>
+          <span className={styles.value}>{tCommon("loading")}</span>
         </div>
         <div className={`${styles.quotaRow} ${styles.error}`}>
-          <span className={styles.label}>{t('quotaLabel')}</span>
-          <span className={styles.value}>{t('quotaError')}</span>
+          <span className={styles.label}>{t("quotaLabel")}</span>
+          <span className={styles.value}>{tErrors("unknown_error")}</span>
         </div>
       </div>
     );
@@ -69,58 +80,50 @@ export function TopicSummary({
   return (
     <div className={styles.summary}>
       <div className={styles.row}>
-        <span className={styles.label}>{t('selectedLabel')}</span>
+        <span className={styles.label}>{t("selectedLabel")}</span>
         <span className={styles.value}>
-          {t('selectedSummary', { topics: selectedCount, parts: partsCount })}
+          {t("selectedSummary", {
+            topics: selectedTopicsCount,
+            parts: partsCount,
+          })}
         </span>
       </div>
       <div className={styles.row}>
-        <span className={styles.label}>{t('costLabel')}</span>
-        <span className={`${styles.value} ${styles.cost} ${isOverQuota ? styles.overQuota : ''}`}>
-          {t('costSummary', { cost: totalTokens })}
+        <span className={styles.label}>{t("costLabel", { cost })}</span>
+        <span
+          className={`${styles.value} ${styles.cost} ${isOverQuota ? styles.overQuota : ""}`}
+        >
+          {t("costSummary", { cost })}
         </span>
       </div>
-      <div className={`${styles.quotaRow} ${isOverQuota ? styles.overQuota : ''}`}>
-        <span className={styles.label}>{t('quotaLabel')}</span>
+      <div
+        className={`${styles.quotaRow} ${isOverQuota ? styles.overQuota : ""}`}
+      >
+        <span className={styles.label}>{t("quotaLabel")}</span>
         <span className={styles.value}>
-          {quotaAvailable !== null
-            ? tCommon('generationsCount', { count: quotaAvailable })
-            : t('quotaUnknown')}
+          {tCommon("generationsCount", { count: available })}
         </span>
       </div>
       {isOverQuota && (
         <div className={styles.warning} role="alert">
-          {t('quotaWarning')}
+          {t("quotaWarning")}
+        </div>
+      )}
+      {/* Parts preview */}
+      {parts.length > 0 && (
+        <div className={styles.partsPreview}>
+          <div className={styles.partsTitle}>{t("planPreviewTitle")}</div>
+          <ul className={styles.partsList}>
+            {parts.map((part) => (
+              <li key={part.index} className={styles.partItem}>
+                <span className={styles.partIndex}>#{part.index}</span>
+                <span className={styles.partTitle}>{part.title}</span>
+                <span className={styles.partTokens}>{part.tokens}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>
   );
-}
-
-interface SelectionStats {
-  selectedCount: number;
-  partsCount: number;
-  totalTokens: number;
-}
-
-function calculateSelection(topics: TopicNodeOut[], selectedIds: Set<string>): SelectionStats {
-  let selectedCount = 0;
-  let partsCount = 0;
-  let totalTokens = 0;
-
-  for (const topic of topics) {
-    if (selectedIds.has(topic.id)) {
-      selectedCount += 1;
-      partsCount += 1;
-      totalTokens += topic.tokens;
-    }
-    if (topic.children.length > 0) {
-      const childStats = calculateSelection(topic.children, selectedIds);
-      selectedCount += childStats.selectedCount;
-      partsCount += childStats.partsCount;
-      totalTokens += childStats.totalTokens;
-    }
-  }
-
-  return { selectedCount, partsCount, totalTokens };
 }

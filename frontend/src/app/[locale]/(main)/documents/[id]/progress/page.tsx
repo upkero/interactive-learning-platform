@@ -1,4 +1,4 @@
-import { ProgressFeature } from '@/features/progress';
+import { ProgressFeature } from "@/features/progress";
 
 export default async function ProgressPage({
   params,
