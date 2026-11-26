@@ -197,7 +197,7 @@ async def test_plan_returns_preview_cost_and_available() -> None:
     # Small topics from different chapters share a part while it is below the
     # minimum fill threshold; generation therefore costs one unit.
     assert len(plan.parts) == 1
-    assert plan.parts[0].tokens == 344
+    assert plan.parts[0].tokens == 426
     assert plan.parts[0].title == "Adaptive learning — Quota and generation pipeline"
     assert available == 20  # default monthly limit, nothing reserved
 

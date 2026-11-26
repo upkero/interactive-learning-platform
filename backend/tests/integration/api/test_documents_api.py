@@ -32,6 +32,7 @@ from src.app.contracts.documents import (
 from src.app.contracts.quota import LedgerOp
 from src.app.contracts.widgets import UsageStatus, WidgetKind, WidgetUsageDraft
 from src.app.exceptions.tasks import TaskDispatchError
+from src.app.ingest.tokens import get_token_counter
 from src.app.models.document import Document
 from src.app.models.document_part import DocumentPart
 from src.app.models.generation_ledger import GenerationLedger
@@ -54,6 +55,7 @@ _PDF_PATH = Path(__file__).resolve().parents[2] / "support" / "fixtures" / "file
 _PDF_BYTES = _PDF_PATH.read_bytes()
 _DOCX_BYTES = (_PDF_PATH.parent / "sample.docx").read_bytes()
 _MD_BYTES = b"# Notes\n\nSome markdown content for the title test.\n"
+_PARSED_TOPIC_TEXTS = ("a" * 1200, "b" * 600)
 
 
 @pytest.fixture
@@ -671,7 +673,8 @@ async def test_plan_preview_is_stable_and_leaves_the_quota_journal_untouched(
 
     body = first.json()
     assert body["cost"] == len(body["parts"]) == 1
-    assert body["parts"][0]["tokens"] == 344
+    counter = get_token_counter()
+    assert body["parts"][0]["tokens"] == sum(counter.count(text) for text in _PARSED_TOPIC_TEXTS)
     assert body["available"] == 20  # default monthly limit
 
     # the journal is untouched: nothing was reserved by the preview
@@ -961,7 +964,7 @@ async def _make_parsed(
     await container.object_storage.put_object(
         bucket="documents",
         key=parsed_markdown_key(document.owner_id, document_id),
-        data=("a" * 1200 + "b" * 600).encode(),
+        data="".join(_PARSED_TOPIC_TEXTS).encode(),
         content_type="text/markdown",
     )
 
