@@ -16,6 +16,7 @@ from src.app.contracts.solver.main_pass import (
     ReaderProfile,
 )
 from src.app.contracts.solver.widget_candidate import WidgetCandidate, WidgetMatch, WidgetWithDescription
+from src.app.contracts.solver.widget_resolution import WidgetResolution
 
 __all__ = [
     "DIRECTIVE_KINDS",
@@ -33,5 +34,6 @@ __all__ = [
     "ReaderProfile",
     "WidgetCandidate",
     "WidgetMatch",
+    "WidgetResolution",
     "WidgetWithDescription",
 ]
