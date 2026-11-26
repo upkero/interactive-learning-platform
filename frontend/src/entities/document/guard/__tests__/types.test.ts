@@ -17,6 +17,7 @@ describe("DocumentStatusGuard - types", () => {
         "parsed",
         "generating",
         "done",
+        "failed",
       ];
 
       for (const status of statusesWithSteps) {
@@ -24,11 +25,6 @@ describe("DocumentStatusGuard - types", () => {
         expect(Array.isArray(ALLOWED_STEPS_BY_STATUS[status])).toBe(true);
         expect(ALLOWED_STEPS_BY_STATUS[status].length).toBeGreaterThan(0);
       }
-
-      // failed status should have empty allowed steps (no wizard steps allowed)
-      expect(ALLOWED_STEPS_BY_STATUS.failed).toBeDefined();
-      expect(Array.isArray(ALLOWED_STEPS_BY_STATUS.failed)).toBe(true);
-      expect(ALLOWED_STEPS_BY_STATUS.failed.length).toBe(0);
     });
 
     it("uploaded should only allow upload", () => {
@@ -39,8 +35,8 @@ describe("DocumentStatusGuard - types", () => {
       expect(ALLOWED_STEPS_BY_STATUS.parsing).toEqual(["upload"]);
     });
 
-    it("parsed should only allow topics", () => {
-      expect(ALLOWED_STEPS_BY_STATUS.parsed).toEqual(["topics"]);
+    it("parsed should allow topics and questions", () => {
+      expect(ALLOWED_STEPS_BY_STATUS.parsed).toEqual(["topics", "questions"]);
     });
 
     it("generating should only allow progress", () => {
@@ -51,8 +47,8 @@ describe("DocumentStatusGuard - types", () => {
       expect(ALLOWED_STEPS_BY_STATUS.done).toEqual(["document"]);
     });
 
-    it("failed should allow no steps", () => {
-      expect(ALLOWED_STEPS_BY_STATUS.failed).toEqual([]);
+    it("failed should allow topics", () => {
+      expect(ALLOWED_STEPS_BY_STATUS.failed).toEqual(["topics"]);
     });
   });
 
@@ -92,8 +88,8 @@ describe("DocumentStatusGuard - types", () => {
       expect(REDIRECT_TARGET_BY_STATUS.done).toBe("document");
     });
 
-    it("failed should redirect to document (fallback)", () => {
-      expect(REDIRECT_TARGET_BY_STATUS.failed).toBe("document");
+    it("failed should redirect to topics", () => {
+      expect(REDIRECT_TARGET_BY_STATUS.failed).toBe("topics");
     });
   });
 
@@ -141,14 +137,10 @@ describe("DocumentStatusGuard - types", () => {
         expectedRedirect: "upload",
       },
 
-      // parsed status
+      // parsed status - allows topics and questions
       { status: "parsed", currentStep: "upload", expectedRedirect: "topics" },
       { status: "parsed", currentStep: "topics", expectedRedirect: null },
-      {
-        status: "parsed",
-        currentStep: "questions",
-        expectedRedirect: "topics",
-      },
+      { status: "parsed", currentStep: "questions", expectedRedirect: null },
       { status: "parsed", currentStep: "progress", expectedRedirect: "topics" },
       { status: "parsed", currentStep: "document", expectedRedirect: "topics" },
 
@@ -186,23 +178,23 @@ describe("DocumentStatusGuard - types", () => {
       { status: "done", currentStep: "progress", expectedRedirect: "document" },
       { status: "done", currentStep: "document", expectedRedirect: null },
 
-      // failed status - no steps allowed
-      { status: "failed", currentStep: "upload", expectedRedirect: "document" },
-      { status: "failed", currentStep: "topics", expectedRedirect: "document" },
+      // failed status - only topics allowed
+      { status: "failed", currentStep: "upload", expectedRedirect: "topics" },
+      { status: "failed", currentStep: "topics", expectedRedirect: null },
       {
         status: "failed",
         currentStep: "questions",
-        expectedRedirect: "document",
+        expectedRedirect: "topics",
       },
       {
         status: "failed",
         currentStep: "progress",
-        expectedRedirect: "document",
+        expectedRedirect: "topics",
       },
       {
         status: "failed",
         currentStep: "document",
-        expectedRedirect: "document",
+        expectedRedirect: "topics",
       },
     ];
 
@@ -220,7 +212,7 @@ describe("DocumentStatusGuard - types", () => {
 
     it("should return correct route for upload step", () => {
       expect(getRouteForStep("upload", documentId)).toBe(
-        `/upload?doc=${documentId}`
+        `/upload?document=${documentId}`
       );
     });
 

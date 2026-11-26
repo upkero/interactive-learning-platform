@@ -85,7 +85,9 @@
     "parsingFailed": "Не удалось разобрать документ",
     "replaceFileButton": "Выбрать другой файл",
     "noFileSelected": "Выберите файл для загрузки",
-    "noUrlEntered": "Введите ссылку на Google Docs"
+    "noUrlEntered": "Введите ссылку на Google Docs",
+    "uploadProgress": "Загрузка файла",
+    "documentLoadFailed": "Не удалось загрузить документ. Возможно, он был удален или у вас нет доступа."
   },
   "topics": {
     "title": "Выберите темы для конспекта",
@@ -100,7 +102,12 @@
     "selectedLabel": "Выбрано",
     "quotaLabel": "Остаток генераций",
     "quotaUnknown": "Неизвестно",
-    "quotaError": "Не удалось загрузить квоту"
+    "quotaError": "Не удалось загрузить квоту",
+    "singleTopicNote": "Документ будет одной темой",
+    "expand": "Раскрыть",
+    "collapse": "Свернуть",
+    "partsPreviewTitle": "Структура частей конспекта",
+    "partTokens": "{tokens} токенов"
   },
   "questions": {
     "title": "Параметры генерации",
@@ -116,6 +123,7 @@
     "goalRefresh": "Освежить память",
     "goalExam": "Подготовка к экзамену",
     "goalPractice": "Применение на практике",
+    "goalUnderstand": "Понять тему",
     "notifyEmailLabel": "Прислать уведомление на почту по готовности",
     "confirmSpend": "Будет списано: {cost}. Остаток после запуска: {remaining}.",
     "startButton": "Запустить генерацию",
@@ -126,26 +134,31 @@
   },
   "progress": {
     "title": "Создаём материал",
-    "etaRemaining": "Оценка оставшегого времени: {seconds} сек.",
+    "etaRemaining": "Оценка оставшегося времени: {seconds} сек.",
     "stageLogTitle": "Журнал этапов",
     "partsTitle": "Готовность частей",
     "keyTermsTitle": "Ключевые термины",
     "partStatus": {
       "queued": "В очереди",
-      "generating": "Генерация...",
-      "ready": "Готово",
+      "mainPass": "Основной проход...",
+      "resolving": "Разрешение ссылок...",
+      "assembling": "Сборка...",
+      "published": "Опубликовано",
       "failed": "Сбой генерации"
     },
     "partFailedHint": "Не удалось сгенерировать часть. Повторная попытка не списывает генерации.",
-    "retryPartButton": "Повторить часть",
     "connectionLost": "Связь с сервером потеряна. Переподключаемся...",
+    "reconnecting": "Переподключение...",
     "openMaterialButton": "Открыть материал",
     "waitingForStages": "Ожидание этапов генерации...",
     "waitingForParts": "Ожидание частей...",
     "noKeyTermsYet": "Ключевые термины появятся по мере генерации.",
     "retryButton": "Повторить",
     "backToMaterials": "Вернуться к материалам",
-    "generationError": "Ошибка генерации"
+    "generationError": "Ошибка генерации",
+    "canClosePage": "Можно закрыть страницу — пришлём уведомление",
+    "documentLoadFailed": "Не удалось загрузить документ. Возможно, он был удален или у вас нет доступа.",
+    "fatalErrorMessage": "Произошла критическая ошибка: {code}"
   },
   "viewer": {
     "materialTitle": "Материал",

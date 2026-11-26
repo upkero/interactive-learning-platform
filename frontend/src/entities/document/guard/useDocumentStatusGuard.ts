@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import { useRouter, useSearchParams } from "@/shared/i18n/navigation-client";
+import { useRouter } from "@/shared/i18n/navigation-client";
 import { useDocument } from "../model/useDocument";
 import { isApiError } from "@/shared/api/errors";
 import type { MaterialStatus } from "./types";
@@ -59,8 +59,6 @@ export function useDocumentStatusGuard({
   useReplace = true,
 }: UseDocumentStatusGuardOptions): UseDocumentStatusGuardResult {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const locale = searchParams.get("locale") || "ru";
 
   const { data: document, isLoading, error } = useDocument(documentId);
 
@@ -77,20 +75,32 @@ export function useDocumentStatusGuard({
       hasRedirectedRef.current = true;
       onRedirect?.(currentStep, redirectStep);
 
-      const targetRoute = getRouteForStep(redirectStep, documentId);
-      const fullRoute = `/${locale}${targetRoute}`;
+      // For 'done' status, redirect to first published part or materials
+      let targetRoute: string;
+      if (redirectStep === "document" && document.status === "done") {
+        const firstPublishedPart = document.parts.find(
+          (p) => p.status === "published"
+        );
+        if (firstPublishedPart) {
+          targetRoute = `/parts/${firstPublishedPart.id}`;
+        } else {
+          targetRoute = "/materials";
+        }
+      } else {
+        targetRoute = getRouteForStep(redirectStep, documentId);
+      }
 
       if (useReplace) {
-        router.replace(fullRoute);
+        router.replace(targetRoute);
       } else {
-        router.push(fullRoute);
+        router.push(targetRoute);
       }
     }
   }, [
     document,
     isLoading,
     currentStep,
-    locale,
+    documentId,
     router,
     onRedirect,
     useReplace,
@@ -114,12 +124,10 @@ export function useDocumentStatusGuard({
  */
 export function useDocumentErrorRedirect() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const locale = searchParams.get("locale") || "ru";
 
   const redirectToMaterials = useCallback(() => {
-    router.push(`/${locale}/materials`);
-  }, [router, locale]);
+    router.push("/materials");
+  }, [router]);
 
   return { redirectToMaterials };
 }
