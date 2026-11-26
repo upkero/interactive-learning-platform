@@ -316,7 +316,13 @@ def test_commonmark_inline_code_masks_only_its_source_spans(example: str) -> Non
 def test_non_code_backticks_do_not_hide_inline_directives(example: str) -> None:
     text = example + "\n:widget[label]"
     assert len(extract_markers(text)[1]) == 1
-    assert sanitize_draft(draft(text, []), max_widgets=6).markdown.startswith(example + "\n\n")
+    cleaned = sanitize_draft(draft(text, []), max_widgets=6)
+    assert cleaned.markdown.startswith(example + "\n&#32;\n")
+    assert [token.type for token in MarkdownIt().parse(cleaned.markdown)] == [
+        "paragraph_open",
+        "inline",
+        "paragraph_close",
+    ]
 
 
 _SHARED_MARKDOWN = Path(__file__).resolve().parents[4] / "support" / "fixtures" / "main_pass" / "directives.md"
@@ -344,7 +350,7 @@ def test_shared_directive_fixtures(name: str, markers: list[str], issues: int, c
     assert [token.content for token in MarkdownIt().parse(cleaned.markdown) if token.type == "code_block"] == code
 
 
-@pytest.mark.parametrize(("name", "count"), [("inline-syntax", 2), ("preserved-urls", 1)])
+@pytest.mark.parametrize(("name", "count"), [("inline-syntax", 2), ("preserved-urls", 1), ("unquoted-brace", 1)])
 def test_shared_inline_cleanup(name: str, count: int) -> None:
     fixture = _SHARED_MARKDOWN.read_text(encoding="utf-8")
     section = fixture.split(f"<!-- case: {name} -->\n", 1)[1].split("\n<!-- case: ", 1)[0].strip("\n")
@@ -352,6 +358,32 @@ def test_shared_inline_cleanup(name: str, count: int) -> None:
     assert len(extract_markers(source)[1]) == count
     assert sanitize_draft(draft(source, []), max_widgets=6).markdown == expected + "\n" + "filler " * 40
     assert extract_markers(expected) == ([], [])
+
+
+def test_shared_fence_cleanup_retains_the_valid_leaf() -> None:
+    fixture = _SHARED_MARKDOWN.read_text(encoding="utf-8")
+    section = fixture.split("<!-- case: exposed-fence -->\n", 1)[1].split("\n<!-- case: ", 1)[0].strip("\n")
+    source, expected = section.split("\n<!-- cleaned -->\n")
+    cleaned = sanitize_draft(draft(source, [entry("w1")]), max_widgets=6)
+    assert cleaned.markdown == expected + "\n" + "filler " * 40
+    found, issues = extract_markers(cleaned.markdown)
+    assert [marker.ref for marker in found] == ["w1"]
+    assert not issues
+
+
+@pytest.mark.parametrize(
+    ("attribute", "remainder"),
+    [
+        ("{title={a}", ""),
+        ("{title=a{b{c}", ""),
+        ('{title="one" other="two"}', ""),
+        ('{title="one"other="two"}', '{title="one"other="two"}'),
+    ],
+)
+def test_inline_attributes_preserve_malformed_suffixes(attribute: str, remainder: str) -> None:
+    original = f"See :quiz[label]{attribute} and continue."
+    cleaned = sanitize_draft(draft(original, []), max_widgets=6)
+    assert cleaned.markdown.startswith(f"See {remainder} and continue.\n")
 
 
 @pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])

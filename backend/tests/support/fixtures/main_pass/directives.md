@@ -108,6 +108,26 @@ Refer to .
 
 Paragraph  after.
 
+<!-- case: unquoted-brace -->
+
+See :quiz[label]{title=a{b} and continue.
+<!-- cleaned -->
+See  and continue.
+
+<!-- case: exposed-fence -->
+
+:quiz[Example] ```text
+
+::widget{ref="w1"}
+
+This paragraph should stay visible.
+<!-- cleaned -->
+&#32; ```text
+
+::widget{ref="w1"}
+
+This paragraph should stay visible.
+
 <!-- case: preserved-urls -->
 
 [lesson](/guide/:quiz[example]) and <https://example.com/:quiz[ok]>.

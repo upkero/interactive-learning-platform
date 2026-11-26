@@ -21,10 +21,10 @@ _DIRECTIVE = re.compile(r'^::(widget|image|quiz)\{(ref|id)="([^"]+)"\}[ \t]*$')
 _CANDIDATE = re.compile(r"^[ \t]*(?:(?:>[ \t]*|(?:[-+*]|[0-9]{1,9}[.)])[ \t]+))*(:{2,}(?:widget|image|quiz)\b)")
 _INLINE_NAME = re.compile(r":(?:widget|image|quiz)(?![\w:-])")
 _INLINE_PREFIX = re.compile(r"(?<![\\:]):[a-z]{0,6}\Z")
-_ATTRIBUTE_VALUE = r"""(?:"[^"]*"|'[^']*'|[^ \t\n"'<>={`}}]+)"""
+_ATTRIBUTE_VALUE = r"""(?:(?:"[^"]*"|'[^']*')(?=[ \t\n}])|[^ \t\n"'<>=`}]+)"""
 _ATTRIBUTES = re.compile(
     r"\{(?>[ \t\n]*(?:[.#][^ \t\n.#\"'<>={`}}]+"
-    rf"|[\w:-][\w.:-]*(?:[ \t\n]*=[ \t\n]*{_ATTRIBUTE_VALUE})?))*[ \t\n]*\}}"
+    rf"|[\w-][\w.:-]*(?:[ \t\n]*=[ \t\n]*{_ATTRIBUTE_VALUE})?))*[ \t\n]*\}}"
 )
 _BLOCK = re.compile(
     r"(:{2,})([^\W_](?:[\w-]*[^\W_])?)"
@@ -132,13 +132,24 @@ def _inline_directive(state: StateInline, silent: bool) -> bool:
     return True
 
 
-def _inline_removals(token: Token, lines: list[str], offsets: list[int]) -> list[tuple[int, int, int]]:
+@dataclass(frozen=True, slots=True, order=True)
+class _Removal:
+    start: int
+    end: int
+    preserve_boundary: bool = False
+
+
+def _inline_removals(token: Token, lines: list[str], offsets: list[int]) -> list[tuple[_Removal, int]]:
     """Map directive spans from the inline buffer to the original Markdown."""
     if not token.map or not token.children:
         return []
     spans = [child.meta["source_span"] for child in token.children if child.type == "solver_inline_directive"]
     if not spans:
         return []
+    boundaries = [0, *(point for span in spans for point in span), len(token.content)]
+    has_surrounding_content = any(
+        token.content[boundaries[index] : boundaries[index + 1]].strip() for index in range(0, len(boundaries), 2)
+    )
     positions: list[tuple[int, int, int]] = []
     cursor = 0
     for number, content in enumerate(token.content.split("\n"), token.map[0]):
@@ -148,13 +159,20 @@ def _inline_removals(token: Token, lines: list[str], offsets: list[int]) -> list
         if column >= 0:
             positions.append((cursor + len(content) - len(plain), offsets[number] + column, number))
         cursor += len(content) + 1
-    result: list[tuple[int, int, int]] = []
+    result: list[tuple[_Removal, int]] = []
     for start, end in spans:
         first = bisect_right(positions, start, key=lambda point: point[0]) - 1
         last = bisect_right(positions, end - 1, key=lambda point: point[0]) - 1
         inline_start, original_start, number = positions[first]
         inline_end, original_end, _ = positions[last]
-        result.append((original_start + start - inline_start, original_end + end - inline_end, number))
+        result.append(
+            (
+                _Removal(
+                    original_start + start - inline_start, original_end + end - inline_end, has_surrounding_content
+                ),
+                number,
+            )
+        )
     return result
 
 
@@ -185,19 +203,23 @@ def _mask_inline_code(token: Token, lines: list[str], masked: list[str]) -> None
             masked[number] = lines[number][:start] + hidden + lines[number][start + len(plain) :]
 
 
-def _markdown_context(
-    markdown: str, lines: list[str], offsets: list[int]
-) -> tuple[set[int], dict[int, int], list[str], list[tuple[int, int, int]]]:
+def _markdown_parser() -> MarkdownIt:
     parser = MarkdownIt("commonmark")
     parser.block.ruler.before("paragraph", "solver_directive", _directive_block, {"alt": ["paragraph"]})
     parser.inline.ruler.at("backticks", _backtick_with_offsets)
     parser.inline.add_terminator_char(":")
     parser.inline.ruler.before("text", "solver_inline_directive", _inline_directive)
+    return parser
+
+
+def _markdown_context(
+    markdown: str, lines: list[str], offsets: list[int]
+) -> tuple[set[int], dict[int, int], list[str], list[tuple[_Removal, int]]]:
     code: set[int] = set()
     directives: dict[int, int] = {}
     masked = lines.copy()
-    inline_removals: list[tuple[int, int, int]] = []
-    for token in parser.parse(markdown):
+    inline_removals: list[tuple[_Removal, int]] = []
+    for token in _markdown_parser().parse(markdown):
         if token.map is None:
             continue
         number = token.map[0]
@@ -245,10 +267,10 @@ class Violation:
     key_term_index: int | None = None
 
 
-def _scan(markdown: str) -> tuple[list[Marker], list[Violation], list[tuple[int, int]]]:
+def _scan(markdown: str) -> tuple[list[Marker], list[Violation], list[_Removal]]:
     markers: list[Marker] = []
     issues: list[Violation] = []
-    removals: list[tuple[int, int]] = []
+    removals: list[_Removal] = []
     source = list(_source_lines(markdown))
     lines = [raw.rstrip("\r\n") for raw in source]
     offsets: list[int] = []
@@ -278,15 +300,15 @@ def _scan(markdown: str) -> tuple[list[Marker], list[Violation], list[tuple[int,
                         line=number,
                     )
                 )
-                removals.append((start + column, start + len(line)))
-    for start, end, index in inline_removals:
+                removals.append(_Removal(start + column, start + len(line)))
+    for removal, index in inline_removals:
         number = index + 1
         issues.append(
             Violation(
                 ViolationCode.INLINE_DIRECTIVE, f"line {number}: inline directives are not supported", line=number
             )
         )
-        removals.append((start, end))
+        removals.append(removal)
     return markers, issues, removals
 
 
@@ -459,7 +481,7 @@ def sanitize_draft(
                 valid = False
         if not valid or entry is None:
             # Leave the original line ending so adjacent prose and code stay separate.
-            removed.append((marker.start, marker.end))
+            removed.append(_Removal(marker.start, marker.end))
             continue
         used.add(marker.ref)
         if marker.kind in counts:
@@ -475,31 +497,7 @@ def sanitize_draft(
                 entry = entry.model_copy(update={"mode_hint": None})
             previous_widget = entry
         kept.append(entry)
-    markdown = draft.markdown
-    # A malformed block can overlap an inline directive found by CommonMark.
-    merged: list[tuple[int, int]] = []
-    for start, end in sorted(removed):
-        if merged and start < merged[-1][1]:
-            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
-        else:
-            merged.append((start, end))
-    for index in reversed(range(len(merged))):
-        start, end = merged[index]
-        # Remove the colons of a newly exposed marker; keep whitespace and surrounding text.
-        following = re.match(r"([ \t]*)::", markdown[end:])
-        replacement = ""
-        if following:
-            whitespace = following.group(1)
-            end += len(whitespace) + 2
-            replacement = whitespace
-        # Removing an inline directive can expose a literal name on its left,
-        # for example :quiz:widget[label]. Keep that literal escaped.
-        previous_end = merged[index - 1][1] if index else 0
-        prefix = _INLINE_PREFIX.search(markdown, max(previous_end, start - 8), start)
-        if prefix and _INLINE_NAME.match(prefix[0] + replacement + markdown[end : end + 8]):
-            start = prefix.start()
-            replacement = "\\" + prefix[0] + replacement
-        markdown = markdown[:start] + replacement + markdown[end:]
+    markdown = _remove_directives(draft.markdown, removed)
     try:
         return RecoveredPageDraft.model_validate(
             {
@@ -510,6 +508,54 @@ def sanitize_draft(
         )
     except ValidationError as exc:
         raise UnrecoverableDraftError("Sanitization cannot preserve the output schema") from exc
+
+
+def _markdown_structure(markdown: str) -> list[tuple[object, ...]]:
+    """Compare syntax that would change rendering, ignoring literal text nodes."""
+    structure: list[tuple[object, ...]] = []
+    for block in _markdown_parser().parse(markdown):
+        content = block.content if block.type in {"code_block", "fence", "solver_directive", "html_block"} else ""
+        structure.append((block.type, block.tag, content, block.info, block.hidden, block.attrs))
+        for inline in block.children or []:
+            if inline.type not in {"text", "text_special"}:
+                content = inline.content if inline.type in {"code_inline", "html_inline"} else ""
+                structure.append((inline.type, content, inline.attrs))
+    return structure
+
+
+def _remove_directives(markdown: str, removed: list[_Removal]) -> str:
+    # A malformed block can overlap an inline directive found by CommonMark.
+    merged: list[_Removal] = []
+    for removal in sorted(removed):
+        if merged and removal.start < merged[-1].end:
+            merged[-1] = _Removal(merged[-1].start, max(merged[-1].end, removal.end))
+        else:
+            merged.append(removal)
+    plain = _apply_removals(markdown, merged, guard_boundaries=False)
+    if any(removal.preserve_boundary for removal in merged):
+        # An entity renders as a space without making a literal delimiter active.
+        guarded = _apply_removals(markdown, merged, guard_boundaries=True)
+        if _markdown_structure(plain) != _markdown_structure(guarded):
+            return guarded
+    return plain
+
+
+def _apply_removals(markdown: str, removals: list[_Removal], *, guard_boundaries: bool) -> str:
+    for index in reversed(range(len(removals))):
+        removal = removals[index]
+        start, end = removal.start, removal.end
+        # Keep literal colons even when they would become a block directive.
+        follows_with_colons = re.match(r"[ \t]*::", markdown[end:])
+        replacement = "&#32;" if removal.preserve_boundary and (guard_boundaries or follows_with_colons) else ""
+        # Removing an inline directive can expose a literal name on its left,
+        # for example :quiz:widget[label]. Keep that literal escaped.
+        previous_end = removals[index - 1].end if index else 0
+        prefix = _INLINE_PREFIX.search(markdown, max(previous_end, start - 8), start)
+        if prefix and _INLINE_NAME.match(prefix[0] + replacement + markdown[end : end + 8]):
+            start = prefix.start()
+            replacement = "\\" + prefix[0] + replacement
+        markdown = markdown[:start] + replacement + markdown[end:]
+    return markdown
 
 
 class UnrecoverableDraftError(ValueError):

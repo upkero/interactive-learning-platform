@@ -64,6 +64,7 @@ function links(node) {
 for (const [name, count, urls] of [
   ["inline-syntax", 2, []],
   ["preserved-urls", 1, ["/guide/:quiz[example]", "https://example.com/:quiz[ok]"]],
+  ["unquoted-brace", 1, []],
 ]) {
   test("remark validates the shared cleanup example " + name, () => {
     const [source, cleaned] = cases.get(name).split("\n<!-- cleaned -->\n");
@@ -79,3 +80,15 @@ for (const [name, count, urls] of [
     assert.deepEqual(links(after), urls);
   });
 }
+
+test("remark keeps the widget and visible paragraph after inline cleanup", () => {
+  const [source, cleaned] = cases.get("exposed-fence").split("\n<!-- cleaned -->\n");
+  const before = parser.parse(source);
+  const after = parser.parse(cleaned);
+  assert.deepEqual(after.children.map((node) => node.type), before.children.map((node) => node.type));
+  const nodes = [];
+  collect(after, nodes);
+  assert.deepEqual(nodes, [["leafDirective", "widget"]]);
+  assert.equal(after.children[0].children[0].value.trimStart(), "```text");
+  assert.equal(after.children[2].children[0].value, "This paragraph should stay visible.");
+});

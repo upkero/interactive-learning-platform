@@ -323,6 +323,7 @@ async def test_inline_cleanup_does_not_create_a_dangling_marker() -> None:
     llm = FakeLLMClient(structured=[broken, broken])
     result = await _service(llm=llm, primitives=await _primitive_repo()).run(build_input())
     assert result.draft.directives == ()
+    assert '::widget{ref="w1"}' in result.draft.markdown
     assert extract_markers(result.draft.markdown) == ([], [])
 
 
@@ -474,3 +475,36 @@ async def test_inline_repair_keeps_link_destinations_and_autolinks() -> None:
     assert len(llm.requests) == 1
     assert (await service.run(build_input())).draft.markdown == text + "\n\nRefer to  or ."
     assert len(llm.requests) == 3
+
+
+@pytest.mark.parametrize(
+    "fragment",
+    [
+        ":quiz[Example] ```text",
+        ":quiz[Example] ~~~text",
+        ":quiz[Example]    indented text",
+        ":quiz[Example]\n    continuing the same paragraph",
+        ":quiz[Example] # literal heading",
+        ":quiz[Example] > literal quotation",
+        ":quiz[Example] 1. literal ordered list",
+        ":quiz[Example] <div>",
+        ":quiz[Example] [ref]: /lesson",
+        "Introductory text\n:quiz[Example] ---",
+        "**:quiz[Example]**",
+        "> :quiz[Example]    text inside a quote",
+        "- :quiz[Example] ~~~text",
+    ],
+)
+async def test_inline_repair_does_not_create_new_markdown_blocks(fragment: str) -> None:
+    text = "body " * 50 + "\n\n" + fragment + '\n\n::widget{ref="w1"}\n\nThis paragraph should stay visible.'
+    before = PageDraft(markdown=text, directives=[_draft().directives[0]], key_terms=["body"] * 5)
+    llm = FakeLLMClient(structured=[before, before])
+    result = await _service(llm=llm, primitives=await _primitive_repo()).run(build_input())
+
+    assert len(llm.requests) == 2
+    assert tuple(directive.ref for directive in result.draft.directives) == ("w1",)
+    assert result.draft.markdown.endswith('::widget{ref="w1"}\n\nThis paragraph should stay visible.')
+    assert ":quiz" not in result.draft.markdown
+    assert [token.type for token in MarkdownIt().parse(result.draft.markdown)] == [
+        token.type for token in MarkdownIt().parse(text)
+    ]
