@@ -273,3 +273,38 @@ async def test_inline_cleanup_does_not_create_a_dangling_marker() -> None:
     from src.app.services.solver.main_pass.directive_parser import extract_markers
 
     assert extract_markers(result.draft.markdown) == ([], [])
+
+
+@pytest.mark.parametrize("spaces", [" ", "  ", "\t", "   "])
+async def test_inline_cleanup_cannot_expose_indented_marker(spaces: str) -> None:
+    text = "body " * 50 + f'\n:widget[label]{spaces}::widget{{ref="w1"}}'
+    broken = PageDraft(markdown=text, directives=[], key_terms=["body"] * 5)
+    llm = FakeLLMClient(structured=[broken, broken])
+    result = await _service(llm=llm, primitives=await _primitive_repo()).run(build_input())
+    assert len(llm.requests) == 2
+    assert result.draft.directives == ()
+    assert "body " * 50 in result.draft.markdown
+    from src.app.services.solver.main_pass.directive_parser import extract_markers
+
+    assert extract_markers(result.draft.markdown) == ([], [])
+
+
+async def test_list_directive_repaired_and_tab_code_preserved() -> None:
+    text = "body " * 50 + '\n\n100. Example\n\n     ::quiz{ref="q1"}\n\nAfter list.\n\n\t::widget{ref="w1"}'
+    broken = PageDraft(markdown=text, directives=[], key_terms=["body"] * 5)
+    llm = FakeLLMClient(structured=[broken, broken])
+    result = await _service(llm=llm, primitives=await _primitive_repo()).run(build_input())
+    assert len(llm.requests) == 2
+    assert '::quiz{ref="q1"}' not in result.draft.markdown
+    assert '\t::widget{ref="w1"}' in result.draft.markdown
+    assert result.draft.directives == ()
+
+
+async def test_tab_indented_code_does_not_trigger_retry() -> None:
+    text = "body " * 50 + '\n\n\t::widget{ref="w1"}'
+    draft = PageDraft(markdown=text, directives=[], key_terms=["body"] * 5)
+    llm = FakeLLMClient(structured=[draft])
+    result = await _service(llm=llm, primitives=await _primitive_repo()).run(build_input())
+    assert len(llm.requests) == 1
+    assert result.draft.markdown == text
+    assert result.draft.directives == ()

@@ -6,17 +6,16 @@ from dataclasses import dataclass
 from itertools import pairwise
 from typing import cast
 
+from markdown_it import MarkdownIt
 from pydantic import ValidationError
 
 from src.app.contracts.solver.main_pass import DirectiveKind
 from src.app.services.solver.main_pass.directives import Directive, PageDraft
 
-_FENCE = re.compile(r"^ {0,3}(?P<fence>`{3,}|~{3,})(?P<info>.*)$")
 _DIRECTIVE = re.compile(r'^::(widget|image|quiz)\{(ref|id)="([^"]+)"\}\s*$')
 _CANDIDATE = re.compile(r"^\s*(?:>\s*)*(?:(?:[-+*]|\d+[.)])\s+)?:{2,3}(widget|image|quiz)\b")
 _INLINE = re.compile(r"(?<![\\:]):(?:widget|image|quiz)(?:\[[^\]\r\n]*\](?:\{[^}\r\n]*\})?|\{[^}\r\n]*\})")
 _CODE_SPAN = re.compile(r"(`+)(?!`)(.*?)(?<!`)\1(?!`)")
-_BLOCKQUOTE = re.compile(r"^ {0,3}(?:> ?)+")
 
 
 def _inline_directives(line: str) -> list[re.Match[str]]:
@@ -24,10 +23,13 @@ def _inline_directives(line: str) -> list[re.Match[str]]:
     return list(_INLINE.finditer(masked))
 
 
-def _fence_match(line: str) -> tuple[re.Match[str] | None, int]:
-    quote = _BLOCKQUOTE.match(line)
-    depth = quote.group().count(">") if quote else 0
-    return _FENCE.match(line[quote.end() :] if quote else line), depth
+def _code_lines(markdown: str) -> set[int]:
+    """Use CommonMark block context to distinguish code from list content."""
+    lines: set[int] = set()
+    for token in MarkdownIt("commonmark").parse(markdown):
+        if token.type in {"fence", "code_block"} and token.map is not None:
+            lines.update(range(token.map[0] + 1, token.map[1] + 1))
+    return lines
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,39 +44,14 @@ class Marker:
 def extract_markers(markdown: str) -> tuple[list[Marker], list[str]]:
     markers: list[Marker] = []
     issues: list[str] = []
-    fence: tuple[str, int, int] | None = None
     offset = 0
-    previous_blank = True
-    indented_code = False
+    code_lines = _code_lines(markdown)
     for number, raw in enumerate(markdown.splitlines(keepends=True), 1):
         line = raw.rstrip("\r\n")
         start = offset
         offset += len(raw)
-        match, depth = _fence_match(line)
-        if fence and depth < fence[2]:
-            fence = None
-        if fence:
-            if (
-                depth == fence[2]
-                and match
-                and match["fence"][0] == fence[0]
-                and len(match["fence"]) >= fence[1]
-                and not match["info"].strip()
-            ):
-                fence = None
+        if number in code_lines:
             continue
-        if match:
-            fence = (match["fence"][0], len(match["fence"]), depth)
-            continue
-        if not line.strip():
-            previous_blank = True
-            continue
-        if line.startswith("    ") and (previous_blank or indented_code):
-            indented_code = True
-            previous_blank = False
-            continue
-        indented_code = False
-        previous_blank = False
         if _inline_directives(line):
             issues.append(f"line {number}: inline directives are not supported")
         if not _CANDIDATE.match(line):
@@ -192,42 +169,25 @@ def sanitize_draft(
         kept.append(entry)
     # Remove malformed directive lines too, so the frontend cannot render unknown slots.
     offset = 0
-    previous_blank = True
-    indented_code = False
+    code_lines = _code_lines(draft.markdown)
     marker_lines = {m.line for m in markers}
-    fence: tuple[str, int, int] | None = None
     for number, raw in enumerate(draft.markdown.splitlines(keepends=True), 1):
         line = raw.rstrip("\r\n")
-        match, depth = _fence_match(line)
-        if fence and depth < fence[2]:
-            fence = None
-        if fence:
-            if (
-                depth == fence[2]
-                and match
-                and match["fence"][0] == fence[0]
-                and len(match["fence"]) >= fence[1]
-                and not match["info"].strip()
-            ):
-                fence = None
-        elif match:
-            fence = (match["fence"][0], len(match["fence"]), depth)
-        elif not line.strip():
-            previous_blank = True
-        elif line.startswith("    ") and (previous_blank or indented_code):
-            indented_code = True
-            previous_blank = False
-        elif number not in marker_lines and _CANDIDATE.match(line):
-            removed.append((offset, offset + len(raw)))
-        elif number not in marker_lines:
-            removed.extend((offset + item.start(), offset + item.end()) for item in _inline_directives(line))
-            previous_blank = False
-            indented_code = False
+        if number not in code_lines and number not in marker_lines:
+            if _CANDIDATE.match(line):
+                removed.append((offset, offset + len(raw)))
+            else:
+                removed.extend((offset + item.start(), offset + item.end()) for item in _inline_directives(line))
         offset += len(raw)
     markdown = draft.markdown
     for start, end in sorted(removed, reverse=True):
-        # Escape the following colon if removing inline syntax would expose a leaf directive.
-        replacement = "\\" if "\n" not in markdown[start:end] and markdown[end:].startswith("::") else ""
+        # Remove the colons of a newly exposed marker; keep whitespace and surrounding text.
+        following = re.match(r"([ \t]*)::", markdown[end:]) if "\n" not in markdown[start:end] else None
+        replacement = ""
+        if following:
+            whitespace = following.group(1)
+            end += len(whitespace) + 2
+            replacement = whitespace
         markdown = markdown[:start] + replacement + markdown[end:]
     try:
         return PageDraft.model_validate(

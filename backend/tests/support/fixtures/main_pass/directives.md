@@ -31,3 +31,13 @@ Indented code (after a blank line):
     ::widget{ref="w1"}
 
 Invalid inline directive: Example :widget{ref="w1"} here.
+
+A directive inside an ordered list remains a directive, not indented code:
+
+100. Example
+
+     ::quiz{ref="q1"}
+
+A tab after a blank line starts an indented code block:
+
+	::widget{ref="w1"}

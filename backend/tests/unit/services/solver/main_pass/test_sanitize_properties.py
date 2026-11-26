@@ -41,6 +41,7 @@ def draft_cases(draw: st.DrawFn) -> tuple[PageDraft, set[str], int, int]:
                     '::image{id="img_1" extra="x"}',
                     "text :quiz[content]",
                     ' :widget[label]::widget{ref="w1"}',
+                    ':widget[label] ::widget{ref="w1"}',
                 ]
             ),
             max_size=4,

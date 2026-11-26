@@ -209,3 +209,20 @@ def test_indented_code_and_inline_attribute_directive() -> None:
     markers, issues = extract_markers(text)
     assert markers == []
     assert len(issues) == 1 and "inline" in issues[0]
+
+
+def test_ordered_list_indentation_is_not_code() -> None:
+    text = 'Paragraph.\n\n100. Example\n\n     ::quiz{ref="q1"}'
+    markers, issues = extract_markers(text)
+    assert markers == []
+    assert len(issues) == 1
+    cleaned = sanitize_draft(draft(text, []), max_widgets=6)
+    assert "100. Example" in cleaned.markdown
+    assert '::quiz{ref="q1"}' not in cleaned.markdown
+    assert extract_markers(cleaned.markdown) == ([], [])
+
+
+def test_tab_indented_code_is_preserved() -> None:
+    text = 'Paragraph.\n\n\t::widget{ref="w1"}'
+    assert extract_markers(text) == ([], [])
+    assert text in sanitize_draft(draft(text, []), max_widgets=6).markdown
