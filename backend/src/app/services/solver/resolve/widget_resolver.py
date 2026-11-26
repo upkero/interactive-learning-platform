@@ -57,7 +57,7 @@ class WidgetResolver:
         one candidate within the distance threshold. The order of results
         matches the order of the input directives.
         """
-        limit = k if k is not None and k > 0 else self._settings.main_pass_max_widgets
+        limit = k if k is not None and k > 0 else self._settings.max_widgets_per_part
         resolutions: list[WidgetResolution] = []
         unresolved = 0
 

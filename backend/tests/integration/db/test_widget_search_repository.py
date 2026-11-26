@@ -182,7 +182,12 @@ async def test_service_fills_short_primitive_result_without_filter(session_facto
     other = await _config_widget(
         session_factory,
         primitive_id="key-terms",
-        descriptions=[("other", _unit(0.0, 1.0))],
+        descriptions=[("other", _unit(1.0, 1.0))],
+    )
+    await _config_widget(
+        session_factory,
+        primitive_id="key-terms",
+        descriptions=[("out of range", _unit(0.0, 1.0))],
     )
     embeddings = _FakeEmbeddingService(_unit())
     search = WidgetSearch(
@@ -195,7 +200,7 @@ async def test_service_fills_short_primitive_result_without_filter(session_facto
         widget_repo=WidgetRepository,
     )
 
-    candidates = await search.search("intent", k=2, primitive_hint="three-frame")
+    candidates = await search.search("intent", k=3, primitive_hint="three-frame")
 
     assert embeddings.calls == [["intent"]]
     assert [candidate.widget_id for candidate in candidates] == [filtered, other]

@@ -1,28 +1,25 @@
 """Unit tests of the widget resolver (story 2.4)."""
 
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID, uuid4
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.app.contracts.solver.main_pass import DirectiveKind, MainPassDirective
+from src.app.contracts.solver.main_pass import DirectiveKind, MainPassDirective, PrimitiveMode
 from src.app.contracts.solver.widget_candidate import WidgetCandidate, WidgetMatch
 from src.app.contracts.widgets import WidgetKind, WidgetRecord, WidgetStatus
 from src.app.core.settings.solver import SolverSettings
 from src.app.services.solver.library.primitive_catalog import PrimitiveCatalog
 from src.app.services.solver.resolve.widget_resolver import WidgetResolver
 from src.app.services.solver.search.widget_search import WidgetSearch
+from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
 from tests.support.fakes.repositories.widgets import FakeWidgetRepository
 
-
-class FakeSession:
-    async def __aenter__(self) -> "FakeSession":
-        return self
-
-    async def __aexit__(self, *args: object) -> None:
-        return None
+pytestmark = pytest.mark.unit
 
 
 class FakeEmbeddingService:
@@ -59,10 +56,8 @@ class ScriptedSearchRepository:
         return self.responses.pop(0) if self.responses else []
 
 
-def _settings(**overrides: object) -> SolverSettings:
-    values: dict[str, object] = {"search_overfetch": 40, "search_max_distance": 0.55}
-    values.update(overrides)
-    return SolverSettings(_env_file=None, **values)  # type: ignore[arg-type]
+def _settings(*, max_widgets_per_part: int = 6) -> SolverSettings:
+    return SolverSettings(_env_file=None, max_widgets_per_part=max_widgets_per_part)
 
 
 def _make_widget_record(widget_id: UUID) -> WidgetRecord:
@@ -78,7 +73,7 @@ def _make_widget_record(widget_id: UUID) -> WidgetRecord:
         canonical_id=None,
         version=1,
         created_from_part_id=None,
-        created_at=None,
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
 
@@ -133,16 +128,17 @@ def _directive(
     kind: DirectiveKind = "widget",
     intent: str = "show a chart",
     primitive_hint: str | None = None,
-    mode_hint: str | None = None,
-    image_alias: str | None = None,
+    mode_hint: PrimitiveMode | None = None,
+    image_id: str | None = None,
 ) -> MainPassDirective:
     return MainPassDirective(
         ref=ref,
         kind=kind,
         intent=intent,
+        source_span="Quoted source text.",
         primitive_hint=primitive_hint,
         mode_hint=mode_hint,
-        image_alias=image_alias,
+        image_id=image_id,
     )
 
 
@@ -202,7 +198,7 @@ async def test_non_widget_directives_are_skipped() -> None:
     )
 
     directives = [
-        _directive("i1", kind="image", intent="show image", image_alias="img-1"),
+        _directive("img_1", kind="image", intent="show image", image_id="img_1"),
         _directive("q1", kind="quiz", intent="ask question"),
         _directive("w1", kind="widget", intent="show widget"),
     ]
@@ -259,7 +255,7 @@ async def test_default_k_comes_from_settings() -> None:
     resolver, repository, _ = _resolver(
         responses=[[WidgetMatch(widget_id=w1, matched_text="a", distance=0.1)]],
         widgets=[_make_widget_record(w1)],
-        settings=_settings(main_pass_max_widgets=2),
+        settings=_settings(max_widgets_per_part=2),
     )
 
     directives = [_directive("w1", intent="intent")]

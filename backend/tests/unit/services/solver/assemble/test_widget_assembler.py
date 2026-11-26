@@ -4,33 +4,24 @@ from collections.abc import Sequence
 from typing import cast
 from uuid import UUID, uuid4
 
+import pytest
+from pydantic import JsonValue
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.app.contracts.solver.widget_assembly import WidgetAssembly
 from src.app.contracts.solver.widget_candidate import WidgetCandidate
 from src.app.contracts.solver.widget_resolution import WidgetResolution
-from src.app.contracts.widgets import UsageStatus, WidgetKind
+from src.app.contracts.widgets import UsageStatus, WidgetKind, WidgetUsageDraft, WidgetUsageRecord
 from src.app.core.settings.solver import SolverSettings
-from src.app.interfaces.repositories.widgets import WidgetUsageRepositoryProtocol
 from src.app.services.solver.assemble.widget_assembler import WidgetAssembler
+from tests.support.fakes.db.session import FakeSession
 from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
+from tests.support.fakes.repositories.widgets import FakeWidgetUsageRepository
+
+pytestmark = pytest.mark.unit
 
 
-class FakeSession:
-    async def __aenter__(self) -> "FakeSession":
-        return self
-
-    async def __aexit__(self, *args: object) -> None:
-        return None
-
-
-def _settings(**overrides: object) -> SolverSettings:
-    values: dict[str, object] = {}
-    values.update(overrides)
-    return SolverSettings(_env_file=None, **values)  # type: ignore[arg-type]
-
-
-def _candidate(widget_id: UUID, params: dict | None = None, distance: float = 0.1) -> WidgetCandidate:
+def _candidate(widget_id: UUID, params: dict[str, JsonValue] | None = None, distance: float = 0.1) -> WidgetCandidate:
     return WidgetCandidate(
         widget_id=widget_id,
         kind=WidgetKind.CONFIG,
@@ -43,7 +34,7 @@ def _candidate(widget_id: UUID, params: dict | None = None, distance: float = 0.
     )
 
 
-def _resolution(widget_id: UUID, ref: str = "w1", params: dict | None = None) -> WidgetResolution:
+def _resolution(widget_id: UUID, ref: str = "w1", params: dict[str, JsonValue] | None = None) -> WidgetResolution:
     return WidgetResolution(
         ref=ref,
         widget_id=widget_id,
@@ -51,50 +42,30 @@ def _resolution(widget_id: UUID, ref: str = "w1", params: dict | None = None) ->
     )
 
 
-class _UsageRecord:
-    def __init__(self, usage_id: UUID, directive_ref: str, widget_id: UUID, position: int) -> None:
-        self.id = usage_id
-        self.directive_ref = directive_ref
-        self.widget_id = widget_id
-        self.position = position
-        self.status = UsageStatus.PENDING
-
-
-class ScriptedWidgetUsageRepository(WidgetUsageRepositoryProtocol):
-    """Records calls and returns scripted usage records in draft order."""
+class ScriptedWidgetUsageRepository(FakeWidgetUsageRepository):
+    """Records calls and returns usage records in draft order."""
 
     def __init__(self) -> None:
-        self.calls: list[tuple[UUID, list]] = []
+        super().__init__()
+        self.calls: list[tuple[UUID, list[WidgetUsageDraft]]] = []
 
-    async def get(self, usage_id: UUID):
-        raise NotImplementedError
-
-    async def find_accessible_part(self, widget_id: UUID, user_id: UUID, part_id: UUID | None):
-        raise NotImplementedError
-
-    async def add_many(self, part_id: UUID, usages: Sequence) -> list:
+    async def add_many(self, part_id: UUID, usages: Sequence[WidgetUsageDraft]) -> list[WidgetUsageRecord]:
         self.calls.append((part_id, list(usages)))
-        return [
-            _UsageRecord(usage_id=uuid4(), directive_ref=u.directive_ref, widget_id=u.widget_id, position=u.position)
-            for u in usages
-        ]
-
-    async def set_status(self, usage_id: UUID, status: UsageStatus):
-        raise NotImplementedError
+        return await super().add_many(part_id, usages)
 
 
 def _assembler(
     *,
-    settings: SolverSettings | None = None,
     metrics: RecordingMetricsCollector | None = None,
+    session: FakeSession | None = None,
 ) -> tuple[WidgetAssembler, ScriptedWidgetUsageRepository, RecordingMetricsCollector]:
     repository = ScriptedWidgetUsageRepository()
     collector = metrics or RecordingMetricsCollector()
-    session_factory = cast(async_sessionmaker[AsyncSession], lambda: FakeSession())
+    session_factory = cast(async_sessionmaker[AsyncSession], lambda: session or FakeSession())
     assembler = WidgetAssembler(
         session_factory=session_factory,
         widget_usages=lambda _session: repository,
-        settings=settings or _settings(),
+        settings=SolverSettings(_env_file=None),
         metrics=collector,
     )
     return assembler, repository, collector
@@ -104,7 +75,8 @@ async def test_assemble_creates_one_usage_per_resolution() -> None:
     w1 = uuid4()
     w2 = uuid4()
     part_id = uuid4()
-    assembler, repository, _ = _assembler()
+    session = FakeSession()
+    assembler, repository, _ = _assembler(session=session)
 
     resolutions = [_resolution(w1, "w1", {"a": 1}), _resolution(w2, "w2", {"b": 2})]
     assembly = await assembler.assemble(part_id=part_id, resolutions=resolutions)
@@ -114,6 +86,7 @@ async def test_assemble_creates_one_usage_per_resolution() -> None:
     assert len(assembly.placements) == 2
     assert [p.ref for p in assembly.placements] == ["w1", "w2"]
     assert all(isinstance(p.usage_id, UUID) for p in assembly.placements)
+    assert session.committed == 1
 
     [call] = repository.calls
     assert call[0] == part_id

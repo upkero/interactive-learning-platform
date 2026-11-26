@@ -42,11 +42,12 @@ facts, examples or numbers that the source does not contain. Match the reader pr
 novice needs simple, concrete questions; advanced needs precision and edge cases.
 
 Supported types:
-- single_choice — one correct option among 4; give correct_id and why_wrong for each distractor.
-- multiple_choice — 2-4 correct options among 5-6; give correct_ids and why_wrong for each distractor.
+- single_choice — one correct option among 4; give correct_id and why_wrong entries for the distractors.
+- multiple_choice — 2-4 correct options among 5-6; give correct_ids and why_wrong entries for the distractors.
 - ordering — 4-5 items to put in the correct order; give correct_order and common_mistakes.
 - numeric — one numeric answer with unit; give answer, tolerance and common_mistakes.
 
+Every why_wrong entry gives the distractor id and its explanation.
 Answer with the JSON object required by the response schema."""
 
 _QUIZ_VERIFY_SYSTEM = """You are the quiz verifier of Grasp. You receive a quiz question, its answer key
@@ -68,6 +69,11 @@ class _QuizOption(BaseModel):
     text: str = Field(min_length=1, max_length=200)
 
 
+class _DistractorExplanation(BaseModel):
+    id: str = Field(min_length=1, max_length=8)
+    explanation: str = Field(min_length=1, max_length=300)
+
+
 class _GeneratedQuiz(BaseModel):
     """Structured LLM output for one generated quiz (public data + answer key)."""
 
@@ -83,26 +89,33 @@ class _GeneratedQuiz(BaseModel):
     answer: float | None = Field(default=None, allow_inf_nan=False)
     tolerance: float = Field(default=0.01, ge=0, allow_inf_nan=False)
     explanation: str | None = Field(default=None, max_length=300)
-    why_wrong: dict[str, str] | None = None
+    why_wrong: list[_DistractorExplanation] | None = None
     common_mistakes: list[str] | None = None
 
     @model_validator(mode="after")
     def _validate_key_fields(self) -> "_GeneratedQuiz":
         kind = self.type
+        options = self.options or []
+        option_ids = {option.id for option in options}
+        if len(option_ids) != len(options):
+            raise ValueError("option ids must be unique")
         if kind == "single_choice":
-            if not self.options or len(self.options) < 2:
+            if len(options) < 2:
                 raise ValueError("single_choice needs at least 2 options")
-            if self.correct_id is None or self.correct_id not in {o.id for o in self.options}:
+            if self.correct_id not in option_ids:
                 raise ValueError("single_choice needs a valid correct_id")
         elif kind == "multiple_choice":
-            if not self.options or len(self.options) < 2:
+            if len(options) < 2:
                 raise ValueError("multiple_choice needs at least 2 options")
-            if not self.correct_ids or not set(self.correct_ids) <= {o.id for o in self.options}:
+            if not self.correct_ids or not set(self.correct_ids) <= option_ids:
                 raise ValueError("multiple_choice needs valid correct_ids")
+            if len(set(self.correct_ids)) != len(self.correct_ids):
+                raise ValueError("multiple_choice correct_ids must be unique")
         elif kind == "ordering":
-            if not self.options or len(self.options) < 2:
+            if len(options) < 2:
                 raise ValueError("ordering needs at least 2 items")
-            if not self.correct_order or set(self.correct_order) != {o.id for o in self.options}:
+            order = self.correct_order or []
+            if len(order) != len(options) or set(order) != option_ids:
                 raise ValueError("ordering needs a complete correct_order")
         elif kind == "numeric":
             if self.answer is None:
@@ -228,18 +241,19 @@ class QuizGenerator:
     def _to_draft(ref: str, quiz: _GeneratedQuiz) -> QuizDraft:
         key = quiz.key or f"q{uuid4().hex[:8]}"
         options = [{"id": o.id, "text": o.text} for o in quiz.options] if quiz.options is not None else None
+        why_wrong = {item.id: item.explanation for item in quiz.why_wrong} if quiz.why_wrong is not None else None
         answer_key: dict[str, object] = {}
         if quiz.type == "single_choice":
             answer_key = {
                 "correct_id": quiz.correct_id,
                 "explanation": quiz.explanation,
-                "why_wrong": quiz.why_wrong,
+                "why_wrong": why_wrong,
             }
         elif quiz.type == "multiple_choice":
             answer_key = {
                 "correct_ids": quiz.correct_ids,
                 "explanation": quiz.explanation,
-                "why_wrong": quiz.why_wrong,
+                "why_wrong": why_wrong,
             }
         elif quiz.type == "ordering":
             answer_key = {

@@ -66,7 +66,7 @@ class WidgetAssembler:
 
         started = perf_counter()
         try:
-            async with self._session_factory() as session:
+            async with self._session_factory() as session, session.begin():
                 repo = self._widget_usages(session)
                 drafts = [
                     WidgetUsageDraft(
