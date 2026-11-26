@@ -69,6 +69,7 @@ class MarkdownStructure:
     images: tuple[Image, ...]
     blocks: tuple[Block, ...]
     markers: tuple[tuple[int, str], ...]
+    protected_blocks: tuple[Block, ...] = ()
 
 
 def _find_images(
@@ -128,11 +129,14 @@ def parse_markdown(markdown: str, *, extract_images: bool = False) -> MarkdownSt
     images: list[Image] = []
     markers: list[tuple[int, str]] = []
     blocks: list[Block] = []
+    protected_blocks: list[Block] = []
     row_columns: dict[int, int] = {}
     for index, token in enumerate(tokens):
         if token.map is None:
             continue
         first, last = token.map
+        if token.type in {"fence", "code_block", "table_open"}:
+            protected_blocks.append(Block(offsets[first], offsets[last], token.type))
         if token.level == 0 and token.type != "inline" and token.nesting != -1:
             plain = token.type == "paragraph_open" and all(
                 child.type in {"text", "softbreak"} for child in tokens[index + 1].children or ()
@@ -160,7 +164,7 @@ def parse_markdown(markdown: str, *, extract_images: bool = False) -> MarkdownSt
             images.extend(
                 _find_images(token, lines, offsets, blocks[-1], row_columns, table=previous.tag in {"td", "th"})
             )
-    return MarkdownStructure(tuple(headings), tuple(images), tuple(blocks), tuple(markers))
+    return MarkdownStructure(tuple(headings), tuple(images), tuple(blocks), tuple(markers), tuple(protected_blocks))
 
 
 def escape_image_markers(markdown: str, structure: MarkdownStructure) -> str:

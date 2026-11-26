@@ -25,6 +25,23 @@ def test_empty_source_range_has_no_paragraphs() -> None:
     assert split_by_paragraphs("outside range", 3, 3, COUNTER, DEFAULT_LIMITS) == []
 
 
+@pytest.mark.parametrize("nested", [False, True])
+def test_large_fence_remains_intact_with_following_image(nested: bool) -> None:
+    indent = "    " if nested else ""
+    prefix = "- A list item\n\n" if nested else ""
+    code = indent + "```python\n" + (indent + "print('hello world')\n\n") * 800 + indent + "```\n"
+    marker = '\n::image{id="img_1"}\n'
+    markdown = prefix + code + ("" if nested else marker)
+    maximum = COUNTER.count(code) + 1
+    assert maximum < COUNTER.count(markdown)
+    tree = build_topic_tree(markdown, COUNTER)
+    plans = split_document(tree, {"0"}, markdown, COUNTER, SplitLimits(maximum // 2, maximum))
+    assert len(plans) >= 2
+    assert "".join(plan.markdown for plan in plans) == markdown
+    assert sum(code in plan.markdown for plan in plans) == 1
+    assert all(plan.tokens <= maximum for plan in plans)
+
+
 def test_selected_child_keeps_the_chapter_id_and_parent_selection_deduplicates() -> None:
     markdown = "# Root\n\nText.\n\n## Child\n\nMore text."
     tree = build_topic_tree(markdown, COUNTER)

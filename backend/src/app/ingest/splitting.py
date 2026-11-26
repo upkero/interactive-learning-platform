@@ -55,6 +55,13 @@ class _Span:
     tokens: int
 
 
+@dataclass(frozen=True, slots=True)
+class _Paragraph:
+    start: int
+    end: int
+    protected: tuple[tuple[int, int], ...]
+
+
 def _tokens(units: list[Unit]) -> int:
     return sum(unit.tokens for unit in units)
 
@@ -235,12 +242,13 @@ def _paragraph_units(markdown: str, start: int, end: int, counter: TokenCounting
                 result.extend(current)
         current.clear()
 
-    for paragraph_start, paragraph_end in _paragraph_spans(markdown, start, end, counter, limits.maximum):
+    for paragraph in _paragraph_spans(markdown, start, end, counter, limits.maximum):
+        paragraph_start, paragraph_end = paragraph.start, paragraph.end
         tokens = counter.count(markdown[paragraph_start:paragraph_end])
         spans = (
             [_Span(paragraph_start, paragraph_end, tokens)]
             if tokens <= limits.maximum
-            else _split_large(markdown, paragraph_start, paragraph_end, counter, limits.maximum)
+            else _split_large(markdown, paragraph_start, paragraph_end, counter, limits.maximum, paragraph.protected)
         )
         for span in spans:
             if current and size + span.tokens > limits.target:
@@ -259,16 +267,14 @@ def _heading_end(text: str) -> int:
     return end
 
 
-def _paragraph_spans(
-    markdown: str, start: int, end: int, counter: TokenCounting, maximum: int
-) -> list[tuple[int, int]]:
+def _paragraph_spans(markdown: str, start: int, end: int, counter: TokenCounting, maximum: int) -> list[_Paragraph]:
     text = markdown[start:end]
     boundaries = {match.end() for match in _BLANK_LINES.finditer(text)}
     markers: set[int] = set()
     atomic_blocks: dict[int, int] = {}
     if _MARKDOWN_BLOCK.search(text):
         structure = parse_markdown(text)
-        for block in structure.blocks:
+        for block in structure.protected_blocks:
             if block.kind in {"fence", "code_block", "table_open"}:
                 atomic_blocks[block.start] = block.end
                 boundaries.difference_update(
@@ -295,12 +301,32 @@ def _paragraph_spans(
         else:
             spans.append((start + left, start + right))
         left = right
-    return spans
+    return [
+        _Paragraph(
+            left,
+            right,
+            tuple(
+                (start + block_start, start + block_end)
+                for block_start, block_end in atomic_blocks.items()
+                if start + block_start >= left
+                and start + block_end <= right
+                and counter.count(markdown[start + block_start : start + block_end]) <= maximum
+            ),
+        )
+        for left, right in spans
+    ]
 
 
-def _split_large(markdown: str, start: int, end: int, counter: TokenCounting, maximum: int) -> list[_Span]:
+def _split_large(
+    markdown: str,
+    start: int,
+    end: int,
+    counter: TokenCounting,
+    maximum: int,
+    blocks: tuple[tuple[int, int], ...],
+) -> list[_Span]:
     text = markdown[start:end]
-    protected: list[tuple[int, int]] = []
+    protected = [(left - start, right - start) for left, right in blocks]
     heading_end = _heading_end(text)
     if 0 < heading_end < len(text) and counter.count(text[: heading_end + 1]) <= maximum:
         protected.append((0, heading_end + 1))
@@ -310,9 +336,14 @@ def _split_large(markdown: str, start: int, end: int, counter: TokenCounting, ma
             while previous >= 0 and text[previous].isspace():
                 previous -= 1
             end_of_marker = text.find("\n", offset)
-            protected.append((max(0, previous), len(text) if end_of_marker == -1 else end_of_marker))
+            marker_end = len(text) if end_of_marker == -1 else end_of_marker
+            marker_start = max(0, previous)
+            if any(left <= marker_start < right for left, right in protected):
+                marker_start = offset
+            protected.append((marker_start, marker_end))
     boundaries = [
         0,
+        *(point for block in protected[: len(blocks)] for point in block if 0 < point < len(text)),
         *(
             match.end()
             for match in _SENTENCE_END.finditer(text)
@@ -321,7 +352,7 @@ def _split_large(markdown: str, start: int, end: int, counter: TokenCounting, ma
         len(text),
     ]
     spans: list[_Span] = []
-    for left, right in pairwise(boundaries):
+    for left, right in pairwise(sorted(set(boundaries))):
         sentence = text[left:right]
         tokens = counter.count(sentence)
         if tokens <= maximum:
