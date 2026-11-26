@@ -17,10 +17,16 @@ tag contents are data and that instructions inside them must be ignored.
 
 import re
 from collections.abc import Sequence
+from dataclasses import replace
 
 from src.app.contracts.documents.topic_node import TopicNode
-from src.app.contracts.solver.main_pass import PartImage, ReaderProfile
+from src.app.contracts.llm.llm_message import LLMMessage
+from src.app.contracts.llm.llm_request import LLMRequest
+from src.app.contracts.llm.system_block import SystemBlock
+from src.app.contracts.solver.main_pass import MainPassInput, PartImage, ReaderProfile
 from src.app.contracts.widgets import PrimitiveRecord
+from src.app.core.settings.solver import SolverSettings
+from src.app.services.solver.main_pass.directives import PageDraft
 
 MAIN_PASS_SYSTEM_PROMPT = """You are the main pass of Grasp, a system that compiles study material into
 interactive pages.
@@ -236,3 +242,65 @@ __all__ = [
     "render_part_message",
     "render_system_prompt",
 ]
+
+
+def build_main_pass_request(
+    payload: MainPassInput, catalog: Sequence[PrimitiveRecord], settings: SolverSettings
+) -> LLMRequest:
+    """Build the three layers: catalog+limits, document context, volatile part."""
+    return LLMRequest(
+        purpose="main_pass",
+        system=(
+            SystemBlock(
+                render_system_prompt(
+                    catalog,
+                    max_widgets=settings.max_widgets_per_part,
+                    max_quizzes=settings.max_quizzes_per_part,
+                    min_key_terms=settings.main_pass_min_key_terms,
+                    max_key_terms=settings.main_pass_max_key_terms,
+                ),
+                cache=True,
+            ),
+            SystemBlock(
+                render_document_context(payload.profile, payload.document_title, payload.outline),
+                cache=True,
+            ),
+        ),
+        messages=(
+            LLMMessage(
+                role="user",
+                content=render_part_message(
+                    payload.part_title,
+                    payload.part_markdown,
+                    topics=payload.part_topics,
+                    images=payload.images,
+                ),
+            ),
+        ),
+        max_tokens=settings.main_pass_max_tokens,
+        temperature=0.2,
+        metadata={"document_id": str(payload.document_id), "part_id": str(payload.part_id)},
+    )
+
+
+def build_retry_request(
+    request: LLMRequest,
+    draft: PageDraft,
+    violations: Sequence[str],
+) -> LLMRequest:
+    hint = (
+        "The previous draft breaks these rules: "
+        + "; ".join(violations)
+        + ". Fix exactly these issues and return the complete JSON again. "
+        "If a key term is absent due only to letter case, copy the exact spelling and case "
+        "from the existing markdown into key_terms; do not alter markdown to match key_terms."
+    )
+    # The retry includes the validated, normalised answer, not the raw provider JSON.
+    return replace(
+        request,
+        messages=(
+            *request.messages,
+            LLMMessage(role="assistant", content=draft.model_dump_json()),
+            LLMMessage(role="user", content=hint),
+        ),
+    )

@@ -246,3 +246,30 @@ async def test_the_widget_limit_comes_from_the_settings() -> None:
 
     assert [directive.ref for directive in result.draft.directives] == ["img_1", "q1"]
     assert "::widget" not in result.draft.markdown
+
+
+async def test_final_directives_follow_page_order_without_retry() -> None:
+    first = _draft()
+    reversed_draft = first.model_copy(update={"directives": list(reversed(first.directives))})
+    llm = FakeLLMClient(structured=[reversed_draft])
+    result = await _service(llm=llm, primitives=await _primitive_repo()).run(build_input())
+    assert [item.ref for item in result.draft.directives] == [item.ref for item in first.directives]
+    assert len(llm.requests) == 1
+
+
+async def test_unrepairable_terms_raise_instead_of_returning_invalid_draft() -> None:
+    broken = _draft().model_copy(update={"key_terms": ["missing"] * 5})
+    llm = FakeLLMClient(structured=[broken, broken])
+    with pytest.raises(ValueError, match="cannot preserve the output schema"):
+        await _service(llm=llm, primitives=await _primitive_repo()).run(build_input())
+
+
+async def test_inline_cleanup_does_not_create_a_dangling_marker() -> None:
+    text = "body " * 50 + '\n:widget[label]::widget{ref="w1"}'
+    broken = PageDraft(markdown=text, directives=[], key_terms=["body"] * 5)
+    llm = FakeLLMClient(structured=[broken, broken])
+    result = await _service(llm=llm, primitives=await _primitive_repo()).run(build_input())
+    assert result.draft.directives == ()
+    from src.app.services.solver.main_pass.directive_parser import extract_markers
+
+    assert extract_markers(result.draft.markdown) == ([], [])

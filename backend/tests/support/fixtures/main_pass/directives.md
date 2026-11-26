@@ -25,3 +25,9 @@ Invalid examples:
 ::widget{ref="w4" mode_hint="watch"}
 
 The ordinary text `::before inserts content` is not a directive.
+
+Indented code (after a blank line):
+
+    ::widget{ref="w1"}
+
+Invalid inline directive: Example :widget{ref="w1"} here.

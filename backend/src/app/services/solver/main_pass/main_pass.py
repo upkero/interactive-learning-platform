@@ -17,14 +17,11 @@ structured warning, so the prompt can be tuned on the corpus.
 
 import logging
 from collections.abc import Callable, Sequence
-from dataclasses import replace
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.app.contracts.llm.llm_message import LLMMessage
 from src.app.contracts.llm.llm_request import LLMRequest
-from src.app.contracts.llm.system_block import SystemBlock
 from src.app.contracts.solver.main_pass import (
     MainPassInput,
     MainPassResult,
@@ -38,14 +35,15 @@ from src.app.interfaces.observability.metrics_collector import MetricsCollector
 from src.app.interfaces.repositories.widgets import PrimitiveRepositoryProtocol
 from src.app.llm.structured import call_structured
 from src.app.services.solver.main_pass.directive_parser import (
+    UnrecoverableDraftError,
     check_draft,
+    extract_markers,
     sanitize_draft,
 )
 from src.app.services.solver.main_pass.directives import PageDraft
 from src.app.services.solver.main_pass.prompts import (
-    render_document_context,
-    render_part_message,
-    render_system_prompt,
+    build_main_pass_request,
+    build_retry_request,
 )
 from src.app.services.solver.main_pass.source_spans import locate_spans
 
@@ -95,6 +93,16 @@ class MainPassService:
                         max_quizzes=self._settings.max_quizzes_per_part,
                         image_aliases={image.alias for image in payload.images},
                     )
+            # Never return an inconsistent or schema-invalid draft.
+            try:
+                draft = PageDraft.model_validate(draft.model_dump())
+            except ValueError as exc:
+                raise UnrecoverableDraftError("Invalid final draft") from exc
+            if self._violations(draft, payload):
+                raise UnrecoverableDraftError("Unresolved final draft violations")
+            markers, _ = extract_markers(draft.markdown)
+            by_ref = {directive.ref: directive for directive in draft.directives}
+            draft = draft.model_copy(update={"directives": [by_ref[m.ref] for m in markers]})
             result = MainPassResult(
                 draft=draft.to_draft(),
                 spans=locate_spans(draft.directives, payload.part_markdown),
@@ -116,64 +124,10 @@ class MainPassService:
             return await self._primitives(session).list_all()
 
     def _request(self, payload: MainPassInput, catalog: Sequence[PrimitiveRecord]) -> LLMRequest:
-        """Build the three layers: catalog+limits, document context, volatile part."""
-        settings = self._settings
-        return LLMRequest(
-            purpose="main_pass",
-            system=(
-                SystemBlock(
-                    render_system_prompt(
-                        catalog,
-                        max_widgets=settings.max_widgets_per_part,
-                        max_quizzes=settings.max_quizzes_per_part,
-                        min_key_terms=settings.main_pass_min_key_terms,
-                        max_key_terms=settings.main_pass_max_key_terms,
-                    ),
-                    cache=True,
-                ),
-                SystemBlock(
-                    render_document_context(payload.profile, payload.document_title, payload.outline),
-                    cache=True,
-                ),
-            ),
-            messages=(
-                LLMMessage(
-                    role="user",
-                    content=render_part_message(
-                        payload.part_title,
-                        payload.part_markdown,
-                        topics=payload.part_topics,
-                        images=payload.images,
-                    ),
-                ),
-            ),
-            max_tokens=settings.main_pass_max_tokens,
-            temperature=0.2,
-            metadata={"document_id": str(payload.document_id), "part_id": str(payload.part_id)},
-        )
+        return build_main_pass_request(payload, catalog, self._settings)
 
-    def _retry_request(
-        self,
-        request: LLMRequest,
-        draft: PageDraft,
-        violations: Sequence[str],
-    ) -> LLMRequest:
-        hint = (
-            "The previous draft breaks these rules: "
-            + "; ".join(violations)
-            + ". Fix exactly these issues and return the complete JSON again. "
-            "If a key term is absent due only to letter case, copy the exact spelling and case "
-            "from the existing markdown into key_terms; do not alter markdown to match key_terms."
-        )
-        # The retry includes the validated, normalised answer, not the raw provider JSON.
-        return replace(
-            request,
-            messages=(
-                *request.messages,
-                LLMMessage(role="assistant", content=draft.model_dump_json()),
-                LLMMessage(role="user", content=hint),
-            ),
-        )
+    def _retry_request(self, request: LLMRequest, draft: PageDraft, violations: Sequence[str]) -> LLMRequest:
+        return build_retry_request(request, draft, violations)
 
     def _violations(self, draft: PageDraft, payload: MainPassInput) -> list[str]:
         return check_draft(

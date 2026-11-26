@@ -1,0 +1,25 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="0" skipped="0" tests="11" time="156.030" timestamp="2026-11-26T14:51:03.583552+03:00"><testcase classname="tests.integration.solver.test_main_pass_cache_live" name="test_two_parts_reuse_the_document_prefix" time="18.749"><system-out>--------------------------------- Captured Out ---------------------------------
+Second request usage: TokenUsage(input_tokens=294, output_tokens=888, cache_read_input_tokens=2786, cache_creation_input_tokens=0)
+
+</system-out></testcase><testcase classname="tests.integration.solver.test_main_pass_injection" name="test_an_injected_fragment_does_not_change_the_instructions[role change]" time="13.631"><system-out>--------------------------------- Captured Out ---------------------------------
+
+</system-out></testcase><testcase classname="tests.integration.solver.test_main_pass_injection" name="test_an_injected_fragment_does_not_change_the_instructions[marker request]" time="13.330"><system-out>--------------------------------- Captured Out ---------------------------------
+
+</system-out></testcase><testcase classname="tests.integration.solver.test_main_pass_injection" name="test_an_injected_fragment_does_not_change_the_instructions[tag close]" time="15.603"><system-out>--------------------------------- Captured Out ---------------------------------
+
+</system-out></testcase><testcase classname="tests.integration.solver.test_main_pass_injection" name="test_an_injected_fragment_does_not_change_the_instructions[document tag close]" time="13.481"><system-out>--------------------------------- Captured Out ---------------------------------
+
+</system-out></testcase><testcase classname="tests.integration.solver.test_main_pass_injection" name="test_an_injected_fragment_does_not_change_the_instructions[html script]" time="14.062"><system-out>--------------------------------- Captured Out ---------------------------------
+
+</system-out></testcase><testcase classname="tests.integration.solver.test_main_pass_injection" name="test_an_injected_fragment_does_not_change_the_instructions[extra directives]" time="13.571"><system-out>--------------------------------- Captured Out ---------------------------------
+
+</system-out></testcase><testcase classname="tests.integration.solver.test_main_pass_injection" name="test_an_injected_fragment_does_not_change_the_instructions[schema override]" time="15.232"><system-out>--------------------------------- Captured Out ---------------------------------
+
+</system-out></testcase><testcase classname="tests.integration.solver.test_main_pass_injection" name="test_an_injected_fragment_does_not_change_the_instructions[comment instruction]" time="11.960"><system-out>--------------------------------- Captured Out ---------------------------------
+
+</system-out></testcase><testcase classname="tests.integration.solver.test_main_pass_injection" name="test_an_injected_fragment_does_not_change_the_instructions[role reassignment]" time="13.683"><system-out>--------------------------------- Captured Out ---------------------------------
+
+</system-out></testcase><testcase classname="tests.integration.solver.test_main_pass_injection" name="test_an_injected_fragment_does_not_change_the_instructions[forced key terms]" time="12.548"><system-out>--------------------------------- Captured Out ---------------------------------
+
+</system-out></testcase></testsuite></testsuites>

@@ -185,6 +185,7 @@ async def run_cases(
     schema_retry_cases = 0
     alternation_violations = 0
     recorded_first_answers = 0
+    clean_first_cases = 0
     for case in cases:
         recorder.reset()
         before = len(metrics.answers)
@@ -214,6 +215,13 @@ async def run_cases(
                 recorded_first_answers += 1
                 issues = classify_first_draft(recorder.first_draft, case.payload, settings)
                 alternation_violations += int(bool(issues["alternation"]))
+                if (
+                    case.id not in failures
+                    and not recorder.schema_retry
+                    and not issues["alternation"]
+                    and not issues["other"]
+                ):
+                    clean_first_cases += 1
                 if case.id in failures:
                     partial = {
                         "model": model,
@@ -229,6 +237,7 @@ async def run_cases(
     violations = metrics.answers.count("violations")
     summary = {
         "cases": len(cases),
+        "clean_first_cases": clean_first_cases,
         "completed": len(cases) - len(failures),
         "failures": failures,
         "first_schema_valid_answers": len(metrics.answers),
@@ -244,6 +253,11 @@ async def run_cases(
     }
     (outputs / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return summary
+
+
+def acceptance_passed(summary: dict[str, Any], problems: list[str]) -> bool:
+    """At least four cases must succeed on the first attempt, including schema validation."""
+    return not summary["failures"] and not problems and summary["clean_first_cases"] >= 4
 
 
 async def _run(outputs: Path) -> int:
@@ -286,7 +300,7 @@ async def _run(outputs: Path) -> int:
         await client.close()
     problems = check_reference_parts(outputs=outputs)
     print(json.dumps({"summary": summary, "term_problem_count": len(problems)}, ensure_ascii=False, indent=2))
-    return int(bool(summary["failures"] or problems))
+    return int(not acceptance_passed(summary, problems))
 
 
 def main() -> int:

@@ -6,13 +6,15 @@ from dataclasses import dataclass
 from itertools import pairwise
 from typing import cast
 
+from pydantic import ValidationError
+
 from src.app.contracts.solver.main_pass import DirectiveKind
 from src.app.services.solver.main_pass.directives import Directive, PageDraft
 
 _FENCE = re.compile(r"^ {0,3}(?P<fence>`{3,}|~{3,})(?P<info>.*)$")
 _DIRECTIVE = re.compile(r'^::(widget|image|quiz)\{(ref|id)="([^"]+)"\}\s*$')
 _CANDIDATE = re.compile(r"^\s*(?:>\s*)*(?:(?:[-+*]|\d+[.)])\s+)?:{2,3}(widget|image|quiz)\b")
-_INLINE = re.compile(r"(?<![\\:]):(?:widget|image|quiz)\[[^\]\r\n]*(?:\](?:\{[^}\r\n]*\})?|$)")
+_INLINE = re.compile(r"(?<![\\:]):(?:widget|image|quiz)(?:\[[^\]\r\n]*\](?:\{[^}\r\n]*\})?|\{[^}\r\n]*\})")
 _CODE_SPAN = re.compile(r"(`+)(?!`)(.*?)(?<!`)\1(?!`)")
 _BLOCKQUOTE = re.compile(r"^ {0,3}(?:> ?)+")
 
@@ -42,6 +44,8 @@ def extract_markers(markdown: str) -> tuple[list[Marker], list[str]]:
     issues: list[str] = []
     fence: tuple[str, int, int] | None = None
     offset = 0
+    previous_blank = True
+    indented_code = False
     for number, raw in enumerate(markdown.splitlines(keepends=True), 1):
         line = raw.rstrip("\r\n")
         start = offset
@@ -62,6 +66,15 @@ def extract_markers(markdown: str) -> tuple[list[Marker], list[str]]:
         if match:
             fence = (match["fence"][0], len(match["fence"]), depth)
             continue
+        if not line.strip():
+            previous_blank = True
+            continue
+        if line.startswith("    ") and (previous_blank or indented_code):
+            indented_code = True
+            previous_blank = False
+            continue
+        indented_code = False
+        previous_blank = False
         if _inline_directives(line):
             issues.append(f"line {number}: inline directives are not supported")
         if not _CANDIDATE.match(line):
@@ -179,6 +192,8 @@ def sanitize_draft(
         kept.append(entry)
     # Remove malformed directive lines too, so the frontend cannot render unknown slots.
     offset = 0
+    previous_blank = True
+    indented_code = False
     marker_lines = {m.line for m in markers}
     fence: tuple[str, int, int] | None = None
     for number, raw in enumerate(draft.markdown.splitlines(keepends=True), 1):
@@ -197,18 +212,34 @@ def sanitize_draft(
                 fence = None
         elif match:
             fence = (match["fence"][0], len(match["fence"]), depth)
+        elif not line.strip():
+            previous_blank = True
+        elif line.startswith("    ") and (previous_blank or indented_code):
+            indented_code = True
+            previous_blank = False
         elif number not in marker_lines and _CANDIDATE.match(line):
             removed.append((offset, offset + len(raw)))
         elif number not in marker_lines:
             removed.extend((offset + item.start(), offset + item.end()) for item in _inline_directives(line))
+            previous_blank = False
+            indented_code = False
         offset += len(raw)
     markdown = draft.markdown
     for start, end in sorted(removed, reverse=True):
-        markdown = markdown[:start] + markdown[end:]
-    return draft.model_copy(
-        update={
-            "markdown": markdown,
-            "directives": kept,
-            "key_terms": [term for term in draft.key_terms if term in markdown],
-        }
-    )
+        # Escape the following colon if removing inline syntax would expose a leaf directive.
+        replacement = "\\" if "\n" not in markdown[start:end] and markdown[end:].startswith("::") else ""
+        markdown = markdown[:start] + replacement + markdown[end:]
+    try:
+        return PageDraft.model_validate(
+            {
+                "markdown": markdown,
+                "directives": kept,
+                "key_terms": [term for term in draft.key_terms if term in markdown],
+            }
+        )
+    except ValidationError as exc:
+        raise UnrecoverableDraftError("Sanitization cannot preserve the output schema") from exc
+
+
+class UnrecoverableDraftError(ValueError):
+    """The draft cannot be repaired without inventing content."""

@@ -35,7 +35,13 @@ def draft_cases(draw: st.DrawFn) -> tuple[PageDraft, set[str], int, int]:
     malformed = draw(
         st.lists(
             st.sampled_from(
-                ['  ::quiz{ref="q1"}', ':::widget{ref="w1"}', '::image{id="img_1" extra="x"}', "text :quiz[content]"]
+                [
+                    '  ::quiz{ref="q1"}',
+                    ':::widget{ref="w1"}',
+                    '::image{id="img_1" extra="x"}',
+                    "text :quiz[content]",
+                    ' :widget[label]::widget{ref="w1"}',
+                ]
             ),
             max_size=4,
         )
@@ -67,4 +73,5 @@ def test_sanitizer_invariants(case: tuple[PageDraft, set[str], int, int]) -> Non
         )
         == []
     )
+    assert PageDraft.model_validate(cleaned.model_dump()) == cleaned
     assert sanitize_draft(cleaned, image_aliases=aliases, max_widgets=widgets, max_quizzes=quizzes) == cleaned

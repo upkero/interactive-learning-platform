@@ -111,6 +111,7 @@ async def test_two_parts_reuse_the_document_prefix() -> None:
     assert first_call.request.system == second_call.request.system
     assert all(block.cache for block in second_call.request.system)
     assert second_call.usage is not None, "Provider did not return usage for the second part's first request."
+    print(f"Second request usage: {second_call.usage}")
     assert second_call.usage.cache_read_input_tokens > 0, (
         f"The second part did not read cached tokens: {second_call.usage}. "
         "Check model support, prefix minimum and provider cache settings."

@@ -1,0 +1,16 @@
+{
+  "model": "anthropic/claude-sonnet-5.5",
+  "generated_at": "2026-11-26T11:54:08.139071+00:00",
+  "prompt_sha256": "bd7ab085d3e872b616765b13852ec072fdd2296955904b3159155f29e640b148",
+  "tests": 11,
+  "passed": 11,
+  "failures": 0,
+  "cache_second_request": {
+    "input_tokens": 294,
+    "output_tokens": 888,
+    "cache_read_input_tokens": 2786,
+    "cache_creation_input_tokens": 0
+  },
+  "command": "pytest tests/integration/solver -m live -q",
+  "note": "The cache check confirms a positive cached prefix; it does not isolate the second cache block."
+}

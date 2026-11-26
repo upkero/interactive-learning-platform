@@ -7,7 +7,7 @@ from typing import cast
 
 import pytest
 
-from evals.main_pass_live import FirstAnswerMetrics, FirstDraftRecorder, load_cases, run_cases
+from evals.main_pass_live import FirstAnswerMetrics, FirstDraftRecorder, acceptance_passed, load_cases, run_cases
 from evals.term_check import check_reference_parts
 from src.app.contracts.llm.llm_message import LLMMessage
 from src.app.contracts.llm.llm_request import LLMRequest
@@ -113,3 +113,10 @@ async def test_runner_writes_snapshots_and_reports_failures(tmp_path: Path) -> N
             prompt_version="test",
             settings=settings,
         )
+
+
+def test_acceptance_requires_four_clean_cases_and_no_other_failures() -> None:
+    assert acceptance_passed({"failures": {}, "clean_first_cases": 4}, [])
+    assert not acceptance_passed({"failures": {}, "clean_first_cases": 3}, [])
+    assert not acceptance_passed({"failures": {"case": "error"}, "clean_first_cases": 4}, [])
+    assert not acceptance_passed({"failures": {}, "clean_first_cases": 4}, ["missing term"])

@@ -152,10 +152,8 @@ def test_sanitize_removes_dangling_duplicates_unknown_and_excess() -> None:
 
 def test_empty_after_sanitizing_does_not_throw() -> None:
     broken = PageDraft.model_construct(markdown='::widget{ref="w1"}', directives=[], key_terms=["missing"])
-    cleaned = sanitize_draft(broken, max_widgets=0)
-    assert cleaned.markdown == ""
-    assert cleaned.directives == []
-    assert cleaned.key_terms == []
+    with pytest.raises(ValueError, match="cannot preserve the output schema"):
+        sanitize_draft(broken, max_widgets=0)
 
 
 def test_blockquote_directives_are_reported_and_removed() -> None:
@@ -204,3 +202,10 @@ def test_unclosed_quoted_fence_ends_when_leaving_quote() -> None:
     markers, issues = extract_markers(text)
     assert issues == []
     assert [marker.ref for marker in markers] == ["q1"]
+
+
+def test_indented_code_and_inline_attribute_directive() -> None:
+    text = 'Paragraph.\n\n    ::widget{ref="w1"}\n\nExample :widget{ref="w1"} here.'
+    markers, issues = extract_markers(text)
+    assert markers == []
+    assert len(issues) == 1 and "inline" in issues[0]
