@@ -19,6 +19,7 @@ from src.app.core.settings.quota import QuotaSettings, get_quota_settings
 from src.app.core.settings.reports import ReportsSettings, get_reports_settings
 from src.app.core.settings.sandbox import SandboxSettings, get_sandbox_settings
 from src.app.core.settings.smtp import get_smtp_settings
+from src.app.core.settings.solver import SolverSettings, get_solver_settings
 from src.app.core.settings.storage import get_storage_settings
 from src.app.core.settings.upload import get_upload_settings
 from src.app.db.parsing_lease import PostgresParsingLease
@@ -77,11 +78,13 @@ from src.app.services.quota.quota_service import QuotaService
 from src.app.services.reports.report_service import ReportService
 from src.app.services.sharing.sharing_service import SharingService
 from src.app.services.solver.library.library_normalizer import LibraryNormalizer
+from src.app.services.solver.library.primitive_catalog import PrimitiveCatalog
 from src.app.services.solver.pipeline.part_recovery import PartRecovery
 from src.app.services.solver.pipeline.stub_pipeline import StubPipeline
 from src.app.services.solver.pipeline.watchdog import Watchdog
 from src.app.services.solver.search.embedding_service import EmbeddingService
 from src.app.services.solver.search.instrumented_embedding_service import InstrumentedEmbeddingService
+from src.app.services.solver.search.widget_search import WidgetSearch
 from src.app.services.users.profile_service import ProfileService
 from src.app.storage.s3_object_storage_client import S3ObjectStorageClient, build_ping_client, build_s3_client
 from src.app.tasks.dispatcher import CeleryTaskDispatcher
@@ -343,6 +346,10 @@ class ApplicationContainer:
         return get_embeddings_settings()
 
     @cached_property
+    def solver_settings(self) -> SolverSettings:
+        return get_solver_settings()
+
+    @cached_property
     def embeddings_redis(self) -> aioredis.Redis:
         """Dedicated cache database: flushing it must not touch Celery."""
         client: aioredis.Redis = aioredis.Redis.from_url(self.embeddings_settings.cache_redis_url)
@@ -359,6 +366,22 @@ class ApplicationContainer:
                 batch_size=settings.batch_size,
                 ttl_seconds=settings.cache_ttl_seconds,
             ),
+            metrics=self.metrics_collector,
+        )
+
+    @cached_property
+    def widget_search(self) -> WidgetSearch:
+        """Widget search by intent (story 2.3).
+
+        ``PrimitiveCatalog`` is empty until the primitives catalog is synced
+        (story 2.4), so an unknown ``primitive_hint`` is ignored and the
+        search falls back to the unfiltered neighbourhood.
+        """
+        return WidgetSearch(
+            session_factory=self.session_factory,
+            embeddings=self.embedding_service,
+            catalog=PrimitiveCatalog(),
+            settings=self.solver_settings,
             metrics=self.metrics_collector,
         )
 
