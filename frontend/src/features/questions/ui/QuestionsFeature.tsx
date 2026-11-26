@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "@/shared/i18n/navigation-client";
 import { useTranslations } from "next-intl";
 import { useStartGeneration, usePlan } from "@/features/questions/api";
@@ -54,7 +54,18 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
   const updatePreferencesMutation = useUpdatePreferences();
 
   // Get plan data for selected topics
-  const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([]);
+  const topicsParam = searchParams.get("topics") ?? "";
+  const selectedTopicIds = useMemo(
+    () => topicsParam.split(",").filter(Boolean),
+    [topicsParam]
+  );
+  const topicsPath = `/documents/${documentId}/topics`;
+  const selectedTopicsQuery = new URLSearchParams(
+    topicsParam ? { topics: topicsParam } : undefined
+  ).toString();
+  const topicsHref = selectedTopicsQuery
+    ? `${topicsPath}?${selectedTopicsQuery}`
+    : topicsPath;
   const planQuery = usePlan(
     documentId,
     selectedTopicIds.length > 0 ? selectedTopicIds : null
@@ -73,21 +84,6 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
     currentStep: "questions",
   });
 
-  // Read selected topic IDs from URL on mount
-  useEffect(() => {
-    const topicsParam = searchParams.get("topics");
-    if (topicsParam) {
-      try {
-        const ids = topicsParam.split(",").filter((id) => id.length > 0);
-        if (ids.length > 0) {
-          setSelectedTopicIds(ids);
-        }
-      } catch {
-        // Invalid format, ignore
-      }
-    }
-  }, [documentId, searchParams]);
-
   // Initialize form data from user's last_answers
   const [formData, setFormData] = useState<FormData>({
     level: "intermediate",
@@ -97,7 +93,7 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<ApiError["code"] | null>(null);
   const inFlightRef = useRef(false);
 
   // Initialize form from meQuery data when available
@@ -136,8 +132,8 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
   );
 
   const handleBack = useCallback(() => {
-    router.push(`/documents/${documentId}/topics`);
-  }, [router, documentId]);
+    router.push(topicsHref);
+  }, [router, topicsHref]);
 
   const handleSubmit = useCallback(async () => {
     if (!canSubmit) return;
@@ -178,21 +174,13 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
       // Success - navigate to progress page
       router.replace(`/documents/${documentId}/progress`);
     } catch (error: unknown) {
-      if (error instanceof ApiError) {
-        if (error.code === "quota_exceeded") {
-          // Redirect back to topics with error flag
-          router.replace(
-            `/documents/${documentId}/topics?error=quota_exceeded`
-          );
-        } else if (error.code === "processing_limit_reached") {
-          // Stay on page, show error
-          setSubmitError(tErrors("processing_limit_reached"));
-        } else {
-          // Other errors - show error, stay on page
-          setSubmitError(tErrors(error.code));
-        }
+      if (error instanceof ApiError && error.code === "quota_exceeded") {
+        void quotaQuery.refetch();
+        const query = new URLSearchParams(selectedTopicsQuery);
+        query.set("error", "quota_exceeded");
+        router.replace(`${topicsPath}?${query.toString()}`);
       } else {
-        setSubmitError(tErrors("unknown_error"));
+        setSubmitError(error instanceof ApiError ? error.code : "unknown_error");
       }
     } finally {
       inFlightRef.current = false;
@@ -206,7 +194,9 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
     meQuery.data,
     router,
     selectedTopicIds,
-    tErrors,
+    quotaQuery,
+    selectedTopicsQuery,
+    topicsPath,
     updatePreferencesMutation,
   ]);
 
@@ -249,7 +239,7 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
           <div className={styles.emptyState} role="alert">
             <p className={styles.emptyMessage}>{t("noTopicsSelected")}</p>
             <ActionLink
-              href={`/documents/${documentId}/topics`}
+              href={topicsHref}
               variant="primary"
               onClick={handleBack}
             >
@@ -419,14 +409,19 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
       {submitError && (
         <div className={styles.errorSurface} role="alert">
           <Surface>
-            <p className={styles.submitError}>{submitError}</p>
+            <p className={styles.submitError}>{tErrors(submitError)}</p>
+            {submitError === "document_not_ready" && (
+              <ActionLink href={topicsHref} variant="secondary">
+                {t("backToTopics")}
+              </ActionLink>
+            )}
           </Surface>
         </div>
       )}
 
       <div className={styles.pageActions}>
         <ActionLink
-          href={`/documents/${documentId}/topics`}
+          href={topicsHref}
           variant="secondary"
           onClick={handleBack}
           disabled={isSubmitting}

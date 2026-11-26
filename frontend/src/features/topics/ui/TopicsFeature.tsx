@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "@/shared/i18n/navigation-client";
 import { useTranslations } from "next-intl";
 import { useDebouncedValue } from "@/shared/lib/use-debounced-value";
@@ -25,17 +25,33 @@ export function TopicsFeature({ documentId }: { documentId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+    () => new Set((searchParams.get("topics") ?? "").split(",").filter(Boolean))
+  );
+  const selectedTopicIds = useMemo(() => Array.from(selectedIds), [selectedIds]);
 
   const topicsQuery = useTopics(documentId);
   const debouncedSelectedIds = useDebouncedValue<string[]>(
-    Array.from(selectedIds),
+    selectedTopicIds,
     300
   );
   const planQuery = usePlan(
     documentId,
     debouncedSelectedIds.length > 0 ? debouncedSelectedIds : null
   );
+
+  useEffect(() => {
+    const selected = debouncedSelectedIds.join(",");
+    if (selected === (searchParams.get("topics") ?? "")) return;
+
+    const params = new URLSearchParams(searchParams.toString());
+    if (selected) params.set("topics", selected);
+    else params.delete("topics");
+    const query = params.toString();
+    router.replace(`/documents/${documentId}/topics${query ? `?${query}` : ""}`, {
+      scroll: false,
+    });
+  }, [debouncedSelectedIds, documentId, router, searchParams]);
 
   // Centralized status guard - topics step allows 'parsed' status
   const {

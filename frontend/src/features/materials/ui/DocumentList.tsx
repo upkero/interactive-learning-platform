@@ -231,23 +231,23 @@ function DocumentRow({ doc, format }: DocumentRowProps) {
           )}
         </Link>
       </td>
-      <td className={styles.cell}>
+      <td className={styles.cell} data-label={t("partsLabel")}>
         <span className={styles.partsCount}>
           {doc.parts_published}/{doc.parts_total}
         </span>
       </td>
-      <td className={styles.cell}>
+      <td className={styles.cell} data-label={t("statusLabel")}>
         <span className={`${styles.statusBadge} ${styles[statusStyle]}`}>
           {statusLabel}
         </span>
       </td>
-      <td className={styles.cell}>
+      <td className={styles.cell} data-label={t("roleLabel")}>
         <span className={styles.roleBadge}>{roleLabel}</span>
       </td>
-      <td className={styles.cell}>
+      <td className={styles.cell} data-label={t("createdAtLabel")}>
         <time dateTime={doc.updated_at}>{formattedDate}</time>
       </td>
-      <td className={styles.cell}>
+      <td className={styles.cell} data-label={t("actionsLabel")}>
         <div className={styles.actions}>
           <Link
             href={route}

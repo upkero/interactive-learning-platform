@@ -284,3 +284,43 @@
     animation: none;
   }
 }
+
+@media (max-width: 640px) {
+  .table,
+  .table tbody {
+    display: block;
+  }
+
+  .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .row {
+    display: grid;
+    gap: var(--g-space-2);
+    margin: var(--g-space-2);
+    padding: var(--g-space-3);
+    border: var(--g-hairline) solid var(--g-color-border);
+    border-radius: var(--g-radius-lg);
+  }
+
+  .cell {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--g-space-2);
+    padding: 0;
+    border: 0;
+    white-space: normal;
+  }
+
+  .cell[data-label]::before {
+    content: attr(data-label);
+    color: var(--g-color-text-secondary);
+  }
+}
