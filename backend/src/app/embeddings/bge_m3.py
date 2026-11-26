@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from src.app.exceptions.embeddings import EmbeddingConfigurationError
 
 BGE_M3_MODEL = "BAAI/bge-m3"
+BGE_M3_DIMENSION = 1024
 
 
 class BgeM3Embedder:
@@ -32,7 +33,7 @@ class BgeM3Embedder:
 
     @property
     def dimension(self) -> int:
-        return 1024
+        return BGE_M3_DIMENSION
 
     def embed(self, texts: Sequence[str]) -> list[list[float]]:
         if not texts:
@@ -41,4 +42,4 @@ class BgeM3Embedder:
         return [[float(value) for value in vector] for vector in vectors]
 
 
-__all__ = ["BGE_M3_MODEL", "BgeM3Embedder"]
+__all__ = ["BGE_M3_DIMENSION", "BGE_M3_MODEL", "BgeM3Embedder"]

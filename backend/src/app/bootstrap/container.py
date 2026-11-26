@@ -22,7 +22,8 @@ from src.app.core.settings.storage import get_storage_settings
 from src.app.core.settings.upload import get_upload_settings
 from src.app.db.parsing_lease import PostgresParsingLease
 from src.app.db.session import build_engine, build_session_factory
-from src.app.embeddings.factory import get_embedder
+from src.app.embeddings.base import Embedder
+from src.app.embeddings.factory import LazyEmbedder
 from src.app.ingest.images import ImageStore
 from src.app.ingest.parsers.base import DocumentParser as IngestDocumentParser
 from src.app.ingest.parsers.base import ParserRegistry
@@ -346,11 +347,15 @@ class ApplicationContainer:
         return client
 
     @cached_property
+    def embedder(self) -> Embedder:
+        return LazyEmbedder(self.embeddings_settings)
+
+    @cached_property
     def embedding_service(self) -> EmbeddingServiceInterface:
         settings = self.embeddings_settings
         return InstrumentedEmbeddingService(
             service=EmbeddingService(
-                embedder=get_embedder(settings),
+                embedder=self.embedder,
                 redis=self.embeddings_redis,
                 metrics=self.metrics_collector,
                 batch_size=settings.batch_size,
@@ -473,7 +478,7 @@ class ApplicationContainer:
             dependency_id = id(dependency)
             if dependency_id in closed_dependency_ids:
                 continue
-            close = getattr(dependency, "close", None)
+            close = getattr(dependency, "aclose", None) or getattr(dependency, "close", None)
             if callable(close):
                 result = close()
                 if inspect.isawaitable(result):

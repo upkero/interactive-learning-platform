@@ -17,6 +17,7 @@ import logging
 import struct
 from collections.abc import Sequence
 from hashlib import sha256
+from math import isfinite
 
 import anyio.to_thread
 from redis.asyncio import Redis
@@ -24,6 +25,7 @@ from redis.exceptions import RedisError
 
 from src.app.embeddings.base import Embedder
 from src.app.exceptions.embeddings import (
+    EmbeddingConfigurationError,
     EmbeddingGenerationError,
     EmbeddingResultMismatchError,
     EmptyEmbeddingInputError,
@@ -54,6 +56,7 @@ class EmbeddingService(EmbeddingServiceInterface):
         self._batch_size = batch_size
         self._ttl = ttl_seconds
         self._logger = logger or logger_ or _LOGGER
+        self._vector_format = struct.Struct(f"<{embedder.dimension}f")
 
     @property
     def model_name(self) -> str:
@@ -66,44 +69,45 @@ class EmbeddingService(EmbeddingServiceInterface):
         if not all(normalized):
             raise EmptyEmbeddingInputError("Embedding input contains an empty text.")
 
-        result: list[list[float] | None] = await self._read_cache(normalized)
-        missing: dict[str, list[int]] = {}
-        for index, vector in enumerate(result):
-            if vector is None:
-                missing.setdefault(normalized[index], []).append(index)
+        unique = list(dict.fromkeys(normalized))
+        cached = await self._read_cache(unique)
+        result = {text: vector for text, vector in zip(unique, cached, strict=True) if vector is not None}
+        pending = [text for text in unique if text not in result]
 
-        hits = len(normalized) - sum(len(indices) for indices in missing.values())
-        self._metrics.increment_counter(_CACHE_COUNTER, labels={"result": "hit"}, by=hits)
-        self._metrics.increment_counter(_CACHE_COUNTER, labels={"result": "miss"}, by=len(missing))
+        self._metrics.increment_counter(_CACHE_COUNTER, labels={"result": "hit"}, by=len(result))
+        self._metrics.increment_counter(_CACHE_COUNTER, labels={"result": "miss"}, by=len(pending))
 
-        pending = list(missing)
         for start in range(0, len(pending), self._batch_size):
             batch = pending[start : start + self._batch_size]
             vectors = await self._embed(batch)
-            self._validate(batch, vectors)
+            if len(vectors) != len(batch):
+                raise EmbeddingResultMismatchError("Embedder returned a different number of vectors.")
+            packed: dict[str, bytes] = {}
             for text, vector in zip(batch, vectors, strict=True):
-                for index in missing[text]:
-                    result[index] = vector
-            await self._write_cache(dict(zip(batch, vectors, strict=True)))
+                packed[text], result[text] = self._prepare_vector(vector)
+            await self._write_cache(packed)
 
-        # Every slot is filled by a cache hit or by the model; the check keeps
-        # mypy and a future refactor honest.
-        if any(vector is None for vector in result):
-            raise EmbeddingGenerationError("Embedding cache returned an incomplete result.")
-        return [vector for vector in result if vector is not None]
+        return [result[text] for text in normalized]
 
     async def _embed(self, batch: Sequence[str]) -> list[list[float]]:
         try:
             return await anyio.to_thread.run_sync(self._embedder.embed, batch)
+        except EmbeddingConfigurationError:
+            raise
         except Exception as exc:
             raise EmbeddingGenerationError("Failed to generate embeddings.") from exc
 
-    def _validate(self, batch: Sequence[str], vectors: Sequence[Sequence[float]]) -> None:
-        if len(vectors) != len(batch):
-            raise EmbeddingResultMismatchError("Embedder returned a different number of vectors.")
-        for vector in vectors:
-            if len(vector) != self._embedder.dimension:
-                raise EmbeddingResultMismatchError("Embedder returned a vector of the wrong dimension.")
+    def _prepare_vector(self, vector: Sequence[float]) -> tuple[bytes, list[float]]:
+        if len(vector) != self._embedder.dimension:
+            raise EmbeddingResultMismatchError("Embedder returned a vector of the wrong dimension.")
+        try:
+            packed = self._vector_format.pack(*vector)
+        except (OverflowError, struct.error) as exc:
+            raise EmbeddingResultMismatchError("Embedder returned a value outside float32.") from exc
+        decoded = self._decode(packed)
+        if decoded is None:
+            raise EmbeddingResultMismatchError("Embedder returned a non-finite value.")
+        return packed, decoded
 
     def _key(self, text: str) -> str:
         return f"emb:{self._embedder.model_name}:{sha256(text.encode()).hexdigest()}"
@@ -115,30 +119,24 @@ class EmbeddingService(EmbeddingServiceInterface):
             self._logger.warning("Embedding cache read failed, treating as miss.", exc_info=True)
             return [None] * len(texts)
         if len(raw) != len(texts):
-            self._logger.warning(
-                "Embedding cache returned an unexpected number of values, treating all as misses."
-            )
+            self._logger.warning("Embedding cache returned an unexpected number of values, treating all as misses.")
             return [None] * len(texts)
-        return [self._decode(item) if item is not None else None for item in raw]
+        return [self._decode(item) for item in raw]
 
-    async def _write_cache(self, vectors: dict[str, Sequence[float]]) -> None:
+    async def _write_cache(self, vectors: dict[str, bytes]) -> None:
         try:
             async with self._redis.pipeline(transaction=False) as pipe:
                 for text, vector in vectors.items():
-                    pipe.set(self._key(text), _encode(vector), ex=self._ttl)
+                    pipe.set(self._key(text), vector, ex=self._ttl)
                 await pipe.execute()
         except RedisError:
             self._logger.warning("Embedding cache write failed.", exc_info=True)
 
-    def _decode(self, raw: bytes) -> list[float] | None:
-        if len(raw) % 4:
+    def _decode(self, raw: bytes | None) -> list[float] | None:
+        if not isinstance(raw, bytes) or len(raw) != self._vector_format.size:
             return None
-        vector = list(struct.unpack(f"<{len(raw) // 4}f", raw))
-        return vector if len(vector) == self._embedder.dimension else None
-
-
-def _encode(vector: Sequence[float]) -> bytes:
-    return struct.pack(f"<{len(vector)}f", *vector)
+        vector = list(self._vector_format.unpack(raw))
+        return vector if all(isfinite(value) for value in vector) else None
 
 
 __all__ = ["EmbeddingService"]

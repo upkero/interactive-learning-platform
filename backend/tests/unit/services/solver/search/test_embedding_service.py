@@ -83,7 +83,7 @@ async def test_duplicate_texts_are_embedded_once_and_cached() -> None:
     assert first[0] == first[2]
     assert embedder.calls == [["alpha", "beta"]]
     assert len(redis.mget_calls) == 1
-    assert len(redis.mget_calls[0]) == 3
+    assert redis.mget_calls[0] == [_key("alpha"), _key("beta")]
     assert len(redis.set_calls) == 2
     assert all(ex == 30 * 24 * 3600 for _, _, ex in redis.set_calls)
     assert redis.set_calls[0][1] == struct.pack("<4f", *first[0])
@@ -100,7 +100,7 @@ async def test_duplicate_texts_are_embedded_once_and_cached() -> None:
     assert len(redis.mget_calls) == 2
     cache_counters = metrics.counters_named("embedding_cache.requests")
     assert [(counter.labels["result"], counter.by) for counter in cache_counters[-2:]] == [
-        ("hit", 3),
+        ("hit", 2),
         ("miss", 0),
     ]
 
@@ -145,12 +145,13 @@ async def test_corrupt_or_wrong_dimension_cache_value_is_a_miss() -> None:
     redis = FakeRedis()
     redis.store[_key("alpha")] = b"\x00\x01\x02"
     redis.store[_key("beta")] = struct.pack("<3f", 1.0, 2.0, 3.0)
+    redis.store[_key("gamma")] = struct.pack("<4f", 1.0, 2.0, 3.0, float("nan"))
     service, embedder, _, _ = _service(redis=redis)
 
-    vectors = await service.embed(["alpha", "beta"])
+    vectors = await service.embed(["alpha", "beta", "gamma"])
 
-    assert len(vectors) == 2
-    assert embedder.calls == [["alpha", "beta"]]
+    assert len(vectors) == 3
+    assert embedder.calls == [["alpha", "beta", "gamma"]]
     assert all(len(vector) == 4 for vector in vectors)
 
 
@@ -201,3 +202,25 @@ async def test_vectors_are_normalised_before_embedding() -> None:
     await service.embed(["  alpha \n  beta  "])
 
     assert embedder.calls == [["alpha beta"]]
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), 1e100])
+async def test_invalid_float32_from_model_is_rejected(value: float, monkeypatch: pytest.MonkeyPatch) -> None:
+    service, embedder, redis, _ = _service()
+    monkeypatch.setattr(embedder, "embed", lambda _texts: [[value, 1.0, 2.0, 3.0]])
+
+    with pytest.raises(EmbeddingResultMismatchError):
+        await service.embed(["alpha"])
+
+    assert redis.set_calls == []
+
+
+async def test_float32_output_stays_identical_on_cache_hit(monkeypatch: pytest.MonkeyPatch) -> None:
+    service, embedder, redis, _ = _service()
+    monkeypatch.setattr(embedder, "embed", lambda _texts: [[0.1, 0.2, 0.3, 0.4]])
+
+    first = await service.embed(["alpha"])
+    second = await service.embed(["alpha"])
+
+    assert first == second
+    assert len(redis.set_calls) == 1

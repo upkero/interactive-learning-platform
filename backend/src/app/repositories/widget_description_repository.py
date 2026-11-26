@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,7 +55,7 @@ class WidgetDescriptionRepository(WidgetDescriptionRepositoryProtocol):
         return [self._to_record(row) for row in rows.all()]
 
     async def list_batch(self, *, after_id: UUID | None, limit: int) -> list[WidgetDescriptionRecord]:
-        """Keyset page ordered by id; the CLI re-embeds and commits one page."""
+        """Keyset page ordered by id."""
         if limit <= 0:
             return []
         stmt = select(WidgetDescription).order_by(WidgetDescription.id).limit(limit)
@@ -63,6 +63,10 @@ class WidgetDescriptionRepository(WidgetDescriptionRepositoryProtocol):
             stmt = stmt.where(WidgetDescription.id > after_id)
         rows = await self._session.scalars(stmt)
         return [self._to_record(row) for row in rows.all()]
+
+    async def lock_for_reembedding(self) -> None:
+        """Prevent writes and concurrent re-embedding until the transaction commits."""
+        await self._session.execute(text("LOCK TABLE widget_descriptions IN SHARE ROW EXCLUSIVE MODE"))
 
     async def set_embedding(self, description_id: UUID, embedding: list[float]) -> None:
         await self._session.execute(

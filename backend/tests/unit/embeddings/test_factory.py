@@ -1,13 +1,18 @@
 """Unit tests of embedder construction and process-wide caching (story 2.3)."""
 
 from collections.abc import Iterator, Sequence
+from threading import get_ident
 
 import pytest
 from pydantic import SecretStr
 
+from src.app.bootstrap.container import ApplicationContainer
 from src.app.core.settings.embeddings import EmbeddingsSettings
 from src.app.embeddings import factory
+from src.app.embeddings.bge_m3 import BGE_M3_DIMENSION, BGE_M3_MODEL
+from src.app.embeddings.voyage import VOYAGE_DIMENSION, VOYAGE_MODEL
 from src.app.exceptions.embeddings import EmbeddingConfigurationError
+from tests.support.fakes.cache.redis import FakeRedis
 
 
 class FakeEmbedder:
@@ -104,3 +109,71 @@ def test_reset_embedder_creates_a_fresh_instance(monkeypatch: pytest.MonkeyPatch
 
     assert first is not second
     assert len(created) == 2
+
+
+async def test_container_loads_and_encodes_off_event_loop_on_first_cache_miss(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, int]] = []
+
+    class RecordingBge(FakeEmbedder):
+        dimension = BGE_M3_DIMENSION
+
+        def __init__(self, *, device: str) -> None:
+            assert device == "cpu"
+            calls.append(("load", get_ident()))
+
+        def embed(self, texts: Sequence[str]) -> list[list[float]]:
+            calls.append(("embed", get_ident()))
+            return super().embed(texts)
+
+    monkeypatch.setattr(factory, "BgeM3Embedder", RecordingBge)
+    container = ApplicationContainer()
+    monkeypatch.setattr(container, "embeddings_settings", _settings(provider="bge_m3", device="cpu"))
+    monkeypatch.setattr(container, "embeddings_redis", FakeRedis())
+    loop_thread = get_ident()
+
+    try:
+        service = container.embedding_service
+        assert calls == []
+        await service.embed(["query"])
+        await service.embed(["query"])
+        await service.embed(["another query"])
+    finally:
+        await container.close()
+
+    assert [action for action, _ in calls] == ["load", "embed", "embed"]
+    assert all(thread != loop_thread for _, thread in calls)
+
+
+async def test_two_container_providers_keep_models_and_redis_keys_separate(monkeypatch: pytest.MonkeyPatch) -> None:
+    cache = FakeRedis()
+    local_settings = _settings(provider="bge_m3", device="cpu")
+    voyage_settings = _settings(provider="voyage", voyage_api_key=SecretStr("fake-api-key"))
+    created: list[str] = []
+
+    class DifferentVectors(FakeEmbedder):
+        def __init__(self, settings: EmbeddingsSettings) -> None:
+            self.dimension = BGE_M3_DIMENSION if settings.provider == "bge_m3" else VOYAGE_DIMENSION
+            self.value = 1.0 if settings.provider == "bge_m3" else 2.0
+
+        def embed(self, texts: Sequence[str]) -> list[list[float]]:
+            return [[self.value] * self.dimension for _ in texts]
+
+    def fake_create(settings: EmbeddingsSettings) -> DifferentVectors:
+        created.append(settings.provider)
+        return DifferentVectors(settings)
+
+    monkeypatch.setattr(factory, "create_embedder", fake_create)
+    for settings, value in ((local_settings, 1.0), (voyage_settings, 2.0), (local_settings, 1.0)):
+        container = ApplicationContainer()
+        monkeypatch.setattr(container, "embeddings_settings", settings)
+        monkeypatch.setattr(container, "embeddings_redis", cache)
+        try:
+            (vector,) = await container.embedding_service.embed(["one shared query"])
+            assert vector[0] == value
+        finally:
+            await container.close()
+
+    assert created == ["bge_m3", "voyage"]
+    assert {key.rsplit(":", 1)[0] for key in cache.store} == {f"emb:{BGE_M3_MODEL}", f"emb:{VOYAGE_MODEL}"}

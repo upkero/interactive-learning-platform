@@ -25,10 +25,10 @@ class EmbeddingGenerationError(EmbeddingError):
 
 
 class EmbeddingResultMismatchError(EmbeddingGenerationError):
-    """The embedder returned the wrong number of vectors or dimensions."""
+    """The embedder returned an invalid shape or vector value."""
 
     error_code = "embedding_result_mismatch"
-    default_detail = "Embedder returned an unexpected result shape."
+    default_detail = "Embedder returned an invalid result."
 
 
 class EmptyEmbeddingInputError(EmbeddingError, ValueError):

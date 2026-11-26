@@ -16,15 +16,10 @@ from collections.abc import Sequence
 from pathlib import Path
 from uuid import UUID
 
-import anyio.to_thread
-
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.core.settings.app import get_app_settings
-from src.app.core.settings.embeddings import get_embeddings_settings
 from src.app.core.settings.seed import get_seed_settings
 from src.app.db.session import build_engine, build_session_factory
-from src.app.embeddings.factory import get_embedder
-from src.app.exceptions.embeddings import EmbeddingResultMismatchError
 from src.app.repositories.widget_description_repository import WidgetDescriptionRepository
 from src.app.seed.dev_seed import seed_dev
 from src.app.seed.primitives_seed import load_catalog, resolve_catalog_path, seed_primitives
@@ -55,40 +50,35 @@ async def _run_seed_dev(fake_embeddings: bool) -> int:
 async def _run_reembed_descriptions() -> int:
     """Recompute every widget description with the configured model.
 
-    Switching EMBEDDINGS_PROVIDER changes the vectors, not the schema: the
-    column is vector(1024) for both models. Pages are fetched and committed
-    in keyset batches, and the CPU-bound encode runs outside the session so
-    a long batch does not hold a database connection.
+    Process bounded pages in one transaction so search sees a complete set
+    of vectors before or after the model change. Readers may continue during
+    the command while writes to widget descriptions wait for the transaction.
     """
-    embeddings_settings = get_embeddings_settings()
-    embedder = get_embedder(embeddings_settings)
     app_settings = get_app_settings()
     engine = build_engine(str(app_settings.db_url), null_pool=True)
+    container = ApplicationContainer()
     updated = 0
     after: UUID | None = None
     try:
         session_factory = build_session_factory(engine)
-        while True:
-            async with session_factory() as session:
-                batch = await WidgetDescriptionRepository(session).list_batch(
+        async with session_factory() as session, session.begin():
+            repository = WidgetDescriptionRepository(session)
+            await repository.lock_for_reembedding()
+            while True:
+                batch = await repository.list_batch(
                     after_id=after,
-                    limit=embeddings_settings.batch_size,
+                    limit=container.embeddings_settings.batch_size,
                 )
-            if not batch:
-                break
-            vectors = await anyio.to_thread.run_sync(embedder.embed, [row.text for row in batch])
-            if len(vectors) != len(batch):
-                raise EmbeddingResultMismatchError("Embedder returned a different number of vectors.")
-            if any(len(vector) != embedder.dimension for vector in vectors):
-                raise EmbeddingResultMismatchError("Embedder returned a vector of the wrong dimension.")
-            async with session_factory() as session, session.begin():
-                repository = WidgetDescriptionRepository(session)
+                if not batch:
+                    break
+                vectors = await container.embedding_service.embed([row.text for row in batch])
                 for row, vector in zip(batch, vectors, strict=True):
                     await repository.set_embedding(row.id, vector)
-            updated += len(batch)
-            after = batch[-1].id
-        print(f"reembed-descriptions: updated {updated} rows with {embedder.model_name}")
+                updated += len(batch)
+                after = batch[-1].id
+        print(f"reembed-descriptions: updated {updated} rows with {container.embedder.model_name}")
     finally:
+        await container.close()
         await engine.dispose()
     return 0
 
