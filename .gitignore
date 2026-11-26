@@ -1,4 +1,5 @@
 node_modules/
+backend/evals/corpus/private/
 primitives/storybook-static/
 primitives/test-results/
 primitives/playwright-report/
