@@ -6,7 +6,7 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
 
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project --extra embeddings-local --extra embeddings-voyage
 
 ENV HF_HOME="/app/.cache/huggingface" \
     TIKTOKEN_CACHE_DIR="/app/.cache/tiktoken"
@@ -27,8 +27,8 @@ ENV PYTHONUNBUFFERED=1 \
 
 RUN groupadd --gid 1001 appgroup && \
     useradd --uid 1001 --gid appgroup --no-create-home appuser && \
-    mkdir -p /app/.cache/huggingface && \
-    chown -R appuser:appgroup /app
+    mkdir -p /models && \
+    chown -R appuser:appgroup /app /models
 
 WORKDIR /app
 

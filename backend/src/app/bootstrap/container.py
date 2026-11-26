@@ -9,6 +9,7 @@ from src.app.core.clock import SystemClock
 from src.app.core.settings.app import get_app_settings
 from src.app.core.settings.auth import AuthSettings, get_auth_settings
 from src.app.core.settings.celery import get_celery_settings
+from src.app.core.settings.embeddings import EmbeddingsSettings, get_embeddings_settings
 from src.app.core.settings.ingest import IngestSettings, get_ingest_settings
 from src.app.core.settings.llm import CheapLLMSettings, LLMSettings, get_cheap_llm_settings, get_llm_settings
 from src.app.core.settings.processing import ProcessingSettings, get_processing_settings
@@ -16,10 +17,12 @@ from src.app.core.settings.progress import get_progress_settings
 from src.app.core.settings.quota import QuotaSettings, get_quota_settings
 from src.app.core.settings.reports import ReportsSettings, get_reports_settings
 from src.app.core.settings.smtp import get_smtp_settings
+from src.app.core.settings.solver import SolverSettings, get_solver_settings
 from src.app.core.settings.storage import get_storage_settings
 from src.app.core.settings.upload import get_upload_settings
 from src.app.db.parsing_lease import PostgresParsingLease
 from src.app.db.session import build_engine, build_session_factory
+from src.app.embeddings.factory import get_embedder
 from src.app.ingest.images import ImageStore
 from src.app.ingest.parsers.base import DocumentParser as IngestDocumentParser
 from src.app.ingest.parsers.base import ParserRegistry
@@ -28,6 +31,7 @@ from src.app.ingest.parsers.markdown_parser import MarkdownParser
 from src.app.ingest.part_planner import DocumentPartPlanner
 from src.app.ingest.splitting import SplitLimits
 from src.app.ingest.tokens import get_token_counter
+from src.app.interfaces.embeddings.embedding_service import EmbeddingServiceInterface
 from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.interfaces.observability.metrics_collector import MetricsCollector
 from src.app.interfaces.services.part_pipeline import PartPipeline
@@ -72,6 +76,9 @@ from src.app.services.solver.library.library_normalizer import LibraryNormalizer
 from src.app.services.solver.pipeline.part_recovery import PartRecovery
 from src.app.services.solver.pipeline.stub_pipeline import StubPipeline
 from src.app.services.solver.pipeline.watchdog import Watchdog
+from src.app.services.solver.search.embedding_service import EmbeddingService
+from src.app.services.solver.search.instrumented_embedding_service import InstrumentedEmbeddingService
+from src.app.services.solver.search.widget_search import WidgetSearch
 from src.app.services.users.profile_service import ProfileService
 from src.app.storage.s3_object_storage_client import S3ObjectStorageClient, build_ping_client, build_s3_client
 from src.app.tasks.dispatcher import CeleryTaskDispatcher
@@ -323,6 +330,44 @@ class ApplicationContainer:
     @cached_property
     def cheap_llm_overrides(self) -> CheapLLMSettings:
         return get_cheap_llm_settings()
+
+    @cached_property
+    def embeddings_settings(self) -> EmbeddingsSettings:
+        return get_embeddings_settings()
+
+    @cached_property
+    def solver_settings(self) -> SolverSettings:
+        return get_solver_settings()
+
+    @cached_property
+    def embeddings_redis(self) -> aioredis.Redis:
+        """Dedicated cache database: flushing it must not touch Celery."""
+        client: aioredis.Redis = aioredis.Redis.from_url(self.embeddings_settings.cache_redis_url)
+        return client
+
+    @cached_property
+    def embedding_service(self) -> EmbeddingServiceInterface:
+        settings = self.embeddings_settings
+        return InstrumentedEmbeddingService(
+            service=EmbeddingService(
+                embedder=get_embedder(settings),
+                redis=self.embeddings_redis,
+                metrics=self.metrics_collector,
+                batch_size=settings.batch_size,
+                ttl_seconds=settings.cache_ttl_seconds,
+            ),
+            metrics=self.metrics_collector,
+        )
+
+    @cached_property
+    def widget_search(self) -> WidgetSearch:
+        """Widget search by intent."""
+        return WidgetSearch(
+            session_factory=self.session_factory,
+            embeddings=self.embedding_service,
+            settings=self.solver_settings,
+            metrics=self.metrics_collector,
+        )
 
     @cached_property
     def metrics_collector(self) -> MetricsCollector:
