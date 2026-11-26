@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 
@@ -7,6 +8,9 @@ const API_INTERNAL_URL =
   process.env.API_INTERNAL_URL ?? "http://localhost:8000";
 
 const nextConfig: NextConfig = {
+  output: process.env.NEXT_STANDALONE === "1" ? "standalone" : undefined,
+  outputFileTracingRoot: path.resolve(__dirname, ".."),
+  transpilePackages: ["@grasp/primitives"],
   async rewrites() {
     return [
       {
