@@ -82,6 +82,7 @@ from src.app.services.solver.library.primitive_catalog import PrimitiveCatalog
 from src.app.services.solver.pipeline.part_recovery import PartRecovery
 from src.app.services.solver.pipeline.stub_pipeline import StubPipeline
 from src.app.services.solver.pipeline.watchdog import Watchdog
+from src.app.services.solver.resolve.widget_resolver import WidgetResolver
 from src.app.services.solver.search.embedding_service import EmbeddingService
 from src.app.services.solver.search.instrumented_embedding_service import InstrumentedEmbeddingService
 from src.app.services.solver.search.widget_search import WidgetSearch
@@ -380,6 +381,21 @@ class ApplicationContainer:
         return WidgetSearch(
             session_factory=self.session_factory,
             embeddings=self.embedding_service,
+            catalog=PrimitiveCatalog(),
+            settings=self.solver_settings,
+            metrics=self.metrics_collector,
+        )
+
+    @cached_property
+    def widget_resolver(self) -> WidgetResolver:
+        """Widget resolver: turns widget directives into concrete assignments (story 2.4).
+
+        Reuses ``WidgetSearch`` from story 2.3; the primitive catalog is
+        empty until synced (2.4), so unknown hints are ignored and search
+        falls back to the unfiltered neighbourhood.
+        """
+        return WidgetResolver(
+            search=self.widget_search,
             catalog=PrimitiveCatalog(),
             settings=self.solver_settings,
             metrics=self.metrics_collector,
