@@ -15,6 +15,7 @@ from src.app.contracts.solver.main_pass import (
     ReaderLevel,
     ReaderProfile,
 )
+from src.app.contracts.solver.widget_assembly import WidgetAssembly, WidgetPlacement
 from src.app.contracts.solver.widget_candidate import WidgetCandidate, WidgetMatch, WidgetWithDescription
 from src.app.contracts.solver.widget_resolution import WidgetResolution
 
@@ -32,8 +33,10 @@ __all__ = [
     "ReaderGoal",
     "ReaderLevel",
     "ReaderProfile",
+    "WidgetAssembly",
     "WidgetCandidate",
     "WidgetMatch",
+    "WidgetPlacement",
     "WidgetResolution",
     "WidgetWithDescription",
 ]

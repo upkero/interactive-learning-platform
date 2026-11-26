@@ -77,6 +77,7 @@ from src.app.services.quota.quota_ledger import QuotaLedger
 from src.app.services.quota.quota_service import QuotaService
 from src.app.services.reports.report_service import ReportService
 from src.app.services.sharing.sharing_service import SharingService
+from src.app.services.solver.assemble.widget_assembler import WidgetAssembler
 from src.app.services.solver.library.library_normalizer import LibraryNormalizer
 from src.app.services.solver.library.primitive_catalog import PrimitiveCatalog
 from src.app.services.solver.pipeline.part_recovery import PartRecovery
@@ -397,6 +398,20 @@ class ApplicationContainer:
         return WidgetResolver(
             search=self.widget_search,
             catalog=PrimitiveCatalog(),
+            settings=self.solver_settings,
+            metrics=self.metrics_collector,
+        )
+
+    @cached_property
+    def widget_assembler(self) -> WidgetAssembler:
+        """Widget assembler: turns resolved widgets into part usages (story 2.5).
+
+        Runs in the ``ASSEMBLING`` pipeline stage, right after the resolver.
+        Creates one ``widget_usages`` row per resolved directive.
+        """
+        return WidgetAssembler(
+            session_factory=self.session_factory,
+            widget_usages=WidgetUsageRepository,
             settings=self.solver_settings,
             metrics=self.metrics_collector,
         )
