@@ -65,6 +65,7 @@ for (const [name, count, urls] of [
   ["inline-syntax", 2, []],
   ["preserved-urls", 1, ["/guide/:quiz[example]", "https://example.com/:quiz[ok]"]],
   ["unquoted-brace", 1, []],
+  ["shortcut-attributes", 6, []],
 ]) {
   test("remark validates the shared cleanup example " + name, () => {
     const [source, cleaned] = cases.get(name).split("\n<!-- cleaned -->\n");
@@ -91,4 +92,20 @@ test("remark keeps the widget and visible paragraph after inline cleanup", () =>
   assert.deepEqual(nodes, [["leafDirective", "widget"]]);
   assert.equal(after.children[0].children[0].value.trimStart(), "```text");
   assert.equal(after.children[2].children[0].value, "This paragraph should stay visible.");
+});
+
+test("remark recognizes the full shortcut attributes including literal braces", () => {
+  const [source] = cases.get("shortcut-attributes").split("\n<!-- cleaned -->\n");
+  const directives = parser.parse(source).children[0].children.filter((node) => node.type === "textDirective");
+  assert.deepEqual(
+    directives.map((node) => node.attributes),
+    [
+      { class: "topic{extra" },
+      { id: "section{extra" },
+      { class: "topic{extra note", id: "section{more", title: "a{b" },
+      { class: "topic{extra", id: "section{more", title: "x } y" },
+      {},
+      {},
+    ]
+  );
 });

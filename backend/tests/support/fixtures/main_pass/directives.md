@@ -114,6 +114,23 @@ See :quiz[label]{title=a{b} and continue.
 <!-- cleaned -->
 See  and continue.
 
+<!-- case: shortcut-attributes -->
+
+Read :quiz[label]{.topic{extra} before continuing.
+Read :quiz[label]{#section{extra} before continuing.
+Read :quiz[label]{.topic{extra#section{more.note title=a{b} before continuing.
+Read :quiz[label]{.topic{extra
+#section{more title="x } y"} before continuing.
+Read :quiz[label]{.} before continuing.
+Read :quiz[label]{#section=x} before continuing.
+<!-- cleaned -->
+Read  before continuing.
+Read  before continuing.
+Read  before continuing.
+Read  before continuing.
+Read {.} before continuing.
+Read {#section=x} before continuing.
+
 <!-- case: exposed-fence -->
 
 :quiz[Example] ```text

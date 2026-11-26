@@ -21,9 +21,13 @@ _DIRECTIVE = re.compile(r'^::(widget|image|quiz)\{(ref|id)="([^"]+)"\}[ \t]*$')
 _CANDIDATE = re.compile(r"^[ \t]*(?:(?:>[ \t]*|(?:[-+*]|[0-9]{1,9}[.)])[ \t]+))*(:{2,}(?:widget|image|quiz)\b)")
 _INLINE_NAME = re.compile(r":(?:widget|image|quiz)(?![\w:-])")
 _INLINE_PREFIX = re.compile(r"(?<![\\:]):[a-z]{0,6}\Z")
-_ATTRIBUTE_VALUE = r"""(?:(?:"[^"]*"|'[^']*')(?=[ \t\n}])|[^ \t\n"'<>=`}]+)"""
+# Quoted values have their own boundaries. Unquoted values and shortcuts
+# share delimiters, with "." and "#" additionally separating shortcuts.
+_UNQUOTED_DELIMITERS = r""" \t\n"'<>=`}"""
+_ATTRIBUTE_VALUE = r"""(?:(?:"[^"]*"|'[^']*')(?=[ \t\n}])""" + rf"|[^{_UNQUOTED_DELIMITERS}]+)"
+_ATTRIBUTE_SHORTCUT = rf"[.#][^{_UNQUOTED_DELIMITERS}.#]+"
 _ATTRIBUTES = re.compile(
-    r"\{(?>[ \t\n]*(?:[.#][^ \t\n.#\"'<>={`}}]+"
+    rf"\{{(?>[ \t\n]*(?:{_ATTRIBUTE_SHORTCUT}"
     rf"|[\w-][\w.:-]*(?:[ \t\n]*=[ \t\n]*{_ATTRIBUTE_VALUE})?))*[ \t\n]*\}}"
 )
 _BLOCK = re.compile(

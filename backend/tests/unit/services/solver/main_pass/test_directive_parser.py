@@ -350,7 +350,10 @@ def test_shared_directive_fixtures(name: str, markers: list[str], issues: int, c
     assert [token.content for token in MarkdownIt().parse(cleaned.markdown) if token.type == "code_block"] == code
 
 
-@pytest.mark.parametrize(("name", "count"), [("inline-syntax", 2), ("preserved-urls", 1), ("unquoted-brace", 1)])
+@pytest.mark.parametrize(
+    ("name", "count"),
+    [("inline-syntax", 2), ("preserved-urls", 1), ("unquoted-brace", 1), ("shortcut-attributes", 6)],
+)
 def test_shared_inline_cleanup(name: str, count: int) -> None:
     fixture = _SHARED_MARKDOWN.read_text(encoding="utf-8")
     section = fixture.split(f"<!-- case: {name} -->\n", 1)[1].split("\n<!-- case: ", 1)[0].strip("\n")

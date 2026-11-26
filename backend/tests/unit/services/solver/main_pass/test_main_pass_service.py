@@ -508,3 +508,14 @@ async def test_inline_repair_does_not_create_new_markdown_blocks(fragment: str) 
     assert [token.type for token in MarkdownIt().parse(result.draft.markdown)] == [
         token.type for token in MarkdownIt().parse(text)
     ]
+
+
+@pytest.mark.parametrize("attributes", ["{.topic{extra}", "{#section{extra}", "{.topic{extra#section{more title=a{b}"])
+async def test_inline_repair_removes_complete_shortcut_attributes(attributes: str) -> None:
+    body = "body " * 50
+    broken = PageDraft(markdown=body + f"\n\nRead :quiz[label]{attributes} before continuing.", key_terms=["body"] * 5)
+    llm = FakeLLMClient(structured=[broken, broken])
+    result = await _service(llm=llm, primitives=await _primitive_repo()).run(build_input())
+
+    assert len(llm.requests) == 2
+    assert result.draft.markdown == body + "\n\nRead  before continuing."
