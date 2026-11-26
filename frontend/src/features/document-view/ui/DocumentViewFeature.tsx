@@ -15,10 +15,20 @@ import styles from './DocumentViewFeature.module.css';
 
 interface DocumentViewFeatureProps {
   documentId: string;
+  initialPartId?: string;
   onShare: () => void;
 }
 
-export function DocumentViewFeature({ documentId, onShare }: DocumentViewFeatureProps) {
+const partStatusLabel = {
+  queued: 'partStatus.queued',
+  main_pass: 'partStatus.mainPass',
+  resolving: 'partStatus.resolving',
+  assembling: 'partStatus.assembling',
+  published: 'partStatus.published',
+  failed: 'partStatus.failed',
+} as const satisfies Record<PartSummaryOut['status'], string>;
+
+export function DocumentViewFeature({ documentId, initialPartId, onShare }: DocumentViewFeatureProps) {
   const t = useTranslations('viewer');
   const tCommon = useTranslations('common');
   const tErrors = useTranslations('errors');
@@ -27,27 +37,24 @@ export function DocumentViewFeature({ documentId, onShare }: DocumentViewFeature
 
   const router = useRouter();
 
-  const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
+  const [partId, setSelectedPartId] = useState(initialPartId);
   const [showTOC, setShowTOC] = useState(true);
 
   const documentQuery = useDocument(documentId);
   const partsQuery = useDocumentParts(documentId);
+  const parts = partsQuery.data ?? [];
+  const selectedPartId = partId ?? parts[0]?.id ?? null;
   const partQuery = usePart(selectedPartId);
 
   const document = documentQuery.data;
-  const parts = partsQuery.data ?? [];
   const part = partQuery.data;
 
   // Centralized status guard - document step allows 'done' status (new API)
   const { isLoading, error, hasRedirected: guardRedirected } = useDocumentStatusGuard({
     documentId,
     currentStep: 'document',
+    previewPartId: initialPartId,
   });
-
-  // Auto-select first part if none selected
-  if (!selectedPartId && parts.length > 0) {
-    setSelectedPartId(parts[0].id);
-  }
 
   const selectedPart = parts.find((p) => p.id === selectedPartId);
 
@@ -64,7 +71,7 @@ export function DocumentViewFeature({ documentId, onShare }: DocumentViewFeature
   if (isLoading || documentQuery.isPending || partsQuery.isPending || (selectedPartId && partQuery.isPending)) {
     return (
       <PageShell title={t('materialTitle')}>
-        <DocumentViewSkeleton />
+        <DocumentViewSkeleton label={tCommon('loading')} />
       </PageShell>
     );
   }
@@ -77,7 +84,7 @@ export function DocumentViewFeature({ documentId, onShare }: DocumentViewFeature
           <div className={styles.errorState} role="alert">
             <h2 className={styles.errorTitle}>{t('loadError')}</h2>
             <p className={styles.errorMessage}>
-              Не удалось загрузить документ. Возможно, он был удален или у вас нет доступа.
+              {tProgress('documentLoadFailed')}
             </p>
             <div className={styles.errorActions}>
               <ActionLink
@@ -222,7 +229,7 @@ export function DocumentViewFeature({ documentId, onShare }: DocumentViewFeature
                         <span className={styles.tocIndex}>{part.index + 1}</span>
                         <span className={styles.tocTitle}>{part.title}</span>
                         <span className={`${styles.tocStatus} ${styles[`status${part.status.charAt(0).toUpperCase() + part.status.slice(1)}`]}`}>
-                          {tProgress(`partStatus.${part.status}`)}
+                          {tProgress(partStatusLabel[part.status])}
                         </span>
                       </button>
                     </li>
@@ -244,7 +251,7 @@ export function DocumentViewFeature({ documentId, onShare }: DocumentViewFeature
         )}
 
         <main className={styles.content}>
-          {showTOC && parts.length > 1 && (
+          {!showTOC && parts.length > 1 && (
             <button
               type="button"
               className={styles.tocMobileToggle}
@@ -256,12 +263,17 @@ export function DocumentViewFeature({ documentId, onShare }: DocumentViewFeature
           )}
 
           <Surface>
-            {selectedPart ? (
+            {partQuery.isError ? (
+              <p role="alert" className={styles.errorMessage}>
+                {tErrors(partQuery.error instanceof ApiError ? partQuery.error.code : 'unknown_error')}
+              </p>
+            ) : selectedPart ? (
               <DocumentPartView
                 part={part ?? null}
                 summary={selectedPart}
                 t={t}
                 tProgress={tProgress}
+                loadingLabel={tCommon('loading')}
               />
             ) : (
               <p className={styles.emptyMessage}>{tEmpty('topicsNone')}</p>
@@ -275,15 +287,16 @@ export function DocumentViewFeature({ documentId, onShare }: DocumentViewFeature
 
 interface DocumentPartViewProps {
   part: PartOut | null;
-  summary: PartSummaryOut | undefined;
+  summary: PartSummaryOut;
   t: ReturnType<typeof useTranslations>;
   tProgress: ReturnType<typeof useTranslations>;
+  loadingLabel: string;
 }
 
-function DocumentPartView({ part, summary, t, tProgress }: DocumentPartViewProps) {
-  const tErrors = useTranslations('errors');
-  const partStatus = summary?.status || part?.status || '';
-  const partTitle = summary?.title || part?.title || '';
+function DocumentPartView({ part, summary, t, tProgress, loadingLabel }: DocumentPartViewProps) {
+  const partStatus = part?.status ?? summary.status;
+  const partTitle = part?.title ?? summary.title;
+  const statusLabel = tProgress(partStatusLabel[partStatus]);
   const partContent = part?.content;
 
   if (!part) {
@@ -293,13 +306,13 @@ function DocumentPartView({ part, summary, t, tProgress }: DocumentPartViewProps
           <h2 className={styles.partTitle}>{partTitle}</h2>
           <div className={styles.partMeta}>
             <span className={`${styles.partStatus} ${styles[`status${partStatus.charAt(0).toUpperCase() + partStatus.slice(1)}`]}`}>
-              {tProgress(`partStatus.${partStatus}`)}
+              {statusLabel}
             </span>
           </div>
         </header>
-        <div className={styles.partLoading} role="status" aria-label={tProgress('loading')}>
+        <div className={styles.partLoading} role="status" aria-label={loadingLabel}>
           <div className={styles.loadingSpinner} />
-          <p>{tProgress('loading')}</p>
+          <p>{loadingLabel}</p>
         </div>
       </article>
     );
@@ -314,7 +327,7 @@ function DocumentPartView({ part, summary, t, tProgress }: DocumentPartViewProps
         <h2 className={styles.partTitle}>{partTitle}</h2>
         <div className={styles.partMeta}>
           <span className={`${styles.partStatus} ${styles[`status${partStatus.charAt(0).toUpperCase() + partStatus.slice(1)}`]}`}>
-            {tProgress(`partStatus.${partStatus}`)}
+            {statusLabel}
           </span>
         </div>
       </header>
@@ -322,19 +335,15 @@ function DocumentPartView({ part, summary, t, tProgress }: DocumentPartViewProps
       {isFailed && (
         <div className={styles.partError} role="alert">
           <p className={styles.partErrorText}>
-            {tErrors('part_generation_failed')}
+            {t('partGenerationFailed')}
           </p>
-          <p className={styles.partErrorHint}>{tProgress('partFailedHint')}</p>
-          <button type="button" className={styles.retryPartButton} disabled>
-            {tProgress('retryPartButton')}
-          </button>
         </div>
       )}
 
       {isGenerating ? (
-        <div className={styles.partLoading} role="status" aria-label={tProgress('partStatus.generating')}>
+        <div className={styles.partLoading} role="status" aria-label={statusLabel}>
           <div className={styles.loadingSpinner} />
-          <p>{tProgress(`partStatus.${partStatus}`)}</p>
+          <p>{statusLabel}</p>
         </div>
       ) : (
         <>
@@ -397,9 +406,9 @@ function DocumentPartView({ part, summary, t, tProgress }: DocumentPartViewProps
   );
 }
 
-function DocumentViewSkeleton() {
+function DocumentViewSkeleton({ label }: { label: string }) {
   return (
-    <div className={styles.skeleton} role="status" aria-label="Загрузка материала...">
+    <div className={styles.skeleton} role="status" aria-label={label}>
       <aside className={styles.tocSkeleton}>
         <Surface>
           <div className={styles.skeletonTocItem} />

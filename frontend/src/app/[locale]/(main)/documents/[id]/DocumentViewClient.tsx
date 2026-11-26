@@ -6,15 +6,17 @@ import { ShareModal } from '@/features/share';
 
 interface DocumentViewClientProps {
   documentId: string;
+  initialPartId?: string;
 }
 
-export function DocumentViewClient({ documentId }: DocumentViewClientProps) {
+export function DocumentViewClient({ documentId, initialPartId }: DocumentViewClientProps) {
   const [shareOpen, setShareOpen] = useState(false);
 
   return (
     <>
       <DocumentViewFeature
         documentId={documentId}
+        initialPartId={initialPartId}
         onShare={() => { setShareOpen(true); }}
       />
       <ShareModal

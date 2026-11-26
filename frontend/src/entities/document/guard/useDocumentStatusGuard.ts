@@ -19,6 +19,8 @@ interface UseDocumentStatusGuardOptions {
   onRedirect?: (fromStep: WizardStep, toStep: WizardStep) => void;
   /** If true, redirect will use router.replace instead of router.push */
   useReplace?: boolean;
+  /** Published part being opened directly while other parts are generating */
+  previewPartId?: string;
 }
 
 interface UseDocumentStatusGuardResult {
@@ -57,6 +59,7 @@ export function useDocumentStatusGuard({
   currentStep,
   onRedirect,
   useReplace = true,
+  previewPartId,
 }: UseDocumentStatusGuardOptions): UseDocumentStatusGuardResult {
   const router = useRouter();
 
@@ -68,6 +71,12 @@ export function useDocumentStatusGuard({
   // Check if redirect is needed and perform it
   useEffect(() => {
     if (isLoading || !document || hasRedirectedRef.current) return;
+
+    if (
+      currentStep === "document" &&
+      document.status === "generating" &&
+      document.parts.some((part) => part.id === previewPartId && part.status === "published")
+    ) return;
 
     const redirectStep = getRedirectForStatus(document.status, currentStep);
 
@@ -104,6 +113,7 @@ export function useDocumentStatusGuard({
     router,
     onRedirect,
     useReplace,
+    previewPartId,
   ]);
 
   // Handle error states (404, 403, etc.) using isApiError and error.code/error.status

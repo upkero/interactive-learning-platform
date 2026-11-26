@@ -145,12 +145,16 @@ export function ParsingCard({ documentId }: { documentId: string }) {
   }
 
   if (errorCode) {
+    const translationKey = `documentErrors.${errorCode}`;
+    const message = errorCode === "too_many_pages"
+      ? tErrors(errorCode)
+      : t(t.has(translationKey) ? translationKey : "documentErrors.parse_failed");
     return (
       <div className={styles.card} role="alert">
         <div className={styles.errorState}>
           <h2 className={styles.errorTitle}>{t("parsingFailed")}</h2>
           <p className={styles.errorMessage}>
-            {tErrors(errorCode as keyof typeof tErrors)}
+            {message}
           </p>
           <div className={styles.errorActions}>
             <button
