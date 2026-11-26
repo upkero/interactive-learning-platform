@@ -12,6 +12,12 @@ from markdown_it.token import Token
 
 _MARKER = re.compile(r'::image\{id="(img_\d+)"\}')
 _TABLE_ESCAPE = re.compile(r"\\(?=\|)")
+_SIMPLE_FENCED_ITEM = re.compile(
+    r"(?:[A-Za-z0-9][^\n]*\n\n)?"
+    r"(?P<fence>`{3,}|~{3,})[^\n`~]*\n"
+    r"(?:(?![ ]{0,3}(?P=fence))[^\n]*\n)*"
+    r"(?P<closing>(?P=fence)[ \t]*(?:\n|\Z))(?:[ \t]*\n)*"
+)
 
 
 def _with_source_range(rule: Callable[[StateInline, bool], bool]) -> Callable[[StateInline, bool], bool]:
@@ -31,6 +37,8 @@ class _IngestMarkdown(MarkdownIt):
 
 
 _MARKDOWN = _IngestMarkdown("default").enable("table")
+_MARKDOWN_BLOCKS = _IngestMarkdown("default").enable("table")
+_MARKDOWN_BLOCKS.core.ruler.disable("inline")
 _MARKDOWN.inline.ruler.at("image", _with_source_range(image))
 _MARKDOWN.inline.ruler.at("backticks", _with_source_range(backtick))
 _MARKDOWN.inline.ruler.at("html_inline", _with_source_range(html_inline))
@@ -69,6 +77,7 @@ class MarkdownStructure:
     images: tuple[Image, ...]
     blocks: tuple[Block, ...]
     markers: tuple[tuple[int, str], ...]
+    protected_blocks: tuple[Block, ...] = ()
 
 
 def _find_images(
@@ -128,11 +137,14 @@ def parse_markdown(markdown: str, *, extract_images: bool = False) -> MarkdownSt
     images: list[Image] = []
     markers: list[tuple[int, str]] = []
     blocks: list[Block] = []
+    protected_blocks: list[Block] = []
     row_columns: dict[int, int] = {}
     for index, token in enumerate(tokens):
         if token.map is None:
             continue
         first, last = token.map
+        if token.type in {"fence", "code_block", "table_open"}:
+            protected_blocks.append(Block(offsets[first], offsets[last], token.type))
         if token.level == 0 and token.type != "inline" and token.nesting != -1:
             plain = token.type == "paragraph_open" and all(
                 child.type in {"text", "softbreak"} for child in tokens[index + 1].children or ()
@@ -160,7 +172,27 @@ def parse_markdown(markdown: str, *, extract_images: bool = False) -> MarkdownSt
             images.extend(
                 _find_images(token, lines, offsets, blocks[-1], row_columns, table=previous.tag in {"td", "th"})
             )
-    return MarkdownStructure(tuple(headings), tuple(images), tuple(blocks), tuple(markers))
+    return MarkdownStructure(tuple(headings), tuple(images), tuple(blocks), tuple(markers), tuple(protected_blocks))
+
+
+def protected_markdown_blocks(markdown: str) -> tuple[Block, ...]:
+    """Find nested atomic blocks without parsing inline content."""
+    offset = 0
+    simple_blocks: list[Block] = []
+    while match := _SIMPLE_FENCED_ITEM.match(markdown, offset):
+        simple_blocks.append(Block(match.start("fence"), match.end("closing"), "fence"))
+        offset = match.end()
+    if offset == len(markdown) and simple_blocks:
+        return tuple(simple_blocks)
+    offsets = [0]
+    offsets.extend(match.end() for match in re.finditer(r"\r\n?|\n", markdown))
+    if offsets[-1] < len(markdown):
+        offsets.append(len(markdown))
+    return tuple(
+        Block(offsets[token.map[0]], offsets[token.map[1]], token.type)
+        for token in _MARKDOWN_BLOCKS.parse(markdown)
+        if token.map is not None and token.type in {"fence", "code_block", "table_open"}
+    )
 
 
 def escape_image_markers(markdown: str, structure: MarkdownStructure) -> str:

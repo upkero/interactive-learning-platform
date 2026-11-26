@@ -11,13 +11,15 @@ from src.app.contracts.documents.generation import GenerationAnswers, Generation
 from src.app.core.clock import SystemClock
 from src.app.core.settings.processing import ProcessingSettings
 from src.app.exceptions.documents import ProcessingLimitError
+from src.app.ingest.part_planner import DocumentPartPlanner
+from src.app.ingest.splitting import SplitLimits
+from src.app.ingest.tokens import TokenCounter
 from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
 from src.app.repositories.generation_ledger_repository import GenerationLedgerRepository
 from src.app.repositories.user_material_repository import UserMaterialRepository
 from src.app.repositories.user_repository import UserRepository
 from src.app.services.documents.generation_service import GenerationService
-from src.app.services.documents.topic_per_part_planner import TopicPerPartPlanner
 from src.app.services.quota.quota_ledger import QuotaLedger
 from src.app.storage.object_keys import parsed_markdown_key
 from tests.support.fakes.notifications.claims import FakeNotificationClaims
@@ -62,7 +64,7 @@ async def test_three_parallel_generations_only_two_start(session_factory: async_
             materials=UserMaterialRepository,
             parts=DocumentPartRepository,
             users=UserRepository,
-            planner=TopicPerPartPlanner(),
+            planner=DocumentPartPlanner(TokenCounter(), SplitLimits(15_000, 22_000)),
             storage=storage,
             ledger=QuotaLedger(
                 users_factory=UserRepository,

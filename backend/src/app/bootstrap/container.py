@@ -9,7 +9,7 @@ from src.app.core.clock import SystemClock
 from src.app.core.settings.app import get_app_settings
 from src.app.core.settings.auth import AuthSettings, get_auth_settings
 from src.app.core.settings.celery import get_celery_settings
-from src.app.core.settings.ingest import get_ingest_settings
+from src.app.core.settings.ingest import IngestSettings, get_ingest_settings
 from src.app.core.settings.llm import CheapLLMSettings, LLMSettings, get_cheap_llm_settings, get_llm_settings
 from src.app.core.settings.processing import ProcessingSettings, get_processing_settings
 from src.app.core.settings.progress import get_progress_settings
@@ -25,6 +25,8 @@ from src.app.ingest.parsers.base import DocumentParser as IngestDocumentParser
 from src.app.ingest.parsers.base import ParserRegistry
 from src.app.ingest.parsers.gdocs_importer import GDocsImporter
 from src.app.ingest.parsers.markdown_parser import MarkdownParser
+from src.app.ingest.part_planner import DocumentPartPlanner
+from src.app.ingest.splitting import SplitLimits
 from src.app.ingest.tokens import get_token_counter
 from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.interfaces.observability.metrics_collector import MetricsCollector
@@ -57,7 +59,6 @@ from src.app.services.documents.import_service import ImportService
 from src.app.services.documents.material_query_service import MaterialQueryService
 from src.app.services.documents.part_query_service import PartQueryService
 from src.app.services.documents.quiz_check_service import QuizCheckService
-from src.app.services.documents.topic_per_part_planner import TopicPerPartPlanner
 from src.app.services.documents.topic_segmenter import TopicSegmenter
 from src.app.services.documents.upload_service import UploadService
 from src.app.services.notifications.email_sender import EmailSender
@@ -95,6 +96,10 @@ class ApplicationContainer:
     @cached_property
     def processing_settings(self) -> ProcessingSettings:
         return get_processing_settings()
+
+    @cached_property
+    def ingest_settings(self) -> IngestSettings:
+        return get_ingest_settings()
 
     @cached_property
     def reports_settings(self) -> ReportsSettings:
@@ -266,7 +271,10 @@ class ApplicationContainer:
             materials=UserMaterialRepository,
             parts=DocumentPartRepository,
             users=UserRepository,
-            planner=TopicPerPartPlanner(),
+            planner=DocumentPartPlanner(
+                get_token_counter(),
+                SplitLimits(self.ingest_settings.split_target_tokens, self.ingest_settings.split_max_tokens),
+            ),
             storage=self.object_storage,
             ledger=self.quota_ledger,
             dispatcher=self.task_dispatcher,

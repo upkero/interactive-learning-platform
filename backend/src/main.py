@@ -14,12 +14,14 @@ from src.app.bootstrap.container import ApplicationContainer
 from src.app.core.logging import setup_logging
 from src.app.core.settings.app import get_app_settings
 from src.app.core.settings.auth import get_auth_settings
+from src.app.core.settings.ingest import get_ingest_settings
 from src.app.core.settings.logging import get_logging_settings
 from src.app.core.settings.smtp import get_smtp_settings, validate_smtp_config
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    get_ingest_settings()
     container = ApplicationContainer()
     app.state.container = container
     try:

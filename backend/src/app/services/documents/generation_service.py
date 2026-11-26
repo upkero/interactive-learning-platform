@@ -1,13 +1,13 @@
 """Generation service: plan preview (story 1.4.6) and start (story 1.4.7).
 
-``plan`` is a pure read: it loads the parsed tree, runs the splitting
-rules (1.10 later replaced through ``PartPlanner``) over the selected
+``plan`` is a pure read: it loads the parsed tree, runs ``PartPlanner`` over the selected
 topics and reports the cost against the quota — without reserving or
 writing anything. ``start`` does the same inside one transaction, then
 reserves quota, creates the parts and only after the commit enqueues
 them.
 """
 
+import asyncio
 import logging
 from collections.abc import Callable
 from uuid import UUID
@@ -172,7 +172,8 @@ class GenerationService:
 
         if set(topic_ids) - ids(tree):
             raise UnknownTopicError()
-        plan = TopicPlan(tuple(self._planner.plan(tree, set(topic_ids), markdown)))
+        parts = await asyncio.to_thread(self._planner.plan, tree, set(topic_ids), markdown)
+        plan = TopicPlan(tuple(parts))
         available = (await self._ledger.available(session, user_id=user_id)).available
         return plan, available
 

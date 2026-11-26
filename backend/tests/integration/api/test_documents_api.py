@@ -31,7 +31,9 @@ from src.app.contracts.documents import (
 )
 from src.app.contracts.quota import LedgerOp
 from src.app.contracts.widgets import UsageStatus, WidgetKind, WidgetUsageDraft
+from src.app.core.settings.ingest import IngestSettings
 from src.app.exceptions.tasks import TaskDispatchError
+from src.app.ingest.tokens import get_token_counter
 from src.app.models.document import Document
 from src.app.models.document_part import DocumentPart
 from src.app.models.generation_ledger import GenerationLedger
@@ -54,6 +56,7 @@ _PDF_PATH = Path(__file__).resolve().parents[2] / "support" / "fixtures" / "file
 _PDF_BYTES = _PDF_PATH.read_bytes()
 _DOCX_BYTES = (_PDF_PATH.parent / "sample.docx").read_bytes()
 _MD_BYTES = b"# Notes\n\nSome markdown content for the title test.\n"
+_PARSED_TOPIC_TEXTS = ("a" * 1200, "b" * 600)
 
 
 @pytest.fixture
@@ -651,6 +654,8 @@ async def test_topics_of_a_foreign_document_is_404(client: TestClient) -> None:
 async def test_plan_preview_is_stable_and_leaves_the_quota_journal_untouched(
     client: TestClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
+    container = cast(ApplicationContainer, cast(FastAPI, client.app).state.container)
+    container.__dict__["ingest_settings"] = IngestSettings(SPLIT_TARGET_TOKENS=250, SPLIT_MAX_TOKENS=500)
     _register(client)
     created = _upload(client, filename="lecture.pdf")
     document_id = UUID(created.json()["id"])
@@ -671,7 +676,8 @@ async def test_plan_preview_is_stable_and_leaves_the_quota_journal_untouched(
 
     body = first.json()
     assert body["cost"] == len(body["parts"]) == 2
-    assert body["parts"][0]["tokens"] == 320
+    counter = get_token_counter()
+    assert [part["tokens"] for part in body["parts"]] == [counter.count(text) for text in _PARSED_TOPIC_TEXTS]
     assert body["available"] == 20  # default monthly limit
 
     # the journal is untouched: nothing was reserved by the preview
@@ -961,7 +967,7 @@ async def _make_parsed(
     await container.object_storage.put_object(
         bucket="documents",
         key=parsed_markdown_key(document.owner_id, document_id),
-        data=("a" * 1200 + "b" * 600).encode(),
+        data="".join(_PARSED_TOPIC_TEXTS).encode(),
         content_type="text/markdown",
     )
 
