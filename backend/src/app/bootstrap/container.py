@@ -418,6 +418,14 @@ class ApplicationContainer:
         )
 
     @cached_property
+    def quiz_generator(self) -> QuizGenerator:
+        return QuizGenerator(
+            llm=self.main_llm,
+            settings=self.solver_settings,
+            metrics=self.metrics_collector,
+        )
+
+    @cached_property
     def metrics_collector(self) -> MetricsCollector:
         return PrometheusMetricsCollector()
 

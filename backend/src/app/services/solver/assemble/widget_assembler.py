@@ -82,9 +82,7 @@ class WidgetAssembler:
         finally:
             self._metrics.observe_histogram(_ASSEMBLE_DURATION, perf_counter() - started)
 
-        placements = tuple(
-            WidgetPlacement(ref=record.directive_ref, usage_id=record.id) for record in records
-        )
+        placements = tuple(WidgetPlacement(ref=record.directive_ref, usage_id=record.id) for record in records)
         placed = len(placements)
         skipped = len(resolutions) - placed
         self._metrics.increment_counter(_PLACED_COUNTER, by=placed)

@@ -14,10 +14,10 @@ from collections.abc import Sequence
 from time import perf_counter
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from src.app.contracts.llm.llm_message import LLMMessage
-from src.app.contracts.llm.llm_request import LLMRequest, LLMPurpose
+from src.app.contracts.llm.llm_request import LLMRequest
 from src.app.contracts.llm.system_block import SystemBlock
 from src.app.contracts.solver.main_pass import MainPassDirective
 from src.app.contracts.solver.quiz_draft import QuizDraft, QuizType
@@ -43,8 +43,8 @@ novice needs simple, concrete questions; advanced needs precision and edge cases
 
 Supported types:
 - single_choice — one correct option among 4; give correct_id and why_wrong for each distractor.
-- multiple_choice — 2–4 correct options among 5–6; give correct_ids and why_wrong for each distractor.
-- ordering — 4–5 items to put in the correct order; give correct_order and common_mistakes.
+- multiple_choice — 2-4 correct options among 5-6; give correct_ids and why_wrong for each distractor.
+- ordering — 4-5 items to put in the correct order; give correct_order and common_mistakes.
 - numeric — one numeric answer with unit; give answer, tolerance and common_mistakes.
 
 Answer with the JSON object required by the response schema."""
@@ -159,9 +159,7 @@ class QuizGenerator:
                         generated += 1
                         verified += 1
                     except Exception:
-                        logger.exception(
-                            "Quiz generation failed for directive %r.", directive.ref
-                        )
+                        logger.exception("Quiz generation failed for directive %r.", directive.ref)
                         failed += 1
         finally:
             self._metrics.observe_histogram(_GENERATE_DURATION, perf_counter() - started)
@@ -211,10 +209,7 @@ class QuizGenerator:
         )
 
     async def _verify(self, quiz: _GeneratedQuiz, part_markdown: str) -> bool:
-        context = (
-            f"<quiz>\n{quiz.model_dump_json()}\n</quiz>\n"
-            f"<part>\n{part_markdown}\n</part>\n"
-        )
+        context = f"<quiz>\n{quiz.model_dump_json()}\n</quiz>\n<part>\n{part_markdown}\n</part>\n"
         request = LLMRequest(
             purpose="quiz_verify",
             system=(SystemBlock(_QUIZ_VERIFY_SYSTEM, cache=True),),
@@ -232,9 +227,7 @@ class QuizGenerator:
     @staticmethod
     def _to_draft(ref: str, quiz: _GeneratedQuiz) -> QuizDraft:
         key = quiz.key or f"q{uuid4().hex[:8]}"
-        options = (
-            [{"id": o.id, "text": o.text} for o in quiz.options] if quiz.options is not None else None
-        )
+        options = [{"id": o.id, "text": o.text} for o in quiz.options] if quiz.options is not None else None
         answer_key: dict[str, object] = {}
         if quiz.type == "single_choice":
             answer_key = {
