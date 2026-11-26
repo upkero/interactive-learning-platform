@@ -84,7 +84,7 @@ class PrometheusMetricsCollector(MetricsCollector):
         with _REGISTRY_LOCK:
             gauge = _GAUGES.get(metric_name)
             if gauge is None:
-                gauge = Gauge(metric_name, f"Grasp gauge {metric_name}")
+                gauge = Gauge(metric_name, f"Grasp gauge {metric_name}", multiprocess_mode="livesum")
                 _GAUGES[metric_name] = gauge
         gauge.set(value)
 

@@ -63,13 +63,14 @@ http://localhost:8000/docs
 
 Боевая конфигурация описана в `docs/adr/0009-deployment.md`.
 
-Используются три имени: `app.<домен>` (приложение и API на `/api/`),
-`widgets.<домен>` (iframe-виджеты) и `files.<домен>` (MinIO). Удалите старую
+Настройте DNS для четырёх имён: `app.<домен>` (приложение и API на `/api/`),
+`widgets.<домен>` (iframe-виджеты), `files.<домен>` (MinIO) и
+`grafana.<домен>` (Grafana). Удалите старую
 DNS-запись отдельного домена API. Например, список имён сертификата:
 
 ```bash
 certbot certonly --webroot -w /var/www/certbot --cert-name grasp.example \
-  -d app.grasp.example -d widgets.grasp.example -d files.grasp.example
+  -d app.grasp.example -d widgets.grasp.example -d files.grasp.example -d grafana.grasp.example
 ```
 
 При реализации frontend (4.1.1) адрес назначения server-side rewrites для
@@ -91,3 +92,25 @@ IMAGE_TAG=<commit-sha> ./infra/deploy.sh
 ```
 
 Скрипт требует `IMAGE_TAG` (деплой воспроизводим, без туманных тегов), проверяет `backend/.env` (права 600) и XFS-каталог `MINIO_DATA_DIR`, тянет образы из GHCR и поднимает стек с Nginx-прокси (порты 80/443). Пакет `aistor-minio` приватный — без `docker login ghcr.io` на самой VPS деплой не скачает образ MinIO.
+# Наблюдаемость
+
+Для локального Compose задайте `GF_SECURITY_ADMIN_PASSWORD` в `backend/.env`.
+Grafana доступна только с локального компьютера на `http://127.0.0.1:3001`,
+Prometheus — на `http://127.0.0.1:9090`. Вход в Grafana: пользователь `admin`
+и заданный пароль. Production требует отдельный сильный пароль и TLS-домен
+`grafana.<домен>` в сертификате; в `backend/.env` задайте также
+`GF_SERVER_ROOT_URL=https://grafana.<домен>/` с вашим доменом. Этот адрес должен
+совпадать с именем в конфигурации Nginx и сертификате. Внутренние порты наружу
+не публикуются.
+
+Для отчёта выгрузите журнал и запустите скрипт из `backend/`:
+
+```sh
+logcli --addr=http://127.0.0.1:3100 query '{logger="grasp.decisions"} | json | event="part.summary"' --output=jsonl --limit=10000 > parts.jsonl
+uv run python evals/usage_report.py parts.jsonl parts.csv
+```
+
+Доля кэша — `cache_read / (input + cache_read + cache_write)`. Если цена
+модели неизвестна, стоимость части остаётся пустой, а не считается нулевой.
+Для локального Celery с пулом prefork (даже с одним процессом) задайте `PROMETHEUS_MULTIPROC_DIR`
+как существующий доступный на запись каталог и очищайте его перед стартом.

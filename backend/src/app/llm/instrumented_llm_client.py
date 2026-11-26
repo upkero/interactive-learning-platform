@@ -43,6 +43,7 @@ from src.app.exceptions.llm import (
 )
 from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.interfaces.observability.metrics_collector import MetricsCollector
+from src.app.observability.usage_tracker import get_usage_tracker
 
 _USAGE_FIELDS = (
     "input_tokens",
@@ -113,6 +114,8 @@ class InstrumentedLLMClient(LLMClient):
         duration = self._observe_duration(started_at=started_at, outcome="success", purpose=_UNSET_PURPOSE)
         self._record_request(outcome="success", purpose=_UNSET_PURPOSE)
         self._record_usage(response.usage)
+        if response.usage is not None and (tracker := get_usage_tracker()) is not None:
+            tracker.add(purpose=_UNSET_PURPOSE, model=self.model_name, usage=response.usage)
         self._logger.info(
             "LLM call completed.",
             extra={
@@ -139,6 +142,8 @@ class InstrumentedLLMClient(LLMClient):
         duration = self._observe_duration(started_at=started_at, outcome="success", purpose=request.purpose)
         self._record_request(outcome="success", purpose=request.purpose)
         self._record_usage(response.usage, purpose=request.purpose)
+        if response.usage is not None and (tracker := get_usage_tracker()) is not None:
+            tracker.add(purpose=request.purpose, model=self.model_name, usage=response.usage)
         usage = response.usage
         self._log_cache_miss(request, usage)
         self._logger.info(

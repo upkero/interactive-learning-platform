@@ -70,9 +70,14 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
         document = self._documents.get(document_id)
         if document is None or document.status is not DocumentStatus.GENERATING or self._parts is None:
             return
-        parts = await self._parts.list_by_document(document_id)
-        if parts and all(p.status in {PartStatus.PUBLISHED, PartStatus.FAILED} for p in parts):
-            published = any(p.status is PartStatus.PUBLISHED for p in parts)
+        all_parts = await self._parts.list_by_document(document_id)
+        current_parts = [p for p in all_parts if p.index >= document.generation_start_index]
+        if current_parts and all(p.status in {PartStatus.PUBLISHED, PartStatus.FAILED} for p in current_parts):
+            # A previous successful run keeps the document usable even when
+            # every part of the current run failed. This matches the SQL
+            # repository, which checks terminality for the current run but
+            # publication across all runs.
+            published = any(p.status is PartStatus.PUBLISHED for p in all_parts)
             self._documents[document_id] = replace(
                 document,
                 status=DocumentStatus.DONE if published else DocumentStatus.FAILED,
@@ -86,9 +91,50 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
             key=lambda d: (d.updated_at, d.id),
         )[:limit]
 
+    async def stale_parsing(self, *, older_than: timedelta, limit: int) -> list[DocumentRecord]:
+        before = now() - older_than
+        return sorted(
+            (d for d in self._documents.values() if d.status is DocumentStatus.PARSING and d.updated_at < before),
+            key=lambda d: (d.updated_at, d.id),
+        )[:limit]
+
+    async def fail_stale_parsing(self, document_id: UUID, *, older_than: timedelta) -> bool:
+        row = self._documents.get(document_id)
+        if row is None or row.status is not DocumentStatus.PARSING or row.updated_at >= now() - older_than:
+            return False
+        await self.set_status(document_id, DocumentStatus.FAILED, error_code=DocumentErrorCode.PARSE_FAILED)
+        return True
+
     async def touch(self, document_id: UUID) -> None:
         if document_id in self._documents:
             self._documents[document_id] = replace(self._documents[document_id], updated_at=now())
+
+    async def update_source(
+        self,
+        document_id: UUID,
+        *,
+        object_key: str,
+        title: str | None = None,
+        page_count: int | None = None,
+        mime_type: str | None = None,
+        size_bytes: int | None = None,
+    ) -> None:
+        row = self._documents.get(document_id)
+        if row is not None:
+            self._documents[document_id] = replace(
+                row,
+                object_key=object_key,
+                title=title or row.title,
+                page_count=page_count if page_count is not None else row.page_count,
+                mime_type=mime_type if mime_type is not None else row.mime_type,
+                size_bytes=size_bytes if size_bytes is not None else row.size_bytes,
+            )
+
+    async def begin_parsing(self, document_id: UUID) -> DocumentRecord | None:
+        row = self._documents.get(document_id)
+        if row is None or row.status not in {DocumentStatus.UPLOADED, DocumentStatus.PARSING, DocumentStatus.FAILED}:
+            return None
+        return await self.set_status(document_id, DocumentStatus.PARSING)
 
     async def get_owned(self, document_id: UUID, owner_id: UUID) -> DocumentRecord | None:
         row = self._documents.get(document_id)
@@ -147,6 +193,10 @@ class FakeDocumentRepository(DocumentRepositoryProtocol):
             return updated
         return None
 
+    async def set_generation_start(self, document_id: UUID, index: int) -> None:
+        if document_id in self._documents:
+            self._documents[document_id] = replace(self._documents[document_id], generation_start_index=index)
+
     async def set_topic_tree(
         self,
         document_id: UUID,
@@ -203,6 +253,12 @@ class FakeDocumentPartRepository(DocumentPartRepositoryProtocol):
         return sorted(
             (p for p in self._parts.values() if p.document_id == document_id),
             key=lambda p: p.index,
+        )
+
+    async def has_published_since(self, document_id: UUID, start_index: int) -> bool:
+        return any(
+            p.document_id == document_id and p.index >= start_index and p.status is PartStatus.PUBLISHED
+            for p in self._parts.values()
         )
 
     async def add_many(self, document_id: UUID, parts: Sequence[PartDraft]) -> list[PartRecord]:
@@ -288,6 +344,19 @@ class FakeImageRepository(ImageRepositoryProtocol):
             self._images[record.id] = record
             created.append(record)
         return created
+
+    async def delete_by_document(self, document_id: UUID) -> list[ImageRecord]:
+        records = await self.list_by_document(document_id)
+        for record in records:
+            self._images.pop(record.id, None)
+        return records
+
+    async def update_descriptions(self, document_id: UUID, descriptions: Mapping[str, str | None]) -> None:
+        for image_id, record in list(self._images.items()):
+            if record.document_id == document_id:
+                ref = record.object_key.rsplit("/", 1)[-1].removesuffix(".png")
+                if ref in descriptions:
+                    self._images[image_id] = replace(record, description=descriptions[ref])
 
 
 class FakeUserMaterialRepository(UserMaterialRepositoryProtocol):

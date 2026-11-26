@@ -11,6 +11,7 @@ from src.app.contracts.users import UserRecord
 from src.app.contracts.users.profile_update import ProfileUpdate
 from src.app.exceptions.users import UserAlreadyExistsError, UserNotFoundError, UsersIntegrityError
 from src.app.interfaces.repositories.users import UserRepositoryProtocol
+from src.app.models.document import Document
 from src.app.models.user import User
 from src.app.repositories._errors import constraint_name
 
@@ -41,6 +42,12 @@ class UserRepository(UserRepositoryProtocol):
     async def get(self, user_id: UUID) -> UserRecord | None:
         row = await self._session.get(User, user_id)
         return self._to_record(row) if row is not None else None
+
+    async def get_locale_by_document(self, document_id: UUID) -> str:
+        locale = await self._session.scalar(
+            select(User.locale).join(Document, Document.owner_id == User.id).where(Document.id == document_id)
+        )
+        return locale or "ru"
 
     async def get_by_email(self, email: str) -> UserRecord | None:
         row = (await self._session.scalars(select(User).where(User.email == email))).first()

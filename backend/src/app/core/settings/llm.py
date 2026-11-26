@@ -26,8 +26,8 @@ class LLMSettings(BaseSettings):
     base_url: str | None = Field(
         default=None,
         description=(
-            "Base URL for openai_compatible providers (Ollama, OpenRouter, a proxy). "
-            "Empty means the official OpenAI API."
+            "Base URL override for the configured provider. For the Anthropic Messages API "
+            "through OpenRouter, use https://openrouter.ai/api."
         ),
     )
     timeout_seconds: float = Field(default=120.0, gt=0.0, description="Per-request timeout in seconds.")

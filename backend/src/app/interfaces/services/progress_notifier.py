@@ -3,10 +3,13 @@
 from typing import Protocol
 from uuid import UUID
 
+from src.app.contracts.documents.statuses import DocumentErrorCode
 from src.app.contracts.progress import ProgressEventType
 
 
 class ProgressNotifier(Protocol):
+    async def reset(self, document_id: UUID) -> None: ...
+
     async def emit(
         self,
         document_id: UUID,
@@ -15,4 +18,5 @@ class ProgressNotifier(Protocol):
         part_id: UUID | None = None,
         stage: str | None = None,
         message: str = "",
-    ) -> None: ...
+        error_code: DocumentErrorCode | None = None,
+    ) -> str | None: ...
