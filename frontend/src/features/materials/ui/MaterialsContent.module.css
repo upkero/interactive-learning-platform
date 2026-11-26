@@ -1,0 +1,88 @@
+.container {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: var(--g-space-6);
+  align-items: start;
+}
+
+.quotaSidebar {
+  position: sticky;
+  top: calc(var(--g-header-height) + var(--g-space-4));
+}
+
+.main {
+  min-width: 0;
+}
+
+.filterTabs {
+  display: flex;
+  gap: var(--g-space-1);
+  border-bottom: var(--g-hairline) solid var(--g-color-border);
+  padding-bottom: var(--g-space-1);
+  margin-bottom: var(--g-space-4);
+  overflow-x: auto;
+}
+
+.filterTab {
+  padding: var(--g-space-2) var(--g-space-4);
+  border: none;
+  background: transparent;
+  color: var(--g-color-text-muted);
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-medium);
+  border-radius: var(--g-radius-md);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color var(--g-duration-fast) var(--g-easing),
+    background-color var(--g-duration-fast) var(--g-easing);
+}
+
+.filterTab:hover {
+  color: var(--g-color-text);
+  background: var(--g-color-bg);
+}
+
+.filterTab.active {
+  color: var(--g-color-primary);
+  background: var(--g-color-primary-light);
+}
+
+.filterTab:focus-visible {
+  outline: 2px solid var(--g-focus-color);
+  outline-offset: 2px;
+}
+
+.panel {
+  animation: fadeIn var(--g-duration-fast) var(--g-easing);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 900px) {
+  .container {
+    grid-template-columns: 1fr;
+  }
+
+  .quotaSidebar {
+    position: static;
+    max-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .filterTab,
+  .panel {
+    transition: none;
+    animation: none;
+  }
+}

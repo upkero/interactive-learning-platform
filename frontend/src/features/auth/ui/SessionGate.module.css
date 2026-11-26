@@ -1,0 +1,83 @@
+.gate {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  padding: var(--g-space-5);
+  background: var(--g-color-bg);
+  color: var(--g-color-text);
+}
+
+.spinner {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 3px solid var(--g-color-border);
+  border-top-color: var(--g-color-accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.errorBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--g-space-4);
+  max-width: 28rem;
+  padding: var(--g-space-6) var(--g-space-5);
+  border: var(--g-hairline) solid var(--g-color-danger);
+  border-radius: var(--g-radius-lg);
+  background: var(--g-color-surface);
+  text-align: center;
+}
+
+.errorText {
+  margin: 0;
+  color: var(--g-color-danger-text);
+  font-size: var(--g-text-sm);
+  line-height: 1.6;
+}
+
+.retry {
+  min-height: var(--g-control-min-height);
+  padding: var(--g-space-2) var(--g-space-4);
+  border: none;
+  border-radius: var(--g-radius-md);
+  background: var(--g-color-accent);
+  color: var(--g-color-accent-contrast);
+  font-family: var(--g-font-sans);
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color var(--g-duration-fast) var(--g-easing),
+    transform var(--g-duration-fast) var(--g-easing);
+}
+
+.retry:hover {
+  background: var(--g-color-accent-hover);
+}
+
+.retry:active {
+  transform: scale(0.98);
+}
+
+.retry:focus-visible {
+  outline: 2px solid var(--g-focus-color);
+  outline-offset: 2px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2s;
+  }
+
+  .retry {
+    transition: none;
+  }
+}

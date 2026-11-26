@@ -1,0 +1,286 @@
+.tableWrapper {
+  overflow-x: auto;
+  border: var(--g-hairline) solid var(--g-color-border);
+  border-radius: var(--g-radius-lg);
+  background: var(--g-color-bg-elevated);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--g-text-sm);
+}
+
+.headerCell {
+  padding: var(--g-space-3) var(--g-space-4);
+  text-align: left;
+  font-weight: var(--g-font-semibold);
+  color: var(--g-color-text-muted);
+  border-bottom: var(--g-hairline) solid var(--g-color-border);
+  white-space: nowrap;
+}
+
+.row {
+  border-bottom: var(--g-hairline) solid var(--g-color-border);
+  transition: background-color var(--g-duration-fast) var(--g-easing);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.row:hover {
+  background: var(--g-color-bg);
+}
+
+.cell {
+  padding: var(--g-space-3) var(--g-space-4);
+  vertical-align: middle;
+}
+
+.titleLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--g-space-2);
+  color: var(--g-color-text);
+  font-weight: var(--g-font-medium);
+  transition: color var(--g-duration-fast) var(--g-easing);
+}
+
+.titleLink:hover {
+  color: var(--g-color-primary);
+}
+
+.titleLink:focus-visible {
+  outline: 2px solid var(--g-focus-color);
+  outline-offset: 2px;
+  border-radius: var(--g-radius-sm);
+}
+
+.sharedBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--g-space-1) var(--g-space-2);
+  font-size: var(--g-text-xs);
+  font-weight: var(--g-font-medium);
+  color: var(--g-color-primary);
+  background: var(--g-color-primary-light);
+  border-radius: var(--g-radius-full);
+}
+
+.partsCount {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--g-font-mono);
+  color: var(--g-color-text);
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--g-space-1) var(--g-space-2);
+  font-size: var(--g-text-xs);
+  font-weight: var(--g-font-medium);
+  border-radius: var(--g-radius-full);
+  white-space: nowrap;
+}
+
+.statusParsing {
+  color: var(--g-color-info);
+  background: var(--g-color-info-light);
+}
+
+.statusTopics {
+  color: var(--g-color-primary);
+  background: var(--g-color-primary-light);
+}
+
+.statusGenerating {
+  color: var(--g-color-warning);
+  background: var(--g-color-warning-light);
+}
+
+.statusReady {
+  color: var(--g-color-success);
+  background: var(--g-color-success-light);
+}
+
+.statusError {
+  color: var(--g-color-error);
+  background: var(--g-color-error-light);
+}
+
+.roleBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--g-space-1) var(--g-space-2);
+  font-size: var(--g-text-xs);
+  font-weight: var(--g-font-medium);
+  color: var(--g-color-text-muted);
+  background: var(--g-color-bg);
+  border-radius: var(--g-radius-full);
+}
+
+.time {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--g-font-mono);
+  color: var(--g-color-text-muted);
+}
+
+.actions {
+  display: flex;
+  gap: var(--g-space-2);
+}
+
+.actionLink {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--g-space-1) var(--g-space-3);
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-medium);
+  color: var(--g-color-primary);
+  background: var(--g-color-primary-light);
+  border-radius: var(--g-radius-md);
+  transition:
+    color var(--g-duration-fast) var(--g-easing),
+    background-color var(--g-duration-fast) var(--g-easing);
+}
+
+.actionLink:hover {
+  color: var(--g-color-primary-hover);
+  background: var(--g-color-primary);
+}
+
+.actionLink:focus-visible {
+  outline: 2px solid var(--g-focus-color);
+  outline-offset: 2px;
+}
+
+.skeletonList {
+  padding: var(--g-space-4);
+}
+
+.skeletonRow {
+  display: grid;
+  grid-template-columns: 30% 15% 20% 15% 10% 10%;
+  gap: var(--g-space-4);
+  padding: var(--g-space-3) var(--g-space-4);
+  border-bottom: var(--g-hairline) solid var(--g-color-border);
+}
+
+.skeletonRow:last-child {
+  border-bottom: none;
+}
+
+.skeletonCell {
+  height: 20px;
+  background: linear-gradient(
+    90deg,
+    var(--g-color-border) 25%,
+    var(--g-color-bg) 50%,
+    var(--g-color-border) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--g-radius-sm);
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--g-space-12) var(--g-space-4);
+  text-align: center;
+  color: var(--g-color-text-muted);
+}
+
+.emptyText {
+  margin: 0 0 var(--g-space-4);
+  font-size: var(--g-text-md);
+}
+
+.emptyAction {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--g-space-2) var(--g-space-4);
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-medium);
+  color: var(--g-color-primary);
+  background: var(--g-color-primary-light);
+  border-radius: var(--g-radius-md);
+  transition:
+    color var(--g-duration-fast) var(--g-easing),
+    background-color var(--g-duration-fast) var(--g-easing);
+}
+
+.emptyAction:hover {
+  color: var(--g-color-primary-hover);
+  background: var(--g-color-primary);
+}
+
+.emptyAction:focus-visible {
+  outline: 2px solid var(--g-focus-color);
+  outline-offset: 2px;
+}
+
+.errorState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--g-space-12) var(--g-space-4);
+  text-align: center;
+  color: var(--g-color-error);
+}
+
+.errorMessage {
+  margin: 0 0 var(--g-space-4);
+  font-size: var(--g-text-md);
+}
+
+.retryButton {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--g-space-2) var(--g-space-4);
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-medium);
+  color: var(--g-color-primary);
+  background: var(--g-color-primary-light);
+  border: none;
+  border-radius: var(--g-radius-md);
+  cursor: pointer;
+  transition:
+    color var(--g-duration-fast) var(--g-easing),
+    background-color var(--g-duration-fast) var(--g-easing);
+}
+
+.retryButton:hover {
+  color: var(--g-color-primary-hover);
+  background: var(--g-color-primary);
+}
+
+.retryButton:focus-visible {
+  outline: 2px solid var(--g-focus-color);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row,
+  .titleLink,
+  .actionLink,
+  .emptyAction,
+  .retryButton,
+  .skeletonCell {
+    transition: none;
+    animation: none;
+  }
+}
