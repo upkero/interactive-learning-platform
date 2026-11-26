@@ -41,6 +41,28 @@ echo "$GHCR_TOKEN" | docker login ghcr.io -u <github-логин> --password-stdi
 docker compose --env-file backend/.env -f infra/compose.yml --profile local-llm up -d
 ```
 
+## Демо готового материала
+
+Демо-заполнение создаёт готовый конспект и тест в локальной БД. Для этого
+сценария достаточно API с его зависимостями и локального фронтенда.
+Генерация и обращения к LLM при просмотре конспекта и проверке ответа не нужны.
+
+```bash
+docker compose --env-file backend/.env -f infra/compose.yml up -d api
+docker compose --env-file backend/.env -f infra/compose.yml --profile seed run --rm seed
+pnpm install --frozen-lockfile
+pnpm --filter grasp-frontend dev
+```
+
+1. Откройте [страницу входа](http://localhost:3000/ru/login). Войдите как
+   `bob@example.com` с паролем из `SEED_PASSWORD` в `backend/.env`
+   (в шаблоне `dev-seed-password`).
+2. В «Моих материалах» откройте **Neural networks basics**. В конспекте
+   появится часть **From neurons to layers**.
+3. Нажмите «Пройти тест по части», выберите **Activation** и нажмите
+   «Завершить тест». На экране появятся результат **1 из 1**, **100%**
+   и пояснение. «Вернуться к конспекту» открывает тот же материал.
+
 ## Проверка, что всё поднялось
 
 ```bash

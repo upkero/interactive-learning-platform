@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useDocument, useDocumentParts, usePart } from '@/entities/document';
 import { useDocumentStatusGuard } from '@/entities/document/guard/useDocumentStatusGuard';
 import { ApiError } from '@/shared/api/errors';
@@ -26,8 +26,7 @@ export function DocumentViewFeature({ documentId, onShare }: DocumentViewFeature
   const tEmpty = useTranslations('empty');
 
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const locale = searchParams.get('locale') || 'ru';
+  const locale = useLocale();
 
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
   const [showTOC, setShowTOC] = useState(true);

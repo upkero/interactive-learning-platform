@@ -7,5 +7,5 @@ export default async function QuizPage({
 }) {
   const { id } = await params;
 
-  return <QuizFeature partId={id} documentId={id.split('-')[0]} />;
+  return <QuizFeature partId={id} key={id} />;
 }

@@ -1,43 +1,33 @@
 'use client';
 
-import { useCallback, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { useQuiz, useSubmitQuiz, useQuizResult } from '@/entities/quiz';
+import { type Quiz, type QuizResult, useQuiz, useSubmitQuiz } from '@/entities/quiz';
 import { ApiError } from '@/shared/api/errors';
 import { ActionLink } from '@/shared/ui/action-link/ActionLink';
 import { PageShell } from '@/shared/ui/page-shell/PageShell';
 import { Surface } from '@/shared/ui/surface/Surface';
 import styles from './QuizFeature.module.css';
 
-export function QuizFeature({ partId, documentId }: { partId: string; documentId: string }) {
+export function QuizFeature({ partId }: { partId: string }) {
   const t = useTranslations('quiz');
   const tCommon = useTranslations('common');
   const tErrors = useTranslations('errors');
 
-  const searchParams = useSearchParams();
-  const locale = searchParams.get('locale') || 'ru';
-
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string[]>>({});
-  const [submitted, setSubmitted] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [answers, setAnswers] = useState<Partial<Record<string, string[]>>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const quizQuery = useQuiz(partId);
   const submitMutation = useSubmitQuiz();
-  const resultQuery = useQuizResult(partId);
 
   const quiz = quizQuery.data;
-  const result = resultQuery.data;
-
-  // Show result if available (after submit or from cache)
-  if (submitted && result) {
-    return renderResultScreen();
-  }
+  const result = submitMutation.data;
+  const isSubmitting = submitMutation.isPending;
+  const materialHref = quiz ? `/documents/${quiz.document_id}` : "/materials";
 
   // Loading state
-  if (quizQuery.isPending || (submitted && resultQuery.isPending)) {
+  if (quizQuery.isPending) {
     return (
       <PageShell title={t('title')} description={t('questionProgress', { current: 1, total: 1 })}>
         <QuizSkeleton />
@@ -66,11 +56,11 @@ export function QuizFeature({ partId, documentId }: { partId: string; documentId
                 {tCommon('retry')}
               </button>
               <ActionLink
-                href={`/${locale}/documents/${documentId}`}
+                href={materialHref}
                 variant="secondary"
                 className={styles.actionButton}
               >
-                {t('backToMaterial')}
+                {tCommon('back')}
               </ActionLink>
             </div>
           </div>
@@ -87,7 +77,7 @@ export function QuizFeature({ partId, documentId }: { partId: string; documentId
           <div className={styles.emptyState} role="status">
             <p>{t('emptyQuiz')}</p>
             <ActionLink
-              href={`/${locale}/documents/${documentId}`}
+              href={materialHref}
               variant="primary"
             >
               {t('backToMaterial')}
@@ -98,87 +88,51 @@ export function QuizFeature({ partId, documentId }: { partId: string; documentId
     );
   }
 
+  if (result) {
+    return renderResultScreen(quiz, result);
+  }
+
   const questions = quiz.questions;
   const currentQuestion = questions[currentQuestionIndex];
   const isLastQuestion = currentQuestionIndex === questions.length - 1;
-  const answeredCount = Object.keys(answers).length;
+  const currentAnswers = answers[currentQuestion.id] ?? [];
+  const answeredCount = questions.filter(({ id }) => (answers[id]?.length ?? 0) > 0).length;
   const canSubmit = answeredCount === questions.length;
 
-  const handleOptionChange = useCallback((questionId: string, optionId: string) => {
-    const question = questions.find((q) => q.id === questionId);
-    if (!question) return;
+  function handleOptionChange(optionId: string) {
+    const selectedOptions = currentQuestion.type === 'single_choice'
+      ? [optionId]
+      : currentAnswers.includes(optionId)
+        ? currentAnswers.filter((id) => id !== optionId)
+        : [...currentAnswers, optionId];
+    setAnswers({ ...answers, [currentQuestion.id]: selectedOptions });
+  }
 
-    setAnswers((prev) => {
-      const next = { ...prev };
-      if (question.type === 'single_choice') {
-        next[questionId] = [optionId];
-      } else {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        const current = next[questionId] || [];
-        if (current.includes(optionId)) {
-          next[questionId] = current.filter((id) => id !== optionId);
-        } else {
-          next[questionId] = [...current, optionId];
-        }
-      }
-      return next;
-    });
-  }, [questions]);
-
-  const handleNext = useCallback(() => {
-    if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex((prev) => prev + 1);
-    }
-  }, [currentQuestionIndex, questions.length]);
-
-  const handlePrevious = useCallback(() => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex((prev) => prev - 1);
-    }
-  }, [currentQuestionIndex]);
-
-  const handleSubmit = useCallback(() => {
+  function handleSubmit() {
     if (!canSubmit || isSubmitting) return;
-
-    setIsSubmitting(true);
     setSubmitError(null);
 
-    const submitAnswers = Object.entries(answers).map(([question_id, option_ids]) => ({
-      question_id,
-      option_ids,
+    const submitAnswers = questions.map(({ id }) => ({
+      question_id: id,
+      option_ids: answers[id] ?? [],
     }));
 
-    void submitMutation.mutateAsync({
-      partId,
-      body: { answers: submitAnswers },
-    }).then(() => {
-      setSubmitted(true);
-      // Refetch result
-      void resultQuery.refetch();
-    }).catch((error: unknown) => {
-      if (error instanceof ApiError) {
-        setSubmitError(tErrors(error.code));
-      } else {
-        setSubmitError(tErrors('unknown_error'));
-      }
-    }).finally(() => {
-      setIsSubmitting(false);
-    });
-  }, [canSubmit, isSubmitting, partId, answers, submitMutation, resultQuery, tErrors]);
+    submitMutation.mutate(
+      { partId, body: { answers: submitAnswers } },
+      {
+        onError: (error) => {
+          setSubmitError(tErrors(error instanceof ApiError ? error.code : 'unknown_error'));
+        },
+      },
+    );
+  }
 
-  const handleGoToQuestion = useCallback((index: number) => {
-    if (index >= 0 && index < questions.length) {
-      setCurrentQuestionIndex(index);
-    }
-  }, [questions.length]);
-
-  const handleRetryQuiz = useCallback(() => {
-    setSubmitted(false);
+  function handleRetryQuiz() {
+    submitMutation.reset();
     setAnswers({});
     setCurrentQuestionIndex(0);
     setSubmitError(null);
-    void quizQuery.refetch();
-  }, [quizQuery]);
+  }
 
   return (
     <PageShell
@@ -217,8 +171,8 @@ export function QuizFeature({ partId, documentId }: { partId: string; documentId
                   type={currentQuestion.type === 'single_choice' ? 'radio' : 'checkbox'}
                   name={currentQuestion.id}
                   value={option.id}
-                  checked={answers[currentQuestion.id].includes(option.id) || false}
-                  onChange={() => { handleOptionChange(currentQuestion.id, option.id); }}
+                  checked={currentAnswers.includes(option.id)}
+                  onChange={() => { handleOptionChange(option.id); }}
                   className={styles.optionInput}
                   aria-label={option.text}
                 />
@@ -231,16 +185,14 @@ export function QuizFeature({ partId, documentId }: { partId: string; documentId
 
       <nav className={styles.questionNav} aria-label={t('navigationLabel')}>
         <div className={styles.questionDots}>
-          {questions.map((_, index) => {
-            const questionId = questions[index].id;
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+          {questions.map(({ id: questionId }, index) => {
             const isAnswered = (answers[questionId]?.length ?? 0) > 0;
             return (
               <button
-                key={index}
+                key={questionId}
                 type="button"
                 className={`${styles.questionDot} ${index === currentQuestionIndex ? styles.active : ''} ${isAnswered ? styles.answered : ''}`}
-                onClick={() => { handleGoToQuestion(index); }}
+                onClick={() => { setCurrentQuestionIndex(index); }}
                 aria-label={t('questionDotLabel', { number: index + 1 })}
                 aria-current={index === currentQuestionIndex ? 'step' : undefined}
               />
@@ -251,7 +203,7 @@ export function QuizFeature({ partId, documentId }: { partId: string; documentId
           <button
             type="button"
             className={`${styles.navButton} ${styles.secondary}`}
-            onClick={handlePrevious}
+            onClick={() => { setCurrentQuestionIndex(currentQuestionIndex - 1); }}
             disabled={currentQuestionIndex === 0}
           >
             {tCommon('back')}
@@ -269,7 +221,7 @@ export function QuizFeature({ partId, documentId }: { partId: string; documentId
             <button
               type="button"
               className={`${styles.navButton} ${styles.primary}`}
-              onClick={handleNext}
+              onClick={() => { setCurrentQuestionIndex(currentQuestionIndex + 1); }}
             >
               {t('nextQuestion')}
             </button>
@@ -279,24 +231,14 @@ export function QuizFeature({ partId, documentId }: { partId: string; documentId
     </PageShell>
   );
 
-  function renderResultScreen() {
-    if (!result) {
-      return (
-        <PageShell title={t('title')}>
-          <QuizSkeleton />
-        </PageShell>
-      );
-    }
-
-    const percentage = Math.round(result.percentage);
-
+  function renderResultScreen(quiz: Quiz, result: QuizResult) {
     return (
       <PageShell
         title={t('title')}
         actions={
           <div className={styles.resultActions}>
             <ActionLink
-              href={`/${locale}/documents/${documentId}`}
+              href={materialHref}
               variant="secondary"
             >
               {t('backToMaterial')}
@@ -323,14 +265,14 @@ export function QuizFeature({ partId, documentId }: { partId: string; documentId
               <p className={styles.resultScore}>
                 {t('scoreSummary', { correct: result.score, total: result.total })}
               </p>
-              <p className={styles.resultPercentage}>{percentage}%</p>
+              <p className={styles.resultPercentage}>{result.percentage}%</p>
             </div>
           </Surface>
         </div>
 
         <Surface title={t('reviewTitle')}>
           <div className={styles.reviewList}>
-            {quiz?.questions.map((question, index) => {
+            {quiz.questions.map((question, index) => {
               const answerResult = result.answers.find((a) => a.question_id === question.id);
               const isCorrect = answerResult?.is_correct ?? false;
 

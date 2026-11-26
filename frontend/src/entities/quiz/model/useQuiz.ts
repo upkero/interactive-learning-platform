@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
 import type { components } from '@/shared/api/schema';
 
@@ -25,6 +25,7 @@ export interface QuizOption {
 
 export interface Quiz {
   part_id: string;
+  document_id: string;
   questions: QuizQuestion[];
 }
 
@@ -99,14 +100,12 @@ export function useQuiz(partId: string | null) {
       const part = data;
       const quizzes = part.content?.quizzes ?? [];
       const questions = quizzes.map((quiz) => mapChoiceQuizToQuestion(quiz));
-      return { part_id: partId, questions };
+      return { part_id: partId, document_id: part.document_id, questions };
     },
   });
 }
 
 export function useSubmitQuiz() {
-  const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: async ({
       partId,
@@ -134,7 +133,7 @@ export function useSubmitQuiz() {
           body: {
             part_id: partId,
             quiz_key: answer.question_id,
-            answer: answer.option_ids.length === 1 ? answer.option_ids[0] : answer.option_ids,
+            answer: quiz.type === 'single_choice' ? answer.option_ids[0] : answer.option_ids,
           },
         });
 
@@ -165,23 +164,6 @@ export function useSubmitQuiz() {
         passed: percentage >= 60,
         answers: results,
       };
-    },
-    onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({ queryKey: [...QUIZ_QUERY_KEY, variables.partId, 'result'] });
-      void queryClient.invalidateQueries({ queryKey: ['document', variables.partId.split('-')[0], 'parts'] });
-    },
-  });
-}
-
-export function useQuizResult(partId: string | null) {
-  return useQuery({
-    queryKey: [...QUIZ_QUERY_KEY, partId, 'result'],
-    enabled: !!partId,
-    queryFn: () => {
-      // New API doesn't have a separate result endpoint
-      // This hook is kept for compatibility but will return undefined
-      // Results are returned directly from useSubmitQuiz mutation
-      return undefined as QuizResult | undefined;
     },
   });
 }
