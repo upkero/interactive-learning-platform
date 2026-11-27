@@ -2,26 +2,24 @@
 
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/shared/api/client';
+import { unwrap } from '@/shared/api/errors';
 import type { components } from '@/shared/api/schema';
 
 export const QUIZ_QUERY_KEY = ['quiz'] as const;
 
-export type QuestionType = 'single_choice' | 'multiple_choice';
+type PublicQuiz = NonNullable<components['schemas']['PartContentOut']['quizzes']>[number];
+type QuizOption = components['schemas']['ChoiceOption'];
 
-export interface QuizQuestion {
-  id: string;
-  type: QuestionType;
-  text: string;
-  options: QuizOption[];
-  explanation?: string;
-  key?: string;
-  ref?: string;
-}
-
-export interface QuizOption {
+interface QuestionPrompt {
   id: string;
   text: string;
 }
+
+export type QuizQuestion = QuestionPrompt & (
+  | { type: 'single_choice' | 'multiple_choice'; options: QuizOption[] }
+  | { type: 'ordering'; items: QuizOption[] }
+  | { type: 'numeric'; unit?: string | null }
+);
 
 export interface Quiz {
   part_id: string;
@@ -29,12 +27,14 @@ export interface Quiz {
   questions: QuizQuestion[];
 }
 
+export type QuizAnswerValue = components['schemas']['QuizAttemptRequest']['answer'];
+
 export interface QuizAnswer {
   question_id: string;
-  option_ids: string[];
+  answer: QuizAnswerValue;
 }
 
-export interface QuizSubmitRequest {
+interface QuizSubmitRequest {
   answers: QuizAnswer[];
 }
 
@@ -46,45 +46,23 @@ export interface QuizResult {
   answers: QuizAnswerResult[];
 }
 
-export interface QuizAnswerResult {
+export type QuizAnswerResult = components['schemas']['QuizAttemptResponse'] & {
   question_id: string;
-  selected_option_ids: string[];
-  correct_option_ids: string[];
-  is_correct: boolean;
-  explanation?: string;
-}
+  submitted_answer: QuizAnswerValue;
+};
 
-function mapChoiceQuizToQuestion(quiz: components['schemas']['ChoiceQuiz'] | components['schemas']['OrderingQuiz'] | components['schemas']['NumericQuiz']): QuizQuestion {
-  if ('options' in quiz) {
-    return {
-      id: quiz.key,
-      type: quiz.type === 'multiple_choice' ? 'multiple_choice' : 'single_choice',
-      text: quiz.prompt,
-      options: quiz.options.map((opt) => ({ id: opt.id, text: opt.text })),
-      key: quiz.key,
-      ref: quiz.ref,
-    };
+function mapQuizToQuestion(quiz: PublicQuiz): QuizQuestion {
+  const prompt = { id: quiz.key, text: quiz.prompt };
+
+  switch (quiz.type) {
+    case 'single_choice':
+    case 'multiple_choice':
+      return { ...prompt, type: quiz.type, options: quiz.options };
+    case 'ordering':
+      return { ...prompt, type: quiz.type, items: quiz.items };
+    case 'numeric':
+      return { ...prompt, type: quiz.type, unit: quiz.unit };
   }
-  if ('items' in quiz) {
-    // Ordering quiz - treat as single choice for now
-    return {
-      id: quiz.key,
-      type: 'single_choice',
-      text: quiz.prompt,
-      options: quiz.items.map((item) => ({ id: item.id, text: item.text })),
-      key: quiz.key,
-      ref: quiz.ref,
-    };
-  }
-  // Numeric quiz
-  return {
-    id: quiz.key,
-    type: 'single_choice',
-    text: quiz.prompt,
-    options: [],
-    key: quiz.key,
-    ref: quiz.ref,
-  };
 }
 
 export function useQuiz(partId: string | null) {
@@ -93,13 +71,10 @@ export function useQuiz(partId: string | null) {
     enabled: !!partId,
     queryFn: async () => {
       if (!partId) throw new Error('Part ID is required');
-      const { data, response } = await apiClient.GET('/api/v1/parts/{part_id}', {
+      const part = await unwrap(apiClient.GET('/api/v1/parts/{part_id}', {
         params: { path: { part_id: partId } },
-      });
-      if (!response.ok || !data) throw new Error('Failed to load part');
-      const part = data;
-      const quizzes = part.content?.quizzes ?? [];
-      const questions = quizzes.map((quiz) => mapChoiceQuizToQuestion(quiz));
+      }));
+      const questions = (part.content?.quizzes ?? []).map(mapQuizToQuestion);
       return { part_id: partId, document_id: part.document_id, questions };
     },
   });
@@ -114,47 +89,18 @@ export function useSubmitQuiz() {
       partId: string;
       body: QuizSubmitRequest;
     }) => {
-      // New API: submit each quiz answer individually to /quiz-attempts
-      const partData = await apiClient.GET('/api/v1/parts/{part_id}', {
-        params: { path: { part_id: partId } },
-      });
-      if (!partData.response.ok || !partData.data) throw new Error('Failed to load part');
-      const part = partData.data;
-      const quizzes = part.content?.quizzes ?? [];
-
       const results: QuizAnswerResult[] = [];
-      let correct = 0;
 
-      for (const answer of body.answers) {
-        const quiz = quizzes.find((q) => q.key === answer.question_id);
-        if (!quiz) continue;
+      for (const { question_id, answer } of body.answers) {
+        const attempt = await unwrap(apiClient.POST('/api/v1/quiz-attempts', {
+          body: { part_id: partId, quiz_key: question_id, answer },
+        }));
 
-        const { data: attemptData, response: attemptResponse } = await apiClient.POST('/api/v1/quiz-attempts', {
-          body: {
-            part_id: partId,
-            quiz_key: answer.question_id,
-            answer: quiz.type === 'single_choice' ? answer.option_ids[0] : answer.option_ids,
-          },
-        });
-
-        if (!attemptResponse.ok || !attemptData) {
-          throw new Error('Failed to submit quiz attempt');
-        }
-
-        const attempt = attemptData;
-        const isCorrect = attempt.is_correct;
-        if (isCorrect) correct++;
-
-        results.push({
-          question_id: answer.question_id,
-          selected_option_ids: answer.option_ids,
-          correct_option_ids: attempt.correct_answer instanceof Array ? attempt.correct_answer : [String(attempt.correct_answer)],
-          is_correct: isCorrect,
-          explanation: attempt.explanation ?? undefined,
-        });
+        results.push({ ...attempt, question_id, submitted_answer: answer });
       }
 
-      const total = body.answers.length;
+      const total = results.length;
+      const correct = results.filter((answer) => answer.is_correct).length;
       const percentage = total > 0 ? Math.round((correct / total) * 100) : 0;
 
       return {

@@ -2,7 +2,15 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { type Quiz, type QuizResult, useQuiz, useSubmitQuiz } from '@/entities/quiz';
+import {
+  type Quiz,
+  type QuizAnswerResult,
+  type QuizAnswerValue,
+  type QuizQuestion,
+  type QuizResult,
+  useQuiz,
+  useSubmitQuiz,
+} from '@/entities/quiz';
 import { ApiError } from '@/shared/api/errors';
 import { ActionLink } from '@/shared/ui/action-link/ActionLink';
 import { PageShell } from '@/shared/ui/page-shell/PageShell';
@@ -15,7 +23,7 @@ export function QuizFeature({ partId }: { partId: string }) {
   const tErrors = useTranslations('errors');
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<Partial<Record<string, string[]>>>({});
+  const [answers, setAnswers] = useState<Partial<Record<string, AnswerDraft>>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const quizQuery = useQuiz(partId);
@@ -95,27 +103,16 @@ export function QuizFeature({ partId }: { partId: string }) {
   const questions = quiz.questions;
   const currentQuestion = questions[currentQuestionIndex];
   const isLastQuestion = currentQuestionIndex === questions.length - 1;
-  const currentAnswers = answers[currentQuestion.id] ?? [];
-  const answeredCount = questions.filter(({ id }) => (answers[id]?.length ?? 0) > 0).length;
+  const submitAnswers = questions.flatMap((question) => {
+    const answer = prepareAnswer(question, answers[question.id]);
+    return answer === undefined ? [] : [{ question_id: question.id, answer }];
+  });
+  const answeredCount = submitAnswers.length;
   const canSubmit = answeredCount === questions.length;
-
-  function handleOptionChange(optionId: string) {
-    const selectedOptions = currentQuestion.type === 'single_choice'
-      ? [optionId]
-      : currentAnswers.includes(optionId)
-        ? currentAnswers.filter((id) => id !== optionId)
-        : [...currentAnswers, optionId];
-    setAnswers({ ...answers, [currentQuestion.id]: selectedOptions });
-  }
 
   function handleSubmit() {
     if (!canSubmit || isSubmitting) return;
     setSubmitError(null);
-
-    const submitAnswers = questions.map(({ id }) => ({
-      question_id: id,
-      option_ids: answers[id] ?? [],
-    }));
 
     submitMutation.mutate(
       { partId, body: { answers: submitAnswers } },
@@ -159,34 +156,29 @@ export function QuizFeature({ partId }: { partId: string }) {
       </Surface>
 
       <Surface>
-        <fieldset className={styles.questionCard} aria-labelledby={`question-${currentQuestion.id}`}>
+        <fieldset
+          key={currentQuestion.id}
+          className={styles.questionCard}
+          aria-labelledby={`question-${currentQuestion.id}`}
+          disabled={isSubmitting}
+        >
           <legend id={`question-${currentQuestion.id}`} className={styles.questionText}>
             {currentQuestion.text}
           </legend>
 
-          <div className={styles.options} role="radiogroup" aria-label={t('optionsLabel')}>
-            {currentQuestion.options.map((option) => (
-              <label key={option.id} className={styles.option}>
-                <input
-                  type={currentQuestion.type === 'single_choice' ? 'radio' : 'checkbox'}
-                  name={currentQuestion.id}
-                  value={option.id}
-                  checked={currentAnswers.includes(option.id)}
-                  onChange={() => { handleOptionChange(option.id); }}
-                  className={styles.optionInput}
-                  aria-label={option.text}
-                />
-                <span className={styles.optionText}>{option.text}</span>
-              </label>
-            ))}
-          </div>
+          <QuestionInput
+            question={currentQuestion}
+            draft={answers[currentQuestion.id]}
+            onChange={(draft) => { setAnswers((previous) => ({ ...previous, [currentQuestion.id]: draft })); }}
+          />
         </fieldset>
       </Surface>
 
       <nav className={styles.questionNav} aria-label={t('navigationLabel')}>
         <div className={styles.questionDots}>
-          {questions.map(({ id: questionId }, index) => {
-            const isAnswered = (answers[questionId]?.length ?? 0) > 0;
+          {questions.map((question, index) => {
+            const questionId = question.id;
+            const isAnswered = prepareAnswer(question, answers[questionId]) !== undefined;
             return (
               <button
                 key={questionId}
@@ -287,27 +279,7 @@ export function QuizFeature({ partId }: { partId: string }) {
                     </span>
                   </header>
                   <p className={styles.reviewQuestionText}>{question.text}</p>
-                  <div className={styles.reviewOptions}>
-                    {question.options.map((option) => {
-                      const isSelected = answerResult?.selected_option_ids.includes(option.id) ?? false;
-                      const isCorrectOption = answerResult?.correct_option_ids.includes(option.id) ?? false;
-
-                      return (
-                        <div
-                          key={option.id}
-                          className={`${styles.reviewOption} ${isSelected ? styles.selected : ''} ${isCorrectOption ? styles.correctOption : ''}`}
-                        >
-                          <span className={styles.optionMarker}>
-                            {isSelected ? '●' : '○'}
-                          </span>
-                          <span className={styles.optionText}>{option.text}</span>
-                          {isCorrectOption && (
-                            <span className={styles.correctBadge}>{t('correct')}</span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {answerResult && <AnswerReview question={question} result={answerResult} />}
                   {answerResult?.explanation && (
                     <p className={styles.reviewExplanation}>
                       {t('explanationLabel')}: {answerResult.explanation}
@@ -321,6 +293,166 @@ export function QuizFeature({ partId }: { partId: string }) {
       </PageShell>
     );
   }
+}
+
+type AnswerDraft = string | string[];
+
+function prepareAnswer(question: QuizQuestion, draft: AnswerDraft | undefined): QuizAnswerValue | undefined {
+  switch (question.type) {
+    case 'single_choice':
+      return typeof draft === 'string' ? draft : undefined;
+    case 'multiple_choice':
+      return Array.isArray(draft) && draft.length > 0 ? draft : undefined;
+    case 'ordering':
+      return Array.isArray(draft) && draft.length === question.items.length && draft.every(Boolean)
+        ? draft
+        : undefined;
+    case 'numeric': {
+      if (typeof draft !== 'string' || draft.trim() === '') return undefined;
+      const number = Number(draft);
+      return Number.isFinite(number) ? number : undefined;
+    }
+  }
+}
+
+function QuestionInput({
+  question,
+  draft,
+  onChange,
+}: {
+  question: QuizQuestion;
+  draft: AnswerDraft | undefined;
+  onChange: (draft: AnswerDraft) => void;
+}) {
+  const t = useTranslations('quiz');
+
+  if (question.type === 'numeric') {
+    return (
+      <label className={styles.answerField}>
+        <span>{question.unit ? t('numericAnswerWithUnit', { unit: question.unit }) : t('numericAnswer')}</span>
+        <input
+          type="number"
+          step="any"
+          value={typeof draft === 'string' ? draft : ''}
+          onChange={(event) => { onChange(event.currentTarget.value); }}
+          className={styles.answerControl}
+        />
+      </label>
+    );
+  }
+
+  if (question.type === 'ordering') {
+    const order = Array.isArray(draft) ? draft : question.items.map(() => '');
+
+    return (
+      <div className={styles.options}>
+        {order.map((itemId, position) => (
+          <label key={position} className={styles.answerField}>
+            <span>{t('orderingPosition', { position: position + 1 })}</span>
+            <select
+              value={itemId}
+              onChange={(event) => {
+                const selectedId = event.currentTarget.value;
+                onChange(order.map((id, index) => index === position ? selectedId : id));
+              }}
+              className={styles.answerControl}
+            >
+              <option value="">{t('orderingPlaceholder')}</option>
+              {question.items.map((item) => (
+                <option key={item.id} value={item.id} disabled={item.id !== itemId && order.includes(item.id)}>
+                  {item.text}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
+      </div>
+    );
+  }
+
+  const singleChoice = question.type === 'single_choice';
+  const selected = Array.isArray(draft) ? draft : typeof draft === 'string' ? [draft] : [];
+
+  return (
+    <div className={styles.options} role={singleChoice ? 'radiogroup' : 'group'} aria-label={t('optionsLabel')}>
+      {question.options.map((option) => {
+        const checked = selected.includes(option.id);
+
+        return (
+          <label key={option.id} className={styles.option}>
+            <input
+              type={singleChoice ? 'radio' : 'checkbox'}
+              name={question.id}
+              value={option.id}
+              checked={checked}
+              onChange={() => {
+                if (singleChoice) {
+                  onChange(option.id);
+                } else {
+                  onChange(checked ? selected.filter((id) => id !== option.id) : [...selected, option.id]);
+                }
+              }}
+              className={styles.optionInput}
+              aria-label={option.text}
+            />
+            <span className={styles.optionText}>{option.text}</span>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
+function AnswerReview({ question, result }: { question: QuizQuestion; result: QuizAnswerResult }) {
+  const t = useTranslations('quiz');
+  const { submitted_answer: submitted, correct_answer: correct } = result;
+
+  if (question.type === 'ordering' || question.type === 'numeric') {
+    const answers = [
+      { label: t('yourAnswer'), value: submitted },
+      { label: t('correctAnswer'), value: correct },
+    ];
+
+    return (
+      <dl className={styles.reviewAnswers}>
+        {answers.map(({ label, value }) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>
+              {question.type === 'ordering' && Array.isArray(value) && (
+                <ol>
+                  {value.map((id) => <li key={id}>{question.items.find((item) => item.id === id)?.text ?? id}</li>)}
+                </ol>
+              )}
+              {question.type === 'numeric' && (
+                question.unit ? t('numericValueWithUnit', { value: String(value), unit: question.unit }) : String(value)
+              )}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    );
+  }
+
+  return (
+    <div className={styles.reviewOptions}>
+      {question.options.map((option) => {
+        const isSelected = Array.isArray(submitted) ? submitted.includes(option.id) : submitted === option.id;
+        const isCorrect = Array.isArray(correct) ? correct.includes(option.id) : correct === option.id;
+
+        return (
+          <div
+            key={option.id}
+            className={`${styles.reviewOption} ${isSelected ? styles.selected : ''} ${isCorrect ? styles.correctOption : ''}`}
+          >
+            <span className={styles.optionMarker}>{isSelected ? '●' : '○'}</span>
+            <span className={styles.optionText}>{option.text}</span>
+            {isCorrect && <span className={styles.correctBadge}>{t('correct')}</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function QuizSkeleton() {
