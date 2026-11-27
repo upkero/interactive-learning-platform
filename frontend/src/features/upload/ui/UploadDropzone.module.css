@@ -7,7 +7,8 @@
 }
 
 .tabs {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--g-space-1);
   border-bottom: var(--g-hairline) solid var(--g-color-border);
   padding-bottom: var(--g-space-2);
@@ -18,7 +19,7 @@
   background: transparent;
   border: none;
   color: var(--g-color-text-secondary);
-  font-size: var(--g-text-md);
+  font-size: var(--g-text-sm);
   font-weight: var(--g-font-weight-medium);
   cursor: pointer;
   border-radius: var(--g-radius-md) var(--g-radius-md) 0 0;
@@ -37,7 +38,7 @@
   outline-offset: 2px;
 }
 
-.active {
+.tab.active {
   color: var(--g-color-accent);
   background: var(--g-color-surface);
 }
@@ -69,6 +70,11 @@
 .dropzone:hover:not(.submitting) {
   border-color: var(--g-color-accent);
   background: var(--g-color-bg-alt);
+}
+
+.dropzone:focus-within {
+  outline: 2px solid var(--g-focus-color);
+  outline-offset: 2px;
 }
 
 .dropzone.dragOver {
@@ -157,7 +163,7 @@
 
 .removeFile:hover:not(:disabled) {
   background: var(--g-color-danger);
-  color: var(--g-color-danger-bg);
+  color: var(--g-color-bg);
 }
 
 .removeFile:focus-visible {
@@ -216,6 +222,7 @@
   display: flex;
   justify-content: flex-end;
   gap: var(--g-space-3);
+  flex-wrap: wrap;
   padding-top: var(--g-space-2);
 }
 
@@ -260,6 +267,7 @@
 
 .mutationError {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--g-space-3);
@@ -287,7 +295,7 @@
 
 .retryButton:hover {
   background: var(--g-color-danger);
-  color: var(--g-color-danger-bg);
+  color: var(--g-color-bg);
 }
 
 .retryButton:focus-visible {

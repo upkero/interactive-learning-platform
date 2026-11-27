@@ -1,18 +1,17 @@
 .card {
-  background: var(--g-color-bg-elevated);
-  border: var(--g-hairline) solid var(--g-color-border);
-  border-radius: var(--g-radius-lg);
-  padding: var(--g-space-4);
-  flex-shrink: 0;
-  width: 100%;
-  max-width: 280px;
+  display: grid;
+  align-items: center;
+  column-gap: var(--g-space-4);
+  row-gap: var(--g-space-1);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  max-width: 100%;
 }
 
 .header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: var(--g-space-3);
+  gap: var(--g-space-2);
 }
 
 .title {
@@ -34,11 +33,10 @@
 }
 
 .progressWrapper {
-  height: 8px;
+  height: 6px;
   background: var(--g-color-border);
   border-radius: var(--g-radius-full);
   overflow: hidden;
-  margin-bottom: var(--g-space-3);
 }
 
 .progressBar {
@@ -54,19 +52,31 @@
 
 .meta {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  align-items: center;
+  column-gap: var(--g-space-3);
+  grid-column: 1 / -1;
+  margin: 0;
   font-size: var(--g-text-xs);
   color: var(--g-color-text-muted);
 }
 
+.period {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--g-color-text-muted);
+  font-size: var(--g-text-xs);
+}
+
 .errorMessage {
+  grid-column: 1 / -1;
   font-size: var(--g-text-sm);
   color: var(--g-color-error);
   margin: var(--g-space-2) 0;
 }
 
 .retry {
+  justify-self: start;
   display: inline-flex;
   align-items: center;
   height: var(--g-control-min-height);
@@ -90,6 +100,13 @@
 .retry:focus-visible {
   outline: 2px solid var(--g-focus-color);
   outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+  .card {
+    width: 100%;
+    grid-template-columns: fit-content(65%) minmax(0, 1fr);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -230,7 +230,7 @@ function DocumentRow({ doc, format, onShare }: DocumentRowProps) {
     <tr className={styles.row}>
       <td className={styles.cell}>
         <Link href={route} className={styles.titleLink}>
-          {doc.title}
+          <span>{doc.title}</span>
           {doc.role === "shared" && (
             <span className={styles.sharedBadge} aria-label={t("sharedLabel")}>
               {t("sharedLabel")}
@@ -252,7 +252,9 @@ function DocumentRow({ doc, format, onShare }: DocumentRowProps) {
         <span className={styles.roleBadge}>{roleLabel}</span>
       </td>
       <td className={styles.cell} data-label={t("createdAtLabel")}>
-        <time dateTime={doc.updated_at}>{formattedDate}</time>
+        <time className={styles.time} dateTime={doc.updated_at}>
+          {formattedDate}
+        </time>
       </td>
       <td className={styles.cell} data-label={t("actionsLabel")}>
         <div className={styles.actions}>

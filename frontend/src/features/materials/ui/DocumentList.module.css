@@ -40,8 +40,10 @@
 
 .titleLink {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--g-space-2);
+  overflow-wrap: anywhere;
   color: var(--g-color-text);
   font-weight: var(--g-font-medium);
   transition: color var(--g-duration-fast) var(--g-easing);
@@ -81,7 +83,6 @@
   font-size: var(--g-text-xs);
   font-weight: var(--g-font-medium);
   border-radius: var(--g-radius-full);
-  white-space: nowrap;
 }
 
 .statusParsing {
@@ -110,8 +111,8 @@
 }
 
 .roleBadge {
-  display: inline-flex;
-  align-items: center;
+  display: inline-block;
+  overflow-wrap: anywhere;
   padding: var(--g-space-1) var(--g-space-2);
   font-size: var(--g-text-xs);
   font-weight: var(--g-font-medium);
@@ -128,10 +129,12 @@
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--g-space-2);
 }
 
 .actionLink {
+  min-height: var(--g-control-min-height);
   display: inline-flex;
   align-items: center;
   padding: var(--g-space-1) var(--g-space-3);
@@ -146,8 +149,8 @@
 }
 
 .actionLink:hover {
-  color: var(--g-color-primary-hover);
-  background: var(--g-color-primary);
+  color: var(--g-color-accent-contrast);
+  background: var(--g-color-accent-hover);
 }
 
 .actionLink:focus-visible {
@@ -167,7 +170,7 @@
 
 .skeletonRow {
   display: grid;
-  grid-template-columns: 30% 15% 20% 15% 10% 10%;
+  grid-template-columns: 3fr 1.5fr 2fr 1.5fr 1fr 1fr;
   gap: var(--g-space-4);
   padding: var(--g-space-3) var(--g-space-4);
   border-bottom: var(--g-hairline) solid var(--g-color-border);
@@ -215,6 +218,7 @@
 }
 
 .emptyAction {
+  min-height: var(--g-control-min-height);
   display: inline-flex;
   align-items: center;
   padding: var(--g-space-2) var(--g-space-4);
@@ -229,8 +233,8 @@
 }
 
 .emptyAction:hover {
-  color: var(--g-color-primary-hover);
-  background: var(--g-color-primary);
+  color: var(--g-color-accent-contrast);
+  background: var(--g-color-accent-hover);
 }
 
 .emptyAction:focus-visible {
@@ -254,6 +258,7 @@
 }
 
 .retryButton {
+  min-height: var(--g-control-min-height);
   display: inline-flex;
   align-items: center;
   padding: var(--g-space-2) var(--g-space-4);
@@ -270,8 +275,8 @@
 }
 
 .retryButton:hover {
-  color: var(--g-color-primary-hover);
-  background: var(--g-color-primary);
+  color: var(--g-color-accent-contrast);
+  background: var(--g-color-accent-hover);
 }
 
 .retryButton:focus-visible {
@@ -291,7 +296,7 @@
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 1023px) {
   .table,
   .table tbody {
     display: block;
@@ -305,8 +310,10 @@
     clip-path: inset(50%);
   }
 
-  .row {
+  .row,
+  .row:last-child {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--g-space-2);
     margin: var(--g-space-2);
     padding: var(--g-space-3);

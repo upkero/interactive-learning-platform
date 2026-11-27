@@ -80,7 +80,6 @@ export function TopicSummary({
   return (
     <div className={styles.summary}>
       <div className={styles.row}>
-        <span className={styles.label}>{t("selectedLabel")}</span>
         <span className={styles.value}>
           {t("selectedSummary", {
             topics: selectedTopicsCount,
@@ -89,7 +88,6 @@ export function TopicSummary({
         </span>
       </div>
       <div className={styles.row}>
-        <span className={styles.label}>{t("costLabel", { cost })}</span>
         <span
           className={`${styles.value} ${styles.cost} ${isOverQuota ? styles.overQuota : ""}`}
         >

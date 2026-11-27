@@ -11,7 +11,7 @@ interface NavItem {
   icon: React.ReactNode;
 }
 
-export function NavLinks() {
+export function NavLinks({ mobile = false }: { mobile?: boolean }) {
   const pathname = usePathname();
   const tCommon = useTranslations("common");
   const tMaterials = useTranslations("materials");
@@ -65,7 +65,10 @@ export function NavLinks() {
   ];
 
   return (
-    <nav aria-label={tCommon("mainNavigation")}>
+    <nav
+      className={mobile ? styles.mobile : undefined}
+      aria-label={tCommon(mobile ? "mobileNavigation" : "mainNavigation")}
+    >
       <ul className={styles.navList}>
         {navItems.map((item) => (
           <li key={item.href}>

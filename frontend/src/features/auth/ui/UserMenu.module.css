@@ -54,7 +54,7 @@
 }
 
 .label {
-  display: none;
+  display: inline;
 }
 
 .mobileMenu .button {
@@ -81,17 +81,7 @@
 }
 
 .mobileMenu .label {
-  display: inline;
   font-size: var(--g-text-xs);
-}
-
-/* Show label on wider screens (when icon rail expands) */
-@media (min-width: 1024px) {
-  .label {
-    display: inline;
-    overflow: visible;
-    text-overflow: clip;
-  }
 }
 
 /* Reduced motion */

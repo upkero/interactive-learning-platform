@@ -31,23 +31,19 @@ export function TopicTree({
   disabled = false,
 }: TopicTreeProps) {
   const t = useTranslations("topics");
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [expandedIds, setExpandedIds] = useState(
+    () =>
+      new Set(
+        topics
+          .filter((topic) => topic.children.length > 0)
+          .map((topic) => topic.id)
+      )
+  );
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const treeRef = useRef<HTMLUListElement>(null);
 
-  // Initialize expandedIds with root topics that have children
-  const initialExpanded = new Set<string>();
-  for (const topic of topics) {
-    if (topic.children.length > 0) {
-      initialExpanded.add(topic.id);
-    }
-  }
-
   // Compute visible nodes for keyboard navigation
-  const visibleNodes = getVisibleNodes(
-    topics,
-    expandedIds.size > 0 ? expandedIds : initialExpanded
-  );
+  const visibleNodes = getVisibleNodes(topics, expandedIds);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -196,8 +192,7 @@ export function TopicTree({
           selectedIds={selectedIds}
           onToggle={onToggle}
           disabled={disabled}
-          depth={0}
-          expandedIds={expandedIds.size > 0 ? expandedIds : initialExpanded}
+          expandedIds={expandedIds}
           setExpandedIds={setExpandedIds}
           setFocusedId={setFocusedId}
           focusedId={focusedId}
@@ -213,7 +208,6 @@ interface TopicNodeItemProps {
   selectedIds: Set<string>;
   onToggle: (id: string, checked: boolean) => void;
   disabled: boolean;
-  depth: number;
   expandedIds: Set<string>;
   setExpandedIds: React.Dispatch<React.SetStateAction<Set<string>>>;
   setFocusedId: React.Dispatch<React.SetStateAction<string | null>>;
@@ -226,7 +220,6 @@ function TopicNodeItem({
   selectedIds,
   onToggle,
   disabled,
-  depth,
   expandedIds,
   setExpandedIds,
   setFocusedId,
@@ -264,7 +257,6 @@ function TopicNodeItem({
   return (
     <li
       className={styles.item}
-      style={{ "--depth": depth } as React.CSSProperties}
       role="treeitem"
       aria-expanded={hasChildren ? isExpanded : undefined}
       data-topic-id={topic.id}
@@ -324,7 +316,6 @@ function TopicNodeItem({
                 selectedIds={selectedIds}
                 onToggle={onToggle}
                 disabled={disabled}
-                depth={depth + 1}
                 expandedIds={expandedIds}
                 setExpandedIds={setExpandedIds}
                 setFocusedId={setFocusedId}

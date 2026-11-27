@@ -3,7 +3,6 @@
 import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "@/shared/i18n/navigation-client";
 import { DocumentList } from "./DocumentList";
-import { QuotaCard } from "./QuotaCard";
 import styles from "./MaterialsContent.module.css";
 
 type Filter = "all" | "mine" | "shared";
@@ -38,56 +37,48 @@ export function MaterialsContent({ onShare }: MaterialsContentProps) {
   };
 
   return (
-    <div className={styles.container}>
-      {/* Quota Card */}
-      <aside className={styles.quotaSidebar} aria-label={t("quotaTitle")}>
-        <QuotaCard />
-      </aside>
+    <div>
+      {/* Filter Tabs */}
+      <nav
+        className={styles.filterTabs}
+        aria-label={t("filterAll")}
+        role="tablist"
+      >
+        {FILTERS.map(({ value, labelKey }) => (
+          <button
+            key={value}
+            role="tab"
+            aria-selected={currentFilter === value}
+            aria-controls={`panel-${value}`}
+            id={`tab-${value}`}
+            className={`${styles.filterTab} ${currentFilter === value ? styles.active : ""}`}
+            onClick={() => {
+              handleFilterChange(value);
+            }}
+          >
+            {t(labelKey)}
+          </button>
+        ))}
+      </nav>
 
-      {/* Main Content */}
-      <main className={styles.main}>
-        {/* Filter Tabs */}
-        <nav
-          className={styles.filterTabs}
-          aria-label={t("filterAll")}
-          role="tablist"
-        >
-          {FILTERS.map(({ value, labelKey }) => (
-            <button
-              key={value}
-              role="tab"
-              aria-selected={currentFilter === value}
-              aria-controls={`panel-${value}`}
-              id={`tab-${value}`}
-              className={`${styles.filterTab} ${currentFilter === value ? styles.active : ""}`}
-              onClick={() => {
-                handleFilterChange(value);
-              }}
-            >
-              {t(labelKey)}
-            </button>
-          ))}
-        </nav>
-
-        {/* Document List Panels */}
-        <div className={styles.panels}>
-          {FILTERS.map(({ value }) => (
-            <div
-              key={value}
-              role="tabpanel"
-              id={`panel-${value}`}
-              aria-labelledby={`tab-${value}`}
-              hidden={currentFilter !== value}
-              className={styles.panel}
-            >
-              <DocumentList
-                scope={value === "all" ? undefined : value}
-                onShare={onShare}
-              />
-            </div>
-          ))}
-        </div>
-      </main>
+      {/* Document List Panels */}
+      <div className={styles.panels}>
+        {FILTERS.map(({ value }) => (
+          <div
+            key={value}
+            role="tabpanel"
+            id={`panel-${value}`}
+            aria-labelledby={`tab-${value}`}
+            hidden={currentFilter !== value}
+            className={styles.panel}
+          >
+            <DocumentList
+              scope={value === "all" ? undefined : value}
+              onShare={onShare}
+            />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

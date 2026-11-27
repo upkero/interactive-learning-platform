@@ -8,7 +8,8 @@
   background: var(--g-color-surface);
 }
 
-.row {
+.row,
+.quotaRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -103,11 +104,14 @@
 
 .partTitle {
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
   color: var(--g-color-text);
   font-size: var(--g-text-md);
 }
 
 .partTokens {
+  flex-shrink: 0;
   color: var(--g-color-text-secondary);
   font-size: var(--g-text-sm);
   font-variant-numeric: tabular-nums;

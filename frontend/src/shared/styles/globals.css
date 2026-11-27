@@ -1,12 +1,37 @@
 @import "@grasp/primitives/tokens.css";
 
 /* Fallback tokens not provided by @grasp/primitives */
-:root {
+:root,
+[data-theme] {
   /* Extended colors */
+  --g-color-bg-alt: color-mix(
+    in srgb,
+    var(--g-color-surface) 80%,
+    var(--g-color-border)
+  );
+  --g-color-text-secondary: var(--g-color-text-muted);
+  --g-color-accent-hover: color-mix(
+    in srgb,
+    var(--g-color-accent) 92%,
+    var(--g-color-text)
+  );
+  --g-focus-color: var(--g-color-accent);
+  --g-color-danger-text: var(--g-color-danger);
+  --g-color-danger-bg: color-mix(
+    in srgb,
+    var(--g-color-danger) 10%,
+    var(--g-color-surface)
+  );
+  --g-color-success-text: var(--g-color-success);
+  --g-color-success-bg: color-mix(
+    in srgb,
+    var(--g-color-success) 10%,
+    var(--g-color-surface)
+  );
+
   --g-color-bg-elevated: var(--g-color-surface);
   --g-color-text-inverse: var(--g-color-accent-contrast);
   --g-color-primary: var(--g-color-accent);
-  --g-color-primary-hover: var(--g-color-accent);
   --g-color-primary-light: color-mix(
     in srgb,
     var(--g-color-accent) 15%,
@@ -34,6 +59,18 @@
     transparent
   );
 
+  /* Dark surfaces shared by navigation and sign-in */
+  --g-color-bg-dark: #191418;
+  --g-color-surface-dark: #241d22;
+  --g-color-border-dark: #82717c;
+  --g-color-text-dark: #f5e9ef;
+  --g-color-text-dark-secondary: #d5c4cd;
+  --g-color-text-dark-muted: #b9aab3;
+  --g-color-accent-dark: #f0b8cb;
+  --g-color-accent-dark-contrast: #402633;
+  --g-color-accent-dark-hover: #f5d3df;
+  --g-focus-color-dark: var(--g-color-accent-dark);
+
   /* Status colors */
   --g-status-parsing: var(--g-color-info);
   --g-status-topics: var(--g-color-primary);
@@ -49,6 +86,7 @@
   --g-space-4: 16px;
   --g-space-5: 20px;
   --g-space-6: 24px;
+  --g-space-7: 28px;
   --g-space-8: 32px;
   --g-space-10: 40px;
   --g-space-12: 48px;
@@ -75,6 +113,10 @@
   --g-font-medium: 500;
   --g-font-semibold: 600;
   --g-font-bold: 700;
+  --g-font-weight-normal: var(--g-font-normal);
+  --g-font-weight-medium: var(--g-font-medium);
+  --g-font-weight-semibold: var(--g-font-semibold);
+  --g-font-weight-bold: var(--g-font-bold);
 
   /* Line heights */
   --g-leading-tight: 1.25;
@@ -96,7 +138,7 @@
 
   /* Layout */
   --g-header-height: 4rem;
-  --g-icon-rail-width: 4.5rem;
+  --g-icon-rail-width: 13.5rem;
   --g-mobile-nav-height: 3.5rem;
   --g-container-max: 72rem;
 

@@ -1,7 +1,7 @@
 .navList {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: var(--g-space-2) 0;
   display: flex;
   flex-direction: column;
   gap: var(--g-space-1);
@@ -11,6 +11,7 @@
   display: flex;
   align-items: center;
   gap: var(--g-space-3);
+  min-height: var(--g-control-min-height);
   padding: var(--g-space-2) var(--g-space-3);
   color: var(--g-color-text-dark-secondary);
   text-decoration: none;
@@ -53,9 +54,49 @@
 .navLabel {
   font-size: var(--g-text-sm);
   font-weight: var(--g-font-weight-medium);
-  white-space: nowrap;
-  overflow: visible;
-  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+
+.mobile .navList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0;
+}
+
+.mobile .navLink {
+  height: 100%;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--g-space-1);
+  padding: var(--g-space-2) var(--g-space-1);
+  color: var(--g-color-text-muted);
+  text-align: center;
+}
+
+.mobile .navIcon {
+  color: currentColor;
+}
+
+.mobile .navLabel {
+  font-size: var(--g-text-xs);
+}
+
+.mobile .navLink:hover {
+  color: var(--g-color-text);
+  background: var(--g-color-bg-alt);
+}
+
+.mobile .navLink.active {
+  color: var(--g-color-accent);
+  background: var(--g-color-primary-light);
+}
+
+.mobile .navLink.active .navIcon {
+  color: currentColor;
+}
+
+.mobile .navLink:focus-visible {
+  outline-color: var(--g-focus-color);
 }
 
 @media (prefers-reduced-motion: reduce) {
