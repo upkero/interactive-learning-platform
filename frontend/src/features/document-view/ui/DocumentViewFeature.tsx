@@ -43,7 +43,7 @@ export function DocumentViewFeature({ documentId, initialPartId, onShare }: Docu
   const documentQuery = useDocument(documentId);
   const partsQuery = useDocumentParts(documentId);
   const parts = partsQuery.data ?? [];
-  const selectedPartId = partId ?? parts[0]?.id ?? null;
+  const selectedPartId = partId ?? (parts.length > 0 ? parts[0].id : null);
   const partQuery = usePart(selectedPartId);
 
   const document = documentQuery.data;

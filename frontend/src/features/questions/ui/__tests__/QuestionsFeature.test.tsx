@@ -165,6 +165,7 @@ describe("QuestionsFeature", () => {
       isLoading: false,
       isError: false,
       error: null,
+      refetch: vi.fn(),
     });
     mockUsePlan.mockReturnValue({
       data: mockPlan,
@@ -295,7 +296,7 @@ describe("QuestionsFeature", () => {
 
       await waitFor(() => {
         expect(mockRouter.replace).toHaveBeenCalledWith(
-          "/documents/doc-123/topics?error=quota_exceeded"
+          "/documents/doc-123/topics?topics=topic-1%2Ctopic-2&error=quota_exceeded"
         );
       });
     });
@@ -473,7 +474,9 @@ describe("QuestionsFeature", () => {
         fireEvent.click(backButton);
       });
 
-      expect(mockRouter.push).toHaveBeenCalledWith("/documents/doc-123/topics");
+      expect(mockRouter.push).toHaveBeenCalledWith(
+        "/documents/doc-123/topics?topics=topic-1%2Ctopic-2"
+      );
     });
   });
 
