@@ -5,8 +5,8 @@ import {
   QueryClientProvider,
   QueryCache,
 } from "@tanstack/react-query";
+import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useState, useEffect, useCallback } from "react";
-import { useRouter, usePathname } from "@/shared/i18n/navigation-client";
 import { isApiError } from "./errors";
 
 export function QueryProvider({ children }: { children: ReactNode }) {

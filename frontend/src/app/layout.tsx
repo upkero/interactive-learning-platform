@@ -1,21 +1,21 @@
 import "@grasp/primitives/tokens.css";
 import "@/shared/styles/globals.css";
+import { getLocale } from "next-intl/server";
 import type { ReactNode } from "react";
-import { QueryProvider } from "@/shared/api/query-provider";
 
 export const runtime = "nodejs";
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const locale = await getLocale();
+
   return (
-    <html lang="ru">
+    <html lang={locale}>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
       </head>
-      <body>
-        <QueryProvider>{children}</QueryProvider>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

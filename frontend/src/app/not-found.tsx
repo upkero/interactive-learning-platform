@@ -1,10 +1,8 @@
-export const dynamic = "force-dynamic";
-
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 
 export default async function NotFound() {
-  const t = await getTranslations({ locale: "ru", namespace: "common" });
-  const materialsPath = "/ru/materials";
+  const locale = await getLocale();
+  const t = await getTranslations("common");
 
   return (
     <div style={{ padding: "2rem", textAlign: "center" }}>
@@ -13,7 +11,7 @@ export default async function NotFound() {
       </h1>
       <p style={{ marginBottom: "2rem" }}>{t("notFoundDescription")}</p>
       <a
-        href={materialsPath}
+        href={`/${locale}/materials`}
         style={{
           display: "inline-block",
           padding: "0.5rem 1rem",
