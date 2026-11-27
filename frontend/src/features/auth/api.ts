@@ -4,7 +4,6 @@ import { apiClient, unwrap, qk } from "@/shared/api";
 import type { paths } from "@/shared/api/schema";
 import {
   useRouter,
-  usePathname,
   useSearchParams,
   useNextRouter,
 } from "@/shared/i18n/navigation-client";
@@ -65,14 +64,12 @@ export function useRegister() {
 export function useLogout() {
   const queryClient = useQueryClient();
   const router = useRouter();
-  const pathname = usePathname();
-  const locale = pathname.split("/")[1] || "ru";
 
   return useMutation({
     mutationFn: logout,
     onSettled: () => {
       queryClient.clear();
-      router.replace(`/${locale}/login`);
+      router.replace("/login");
     },
   });
 }

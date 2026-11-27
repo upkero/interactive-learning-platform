@@ -57,6 +57,34 @@
   display: none;
 }
 
+.mobileMenu .button {
+  flex-direction: column;
+  gap: var(--g-space-1);
+  height: 100%;
+  min-height: var(--g-control-min-height);
+  padding: var(--g-space-2) var(--g-space-3);
+  color: var(--g-color-text-muted);
+}
+
+.mobileMenu .button:hover {
+  background: var(--g-color-bg-alt);
+  color: var(--g-color-text);
+}
+
+.mobileMenu .button:focus-visible {
+  outline-color: var(--g-focus-color);
+}
+
+.mobileMenu .icon {
+  width: 24px;
+  height: 24px;
+}
+
+.mobileMenu .label {
+  display: inline;
+  font-size: var(--g-text-xs);
+}
+
 /* Show label on wider screens (when icon rail expands) */
 @media (min-width: 1024px) {
   .label {

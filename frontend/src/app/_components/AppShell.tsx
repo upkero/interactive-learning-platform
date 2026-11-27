@@ -118,6 +118,7 @@ export async function AppShell({ children, locale }: AppShellProps) {
           </span>
           <span className={styles.mobileNavLabel}>{tUpload("title")}</span>
         </Link>
+        <UserMenu variant="mobile" />
       </nav>
     </div>
   );

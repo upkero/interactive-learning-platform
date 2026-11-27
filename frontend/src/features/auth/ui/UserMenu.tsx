@@ -4,21 +4,16 @@ import { useTranslations } from "next-intl";
 import { useLogout } from "../api";
 import styles from "./UserMenu.module.css";
 
-export function UserMenu() {
+interface UserMenuProps {
+  variant?: "rail" | "mobile";
+}
+
+export function UserMenu({ variant = "rail" }: UserMenuProps) {
   const t = useTranslations("common");
   const logoutMutation = useLogout();
 
-  if (
-    !logoutMutation.isSuccess &&
-    !logoutMutation.isError &&
-    !logoutMutation.isPending
-  ) {
-    // Not logged in
-    return null;
-  }
-
   return (
-    <div className={styles.menu}>
+    <div className={variant === "mobile" ? styles.mobileMenu : styles.menu}>
       <button
         type="button"
         onClick={() => {
