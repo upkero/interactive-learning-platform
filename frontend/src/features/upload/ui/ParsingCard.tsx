@@ -45,7 +45,9 @@ export function ParsingCard({ documentId }: { documentId: string }) {
               <button
                 type="button"
                 className={`${styles.actionButton} ${styles.primary}`}
-                onClick={() => router.replace("/upload")}
+                onClick={() => {
+                  router.replace("/upload");
+                }}
               >
                 {t("replaceFileButton")}
               </button>
