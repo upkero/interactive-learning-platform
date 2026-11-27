@@ -37,7 +37,7 @@ export default async function AuthLayout({
                   <rect width="32" height="32" rx="8" fill="currentColor" />
                   <path
                     d="M8 16L14 22L24 10"
-                    stroke="white"
+                    stroke="var(--g-color-bg-dark)"
                     strokeWidth="3.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
