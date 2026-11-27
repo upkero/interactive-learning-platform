@@ -11,6 +11,10 @@ const nextConfig: NextConfig = {
   output: process.env.NEXT_STANDALONE === "1" ? "standalone" : undefined,
   outputFileTracingRoot: path.resolve(__dirname, ".."),
   transpilePackages: ["@grasp/primitives"],
+  experimental: {
+    // External API rewrites buffer the 50 MiB upload plus multipart overhead.
+    middlewareClientMaxBodySize: "55mb",
+  },
   async rewrites() {
     return [
       {
