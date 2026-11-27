@@ -342,7 +342,7 @@ class ApplicationContainer:
 
     @cached_property
     def embeddings_redis(self) -> aioredis.Redis:
-        """Dedicated cache database: flushing it must not touch Celery."""
+        """Dedicated cache DB: flushing it must not touch broker, progress, or rate limits."""
         client: aioredis.Redis = aioredis.Redis.from_url(self.embeddings_settings.cache_redis_url)
         return client
 

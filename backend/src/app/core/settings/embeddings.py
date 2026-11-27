@@ -4,8 +4,9 @@ The provider is a deployment choice: ``bge_m3`` runs locally on CPU and is
 the default, ``voyage`` calls the paid API. Both produce 1024-dimensional
 vectors, so one pgvector column serves either model.
 
-The cache lives in a separate Redis database (``/2`` by default) so that
-flushing it cannot touch the Celery broker or progress streams. The model
+The cache lives in a separate Redis database (``/3`` by default) so that
+flushing it cannot touch the Celery broker, progress streams, or rate-limit
+counters. The model
 name is part of every cache key; switching providers does not require a
 cache flush, only ``python -m src.cli reembed-descriptions`` for the table.
 """
@@ -28,8 +29,8 @@ class EmbeddingsSettings(BaseSettings):
     batch_size: int = Field(default=32, ge=1, description="Texts per embedder call.")
     cache_ttl_days: int = Field(default=30, ge=1, description="Lifetime of one cached vector.")
     cache_redis_url: str = Field(
-        default="redis://localhost:6379/2",
-        description="Redis database for the embedding cache (not the broker).",
+        default="redis://localhost:6379/3",
+        description="Redis database for the embedding cache (not the broker or rate-limit storage).",
     )
     voyage_api_key: SecretStr | None = Field(
         default=None,
