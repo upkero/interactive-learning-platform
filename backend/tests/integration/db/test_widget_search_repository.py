@@ -13,7 +13,6 @@ from uuid import UUID
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.dialects import postgresql
 
 from src.app.contracts.widgets import WidgetKind, WidgetStatus
 from src.app.core.settings.solver import SolverSettings
@@ -223,10 +222,9 @@ async def test_explain_of_search_uses_hnsw_index(session_factory: SessionFactory
         primitive_id="three-frame",
         descriptions=[(f"description {index}", vector) for index, vector in enumerate(vectors)],
     )
-    query = _nearest_widgets_statement(vectors[0], k=5, overfetch=40, primitive_id=None).compile(
-        dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
-    )
+    statement = _nearest_widgets_statement(vectors[0], k=5, overfetch=40, primitive_id=None)
     async with session_factory() as session:
+        query = statement.compile(dialect=session.get_bind().dialect, compile_kwargs={"literal_binds": True})
         await session.execute(text("ANALYZE widgets, widget_descriptions"))
         # For this small fixture, PostgreSQL can prefer a scan followed by an explicit sort.
         # Discourage that sort to verify the KNN ordering can use HNSW.
