@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react';
 import { useRouter } from '@/shared/i18n/navigation-client';
 import { Link } from '@/shared/i18n/navigation';
 import { useTranslations } from 'next-intl';
-import Markdown from 'react-markdown';
+import Markdown, { type AllowElement } from 'react-markdown';
 import { useDocument, useDocumentParts, useDocumentStatusGuard, usePart } from '@/entities/document';
 import { ApiError } from '@/shared/api/errors';
 import { ActionLink } from '@/shared/ui/action-link/ActionLink';
@@ -28,6 +28,25 @@ const partStatusLabel = {
   failed: 'partStatus.failed',
 } as const satisfies Record<PartSummaryOut['status'], string>;
 
+type MarkdownRoot = Extract<Parameters<AllowElement>[2], { type: 'root' }>;
+
+function removeDuplicateMarkdownHeading(partTitle: string) {
+  return (root: MarkdownRoot) => {
+    const headingIndex = root.children.findIndex(
+      (child) => child.type === 'element' && /^h[1-6]$/.test(child.tagName),
+    );
+    if (headingIndex < 0) return;
+
+    const heading = root.children[headingIndex];
+    if (heading.type !== 'element' || heading.children.length !== 1) return;
+
+    const [text] = heading.children;
+    if (text.type === 'text' && text.value === partTitle) {
+      root.children.splice(headingIndex, 1);
+    }
+  };
+}
+
 export function DocumentViewFeature({ documentId, initialPartId, onShare }: DocumentViewFeatureProps) {
   const t = useTranslations('viewer');
   const tCommon = useTranslations('common');
@@ -38,11 +57,12 @@ export function DocumentViewFeature({ documentId, initialPartId, onShare }: Docu
   const router = useRouter();
 
   const [partId, setSelectedPartId] = useState(initialPartId);
-  const [showTOC, setShowTOC] = useState(true);
+  const [isMobileTocOpen, setIsMobileTocOpen] = useState(false);
 
   const documentQuery = useDocument(documentId);
   const partsQuery = useDocumentParts(documentId);
   const parts = partsQuery.data ?? [];
+  const hasToc = parts.length > 1;
   const selectedPartId = partId ?? (parts.length > 0 ? parts[0].id : null);
   const partQuery = usePart(selectedPartId);
 
@@ -208,9 +228,24 @@ export function DocumentViewFeature({ documentId, initialPartId, onShare }: Docu
         </div>
       }
     >
-      <div className={styles.layout}>
-        {showTOC && parts.length > 1 && (
-          <aside className={styles.toc} aria-label={t('tocTitle')}>
+      <div className={`${styles.layout} ${hasToc ? styles.layoutWithToc : ''}`}>
+        {hasToc && (
+          <button
+            type="button"
+            className={styles.tocMobileToggle}
+            onClick={() => { setIsMobileTocOpen((isOpen) => !isOpen); }}
+            aria-expanded={isMobileTocOpen}
+            aria-controls="document-toc"
+          >
+            {isMobileTocOpen ? t('closeTOC') : t('tocTitle')}
+          </button>
+        )}
+        {hasToc && (
+          <aside
+            id="document-toc"
+            className={`${styles.toc} ${isMobileTocOpen ? styles.tocOpen : ''}`}
+            aria-label={t('tocTitle')}
+          >
             <Surface title={t('tocTitle')}>
               <nav className={styles.tocNav}>
                 <ul className={styles.tocList} role="list">
@@ -233,32 +268,11 @@ export function DocumentViewFeature({ documentId, initialPartId, onShare }: Docu
                   ))}
                 </ul>
               </nav>
-              {parts.length > 1 && (
-                <button
-                  type="button"
-                  className={styles.tocToggle}
-                  onClick={() => { setShowTOC(false); }}
-                  aria-label={t('closeTOC')}
-                >
-                  {t('closeTOC')}
-                </button>
-              )}
             </Surface>
           </aside>
         )}
 
         <main className={styles.content}>
-          {!showTOC && parts.length > 1 && (
-            <button
-              type="button"
-              className={styles.tocMobileToggle}
-              onClick={() => { setShowTOC(true); }}
-              aria-label={t('tocTitle')}
-            >
-              {t('tocTitle')}
-            </button>
-          )}
-
           <Surface>
             {partQuery.isError ? (
               <p role="alert" className={styles.errorMessage}>
@@ -347,7 +361,9 @@ function DocumentPartView({ part, summary, t, tProgress, loadingLabel }: Documen
           {partContent?.markdown && (
             <div className={styles.partContent}>
               <div className={styles.markdownContent}>
-                <Markdown skipHtml>{partContent.markdown}</Markdown>
+                <Markdown skipHtml rehypePlugins={[[removeDuplicateMarkdownHeading, partTitle]]}>
+                  {partContent.markdown}
+                </Markdown>
               </div>
             </div>
           )}

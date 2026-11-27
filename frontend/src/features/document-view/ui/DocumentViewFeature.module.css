@@ -1,8 +1,12 @@
 .layout {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--g-space-5);
   min-height: 60vh;
+}
+
+.layoutWithToc {
+  grid-template-columns: 280px minmax(0, 1fr);
 }
 
 .headerActions {
@@ -185,25 +189,9 @@
   border-color: var(--g-color-danger);
 }
 
-.tocToggle {
-  display: none;
-  width: 100%;
-  margin-top: var(--g-space-3);
-  padding: var(--g-space-2);
-  border: var(--g-hairline) solid var(--g-color-border);
-  border-radius: var(--g-radius-md);
-  background: var(--g-color-surface);
-  color: var(--g-color-text);
-  font-family: var(--g-font-sans);
-  font-size: var(--g-text-sm);
-  font-weight: var(--g-font-weight-medium);
-  cursor: pointer;
-}
-
 .tocMobileToggle {
   display: none;
   width: 100%;
-  margin-bottom: var(--g-space-4);
   padding: var(--g-space-3);
   border: var(--g-hairline) solid var(--g-color-border);
   border-radius: var(--g-radius-md);
@@ -213,6 +201,11 @@
   font-size: var(--g-text-md);
   font-weight: var(--g-font-weight-medium);
   cursor: pointer;
+}
+
+.tocMobileToggle:focus-visible {
+  outline: 2px solid var(--g-focus-color);
+  outline-offset: 2px;
 }
 
 .content {
@@ -672,7 +665,8 @@
 
 @media (max-width: 1024px) {
   .layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
   }
 
   .toc {
@@ -680,15 +674,11 @@
     display: none;
   }
 
-  .toc.open {
+  .tocOpen {
     display: block;
   }
 
   .tocMobileToggle {
-    display: block;
-  }
-
-  .tocToggle {
     display: block;
   }
 }
