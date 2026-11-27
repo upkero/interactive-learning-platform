@@ -25,12 +25,12 @@ ENV PYTHONUNBUFFERED=1 \
     TIKTOKEN_CACHE_DIR="/app/.cache/tiktoken" \
     INGEST_DOCLING_ARTIFACTS_PATH="/app/artifacts"
 
+WORKDIR /app
+
 RUN groupadd --gid 1001 appgroup && \
     useradd --uid 1001 --gid appgroup --no-create-home appuser && \
-    mkdir -p /app/.cache/huggingface && \
-    chown -R appuser:appgroup /app
-
-WORKDIR /app
+    mkdir -p /models && \
+    chown -R appuser:appgroup /app /models
 
 COPY --from=builder --chown=appuser:appgroup /app/.venv .venv
 COPY --from=builder --chown=appuser:appgroup /app/.cache /app/.cache

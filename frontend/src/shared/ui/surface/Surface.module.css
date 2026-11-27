@@ -1,0 +1,33 @@
+.surface {
+  padding: var(--g-space-5);
+  border: var(--g-hairline) solid var(--g-color-border);
+  border-radius: var(--g-radius-lg);
+  background: var(--g-color-surface);
+  color: var(--g-color-text);
+}
+
+.muted {
+  background: var(--g-color-bg-alt);
+  border-color: var(--g-color-border);
+}
+
+.title {
+  margin: 0 0 var(--g-space-2);
+  color: var(--g-color-text);
+  font-size: var(--g-text-md);
+  font-weight: var(--g-font-weight-bold);
+}
+
+.body {
+  color: var(--g-color-text-secondary);
+  font-size: var(--g-text-sm);
+  line-height: 1.6;
+}
+
+.body p {
+  margin: 0;
+}
+
+.body p + p {
+  margin-top: var(--g-space-2);
+}

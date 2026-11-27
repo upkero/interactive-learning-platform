@@ -1,0 +1,129 @@
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-3);
+  padding: var(--g-space-4);
+  border: var(--g-hairline) solid var(--g-color-border);
+  border-radius: var(--g-radius-lg);
+  background: var(--g-color-surface);
+}
+
+.row,
+.quotaRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--g-space-3);
+  flex-wrap: wrap;
+}
+
+.label {
+  color: var(--g-color-text-secondary);
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-weight-medium);
+}
+
+.value {
+  color: var(--g-color-text);
+  font-size: var(--g-text-md);
+  font-weight: var(--g-font-weight-bold);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--g-font-mono);
+}
+
+.cost {
+  font-family: var(--g-font-mono);
+}
+
+.overQuota .value {
+  color: var(--g-color-danger-text);
+}
+
+.quotaRow {
+  padding-top: var(--g-space-3);
+  border-top: var(--g-hairline) solid var(--g-color-border);
+}
+
+.warning {
+  padding: var(--g-space-2) var(--g-space-3);
+  border-radius: var(--g-radius-md);
+  background: var(--g-color-danger-bg);
+  color: var(--g-color-danger-text);
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-weight-medium);
+}
+
+[data-theme="dark"] .warning {
+  background: var(--g-color-danger-bg);
+  color: var(--g-color-danger-text);
+}
+
+.error .value {
+  color: var(--g-color-danger-text);
+}
+
+.partsPreview {
+  margin-top: var(--g-space-3);
+  padding-top: var(--g-space-3);
+  border-top: var(--g-hairline) solid var(--g-color-border);
+}
+
+.partsTitle {
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-weight-semibold);
+  color: var(--g-color-text-secondary);
+  margin-bottom: var(--g-space-2);
+}
+
+.partsList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-1);
+}
+
+.partItem {
+  display: flex;
+  align-items: center;
+  gap: var(--g-space-3);
+  padding: var(--g-space-2);
+  background: var(--g-color-bg-alt);
+  border-radius: var(--g-radius-md);
+}
+
+.partIndex {
+  min-width: 2rem;
+  font-weight: var(--g-font-weight-bold);
+  color: var(--g-color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--g-font-mono);
+}
+
+.partTitle {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--g-color-text);
+  font-size: var(--g-text-md);
+}
+
+.partTokens {
+  flex-shrink: 0;
+  color: var(--g-color-text-secondary);
+  font-size: var(--g-text-sm);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--g-font-mono);
+}
+
+.quotaErrorBanner {
+  padding: var(--g-space-2) var(--g-space-3);
+  border-radius: var(--g-radius-md);
+  background: var(--g-color-danger-bg);
+  color: var(--g-color-danger-text);
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-weight-medium);
+  margin-bottom: var(--g-space-3);
+}

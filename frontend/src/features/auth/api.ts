@@ -1,0 +1,75 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocale } from "next-intl";
+import { apiClient, unwrap, qk } from "@/shared/api";
+import type { paths } from "@/shared/api/schema";
+import {
+  useRouter,
+  useSearchParams,
+  useNextRouter,
+} from "@/shared/i18n/navigation-client";
+import { sanitizeNextUrl } from "./model/sanitizeNext";
+
+export type LoginCredentials =
+  paths["/api/v1/auth/login"]["post"]["requestBody"]["content"]["application/json"];
+
+export type RegisterCredentials =
+  paths["/api/v1/auth/register"]["post"]["requestBody"]["content"]["application/json"];
+
+export async function login(credentials: LoginCredentials) {
+  return unwrap(apiClient.POST("/api/v1/auth/login", { body: credentials }));
+}
+
+export async function register(credentials: RegisterCredentials) {
+  return unwrap(apiClient.POST("/api/v1/auth/register", { body: credentials }));
+}
+
+export async function logout() {
+  await unwrap(apiClient.POST("/api/v1/auth/logout"));
+}
+
+export function useAuthReturnUrl() {
+  const locale = useLocale();
+  const searchParams = useSearchParams();
+  return sanitizeNextUrl(searchParams.get("next"), locale);
+}
+
+export function useLogin() {
+  const queryClient = useQueryClient();
+  const router = useNextRouter();
+  const nextUrl = useAuthReturnUrl();
+
+  return useMutation({
+    mutationFn: login,
+    onSuccess: (user) => {
+      queryClient.setQueryData(qk.me, user);
+      router.replace(nextUrl);
+    },
+  });
+}
+
+export function useRegister() {
+  const queryClient = useQueryClient();
+  const router = useNextRouter();
+  const nextUrl = useAuthReturnUrl();
+
+  return useMutation({
+    mutationFn: register,
+    onSuccess: (user) => {
+      queryClient.setQueryData(qk.me, user);
+      router.replace(nextUrl);
+    },
+  });
+}
+
+export function useLogout() {
+  const queryClient = useQueryClient();
+  const router = useRouter();
+
+  return useMutation({
+    mutationFn: logout,
+    onSettled: () => {
+      queryClient.clear();
+      router.replace("/login");
+    },
+  });
+}

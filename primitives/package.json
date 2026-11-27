@@ -6,6 +6,7 @@
   "exports": {
     "./tokens.css": "./src/tokens/tokens.css",
     "./ui": "./src/ui/index.ts",
+    "./widget-protocol": "./src/widget-protocol.ts",
     "./core": "./src/core/index.ts",
     "./registry": "./src/registry.ts",
     "./core/labels": "./src/core/labels.ts",

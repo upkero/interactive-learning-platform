@@ -1,16 +1,51 @@
 {
-  "name": "frontend",
+  "name": "grasp-frontend",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "lint": "echo ok",
-    "typecheck": "echo ok",
-    "test": "node --test",
-    "build": "echo ok"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint && tsx scripts/check-messages.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --reporter=verbose && node --test tests/*.test.mjs",
+    "api:gen": "openapi-typescript ../backend/openapi.json -o src/shared/api/schema.d.ts",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "@grasp/primitives": "workspace:*",
+    "@tanstack/react-query": "^5.0.0",
+    "next": "15.5.29",
+    "next-intl": "^4.9.2",
+    "openapi-fetch": "^0.13.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-markdown": "10.1.0",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@next/eslint-plugin-next": "15.5.29",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/testing-library__jest-dom": "^6.0.0",
+    "eslint": "^9.0.0",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-boundaries": "^5.0.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "jsdom": "^30.1.3",
+    "openapi-typescript": "^7.0.0",
+    "prettier": "^3.0.0",
     "remark-directive": "4.0.0",
     "remark-parse": "11.0.0",
-    "unified": "11.0.5"
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.0.0",
+    "unified": "11.0.5",
+    "vitest": "^3.2.7"
   }
 }
