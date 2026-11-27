@@ -209,7 +209,14 @@ async def test_far_filtered_match_does_not_block_fallback() -> None:
     assert [candidate.widget_id for candidate in candidates] == [near.id]
 
 
-async def test_threshold_is_inclusive_and_applied_before_enrichment() -> None:
+@pytest.mark.parametrize(("override", "threshold"), [(None, 0.4449), ("0.6", 0.6)], ids=["bge-default", "env-override"])
+async def test_threshold_is_inclusive_and_applied_before_enrichment(
+    monkeypatch: pytest.MonkeyPatch, override: str | None, threshold: float
+) -> None:
+    if override is None:
+        monkeypatch.delenv("SOLVER_SEARCH_MAX_DISTANCE", raising=False)
+    else:
+        monkeypatch.setenv("SOLVER_SEARCH_MAX_DISTANCE", override)
     widgets = FakeWidgetRepository()
     included = await _widget(widgets)
     too_far = await _widget(widgets)
@@ -218,10 +225,11 @@ async def test_threshold_is_inclusive_and_applied_before_enrichment() -> None:
         embeddings=FakeEmbeddingService(),
         responses=[
             [
-                WidgetMatch(widget_id=included.id, matched_text="edge", distance=0.55),
-                WidgetMatch(widget_id=too_far.id, matched_text="far", distance=0.5500001),
+                WidgetMatch(widget_id=included.id, matched_text="edge", distance=threshold),
+                WidgetMatch(widget_id=too_far.id, matched_text="far", distance=threshold + 0.0000001),
             ]
         ],
+        settings=SolverSettings(_env_file=None),
     )
 
     candidates = await search.search("intent")
