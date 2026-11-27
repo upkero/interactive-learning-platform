@@ -11,7 +11,7 @@ interface NavItem {
   icon: React.ReactNode;
 }
 
-export function NavLinks({ locale }: { locale: string }) {
+export function NavLinks() {
   const pathname = usePathname();
   const tCommon = useTranslations("common");
   const tMaterials = useTranslations("materials");
@@ -19,7 +19,7 @@ export function NavLinks({ locale }: { locale: string }) {
 
   const navItems: NavItem[] = [
     {
-      href: `/${locale}/materials`,
+      href: "/materials",
       label: tMaterials("title"),
       icon: (
         <svg
@@ -42,7 +42,7 @@ export function NavLinks({ locale }: { locale: string }) {
       ),
     },
     {
-      href: `/${locale}/upload`,
+      href: "/upload",
       label: tUpload("title"),
       icon: (
         <svg

@@ -1,4 +1,4 @@
-import { Link, getPathname } from "@/shared/i18n/navigation";
+import { Link } from "@/shared/i18n/navigation";
 import { getTranslations } from "next-intl/server";
 import { NavLinks } from "./NavLinks";
 import { LocaleSwitch } from "@/features/locale";
@@ -16,16 +16,13 @@ export async function AppShell({ children, locale }: AppShellProps) {
   const tMaterials = await getTranslations({ locale, namespace: "materials" });
   const tUpload = await getTranslations({ locale, namespace: "upload" });
 
-  const materialsPath = getPathname({ locale, href: "/materials" });
-  const uploadPath = getPathname({ locale, href: "/upload" });
-
   return (
     <div className={styles.shell}>
       {/* Icon Rail - Left side */}
       <aside className={styles.iconRail} aria-label={tCommon("navigation")}>
         <div className={styles.railTop}>
           <Link
-            href={materialsPath}
+            href="/materials"
             className={styles.brand}
             aria-label={tCommon("appName")}
           >
@@ -51,7 +48,7 @@ export async function AppShell({ children, locale }: AppShellProps) {
           </Link>
         </div>
 
-        <NavLinks locale={locale} />
+        <NavLinks />
 
         <div className={styles.railBottom}>
           <LocaleSwitch />
@@ -76,7 +73,7 @@ export async function AppShell({ children, locale }: AppShellProps) {
         aria-label={tCommon("mobileNavigation")}
       >
         <Link
-          href={materialsPath}
+          href="/materials"
           className={styles.mobileNavItem}
           aria-current="page"
         >
@@ -101,7 +98,7 @@ export async function AppShell({ children, locale }: AppShellProps) {
           </span>
           <span className={styles.mobileNavLabel}>{tMaterials("title")}</span>
         </Link>
-        <Link href={uploadPath} className={styles.mobileNavItem}>
+        <Link href="/upload" className={styles.mobileNavItem}>
           <span className={styles.mobileNavIcon} aria-hidden="true">
             <svg
               width="24"

@@ -35,8 +35,6 @@ export function getMaterialRoute(material: MaterialOut): string {
     case "generating":
       return `/documents/${id}/progress`;
     case "done":
-      // List response doesn't include parts array, fall back to progress page
-      return `/documents/${id}/progress`;
     default:
       return `/documents/${id}`;
   }
