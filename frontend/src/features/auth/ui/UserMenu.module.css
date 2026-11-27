@@ -57,6 +57,10 @@
   display: inline;
 }
 
+.mobileMenu {
+  height: 100%;
+}
+
 .mobileMenu .button {
   flex-direction: column;
   gap: var(--g-space-1);

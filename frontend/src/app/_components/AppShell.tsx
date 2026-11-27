@@ -68,7 +68,6 @@ export async function AppShell({ children, locale }: AppShellProps) {
       {/* Mobile bottom navigation */}
       <div className={styles.mobileNav}>
         <NavLinks mobile />
-        <UserMenu variant="mobile" />
       </div>
     </div>
   );

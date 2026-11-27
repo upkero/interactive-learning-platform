@@ -3,6 +3,7 @@
 import { Link } from "@/shared/i18n/navigation";
 import { usePathname } from "@/shared/i18n/navigation-client";
 import { useTranslations } from "next-intl";
+import { UserMenu } from "@/features/auth";
 import styles from "./NavLinks.module.css";
 
 interface NavItem {
@@ -84,6 +85,11 @@ export function NavLinks({ mobile = false }: { mobile?: boolean }) {
             </Link>
           </li>
         ))}
+        {mobile && (
+          <li>
+            <UserMenu variant="mobile" />
+          </li>
+        )}
       </ul>
     </nav>
   );
