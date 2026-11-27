@@ -1,19 +1,17 @@
 "use client";
 
-import { useLocale, useTranslations } from "next-intl";
-import { useRouter, useSearchParams } from "@/shared/i18n/navigation-client";
+import { useTranslations } from "next-intl";
+import { useRouter } from "@/shared/i18n/navigation-client";
 import { type SyntheticEvent, useState } from "react";
-import { useLogin, useRegister } from "../api";
-import { sanitizeNextUrl } from "../model/sanitizeNext";
+import { useAuthReturnUrl, useLogin, useRegister } from "../api";
 import { authCredentialsSchema, registerSchema } from "../model/schemas";
 import { useApiErrorMessage } from "@/shared/api";
 import styles from "./LoginForm.module.css";
 
 export function LoginForm({ mode = "login" }: { mode?: "login" | "register" }) {
   const t = useTranslations("auth");
-  const locale = useLocale();
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const nextUrl = useAuthReturnUrl();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -135,14 +133,10 @@ export function LoginForm({ mode = "login" }: { mode?: "login" | "register" }) {
         <button
           type="button"
           onClick={() => {
-            const nextUrl = sanitizeNextUrl(
-              searchParams.get("next"),
-              `/${locale}/materials`
-            );
             router.replace(
               mode === "login"
-                ? `/${locale}/register?next=${encodeURIComponent(nextUrl)}`
-                : `/${locale}/login?next=${encodeURIComponent(nextUrl)}`
+                ? `/register?next=${encodeURIComponent(nextUrl)}`
+                : `/login?next=${encodeURIComponent(nextUrl)}`
             );
           }}
           className={styles.switchLink}

@@ -1,10 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocale } from "next-intl";
 import { apiClient, unwrap, qk } from "@/shared/api";
 import type { paths } from "@/shared/api/schema";
 import {
   useRouter,
   usePathname,
   useSearchParams,
+  useNextRouter,
 } from "@/shared/i18n/navigation-client";
 import { sanitizeNextUrl } from "./model/sanitizeNext";
 
@@ -26,16 +28,21 @@ export async function logout() {
   await unwrap(apiClient.POST("/api/v1/auth/logout"));
 }
 
+export function useAuthReturnUrl() {
+  const locale = useLocale();
+  const searchParams = useSearchParams();
+  return sanitizeNextUrl(searchParams.get("next"), locale);
+}
+
 export function useLogin() {
   const queryClient = useQueryClient();
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const router = useNextRouter();
+  const nextUrl = useAuthReturnUrl();
 
   return useMutation({
     mutationFn: login,
     onSuccess: (user) => {
       queryClient.setQueryData(qk.me, user);
-      const nextUrl = sanitizeNextUrl(searchParams.get("next"), "/materials");
       router.replace(nextUrl);
     },
   });
@@ -43,14 +50,13 @@ export function useLogin() {
 
 export function useRegister() {
   const queryClient = useQueryClient();
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const router = useNextRouter();
+  const nextUrl = useAuthReturnUrl();
 
   return useMutation({
     mutationFn: register,
     onSuccess: (user) => {
       queryClient.setQueryData(qk.me, user);
-      const nextUrl = sanitizeNextUrl(searchParams.get("next"), "/materials");
       router.replace(nextUrl);
     },
   });

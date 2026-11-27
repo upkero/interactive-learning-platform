@@ -1,18 +1,34 @@
+import { locales } from "@/shared/i18n/config";
+
+const returnUrlOrigin = "https://grasp.invalid";
+
 export function sanitizeNextUrl(
   nextParam: string | null | undefined,
-  defaultPath = "/materials"
+  locale: string
 ): string {
-  if (!nextParam) return defaultPath;
-  const trimmed = nextParam.trim();
+  const fallback = `/${locale}/materials`;
+  const trimmed = nextParam?.trim();
 
   if (
-    !trimmed.startsWith("/") ||
+    !trimmed?.startsWith("/") ||
     trimmed.startsWith("//") ||
     trimmed.includes("://") ||
     trimmed.includes("\\")
   ) {
-    return defaultPath;
+    return fallback;
   }
 
-  return trimmed;
+  try {
+    const target = new URL(trimmed, returnUrlOrigin);
+    if (target.origin !== returnUrlOrigin || target.pathname.startsWith("//")) {
+      return fallback;
+    }
+    const [, prefix] = target.pathname.split("/");
+    const path = target.pathname + target.search + target.hash;
+    return locales.some((candidate) => candidate === prefix)
+      ? path
+      : `/${locale}${path}`;
+  } catch {
+    return fallback;
+  }
 }
