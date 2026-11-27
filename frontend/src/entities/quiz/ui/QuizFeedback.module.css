@@ -1,0 +1,102 @@
+.feedback {
+  padding: var(--g-space-4);
+  border-radius: var(--g-radius-md);
+  border: var(--g-hairline) solid var(--g-color-border);
+  background: var(--g-color-bg-alt);
+  animation: fadeIn var(--g-duration-fast) var(--g-easing);
+}
+
+.feedback.correct {
+  border-color: var(--g-color-success);
+  background: var(--g-color-success-light);
+}
+
+.feedback.incorrect {
+  border-color: var(--g-color-danger);
+  background: var(--g-color-danger-bg);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--g-space-2);
+  padding: var(--g-space-1) var(--g-space-3);
+  border-radius: var(--g-radius-full);
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-weight-semibold);
+  margin-bottom: var(--g-space-3);
+}
+
+.correctText {
+  background: var(--g-color-success-light);
+  color: var(--g-color-success-text);
+}
+
+.incorrectText {
+  background: var(--g-color-danger-bg);
+  color: var(--g-color-danger-text);
+}
+
+.correctAnswer {
+  margin: 0 0 var(--g-space-2);
+  font-size: var(--g-text-md);
+  color: var(--g-color-text);
+}
+
+.explanation {
+  margin: 0 0 var(--g-space-2);
+  padding: var(--g-space-3);
+  background: var(--g-color-surface);
+  border-radius: var(--g-radius-md);
+  font-size: var(--g-text-sm);
+  line-height: 1.6;
+  color: var(--g-color-text-secondary);
+}
+
+.optionExplanations {
+  margin-top: var(--g-space-3);
+  border-top: var(--g-hairline) solid var(--g-color-border);
+  padding-top: var(--g-space-3);
+}
+
+.optionExplanations summary {
+  cursor: pointer;
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-weight-medium);
+  color: var(--g-color-text-secondary);
+  padding: var(--g-space-1) 0;
+}
+
+.explanationsList {
+  margin: var(--g-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.explanationItem {
+  margin-bottom: var(--g-space-2);
+  font-size: var(--g-text-sm);
+  line-height: 1.5;
+  color: var(--g-color-text-secondary);
+}
+
+.explanationItem:last-child {
+  margin-bottom: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feedback {
+    animation: none;
+  }
+}

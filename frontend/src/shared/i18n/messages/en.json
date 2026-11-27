@@ -138,6 +138,7 @@
     "stageLogTitle": "Stage log",
     "partsTitle": "Parts status",
     "keyTermsTitle": "Key terms",
+    "loading": "Loading progress...",
     "partStatus": {
       "queued": "Queued",
       "mainPass": "Main pass...",
@@ -176,10 +177,13 @@
   },
   "report": {
     "title": "Report a widget issue",
+    "reasonLabel": "Report reason",
     "reasonBroken": "Widget is broken or fails to render",
     "reasonInaccurate": "Factual inaccuracy in content",
     "reasonUnhelpful": "Widget does not help explain the topic",
+    "reasonOther": "Other reason",
     "commentLabel": "Comment (optional)",
+    "commentPlaceholder": "Describe the issue in more detail...",
     "submitButton": "Submit report",
     "submittedToast": "Thank you, report submitted"
   },
@@ -205,7 +209,12 @@
     "reviewTitle": "Answer review",
     "explanationLabel": "Explanation",
     "passed": "Quiz passed",
-    "failed": "Quiz failed"
+    "failed": "Quiz failed",
+    "correctAnswer": "Correct answer",
+    "numericPlaceholder": "Enter a number",
+    "prevQuestion": "Previous question",
+    "moveUp": "Move up",
+    "moveDown": "Move down"
   },
   "share": {
     "title": "Share material",
@@ -214,20 +223,11 @@
     "quotaNote": "Sharing access does not consume generations for you or the recipient.",
     "grantButton": "Grant access",
     "sharedWithTitle": "Shared with",
-    "revokeButton": "Revoke",
-    "publicLinkTitle": "Public link",
-    "publicLinkDescription": "Create a public link so anyone can open the material without signing in.",
-    "publicLinkLabel": "Public link to material",
-    "noPublicLink": "No public link created yet.",
-    "createPublicLink": "Create public link",
-    "revokePublicLink": "Revoke public link",
-    "copied": "Copied!",
-    "copyLink": "Copy link",
-    "inviteByEmailTitle": "Invite by email",
-    "inviteByEmailDescription": "Add a user by email. They will get access to the material after signing in.",
+    "partsCount": "{count, plural, one {# part} other {# parts}}",
+    "recipientNote": "The recipient will see the original, not a copy: corrections will be visible to everyone. Generations are not charged to the recipient.",
     "invalidEmail": "Please enter a valid email address.",
-    "userNotFound": "No user found with that email.",
-    "shareSelfForbidden": "You cannot share with yourself."
+    "shareSelfForbidden": "You cannot share a material with yourself.",
+    "sharedWithNone": "You haven't shared this material with anyone yet."
   },
   "empty": {
     "materialsAll": "You don't have any materials yet. Upload your first lecture or textbook to generate an interactive study guide.",
@@ -264,5 +264,16 @@
     "queue_unavailable": "Task queue is unavailable. Please try again later.",
     "network_error": "Network error. Check your internet connection.",
     "unknown_error": "An unexpected error occurred."
+  },
+  "part": {
+    "title": "Part",
+    "status": {
+      "queued": "Queued",
+      "mainPass": "Main pass...",
+      "resolving": "Resolving...",
+      "assembling": "Assembling...",
+      "published": "Published",
+      "failed": "Generation failed"
+    }
   }
 }

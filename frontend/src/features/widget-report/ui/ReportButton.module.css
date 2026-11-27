@@ -1,0 +1,50 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--g-space-2);
+  padding: var(--g-space-1) var(--g-space-3);
+  border: var(--g-hairline) solid var(--g-color-border);
+  border-radius: var(--g-radius-md);
+  background: var(--g-color-surface);
+  color: var(--g-color-text-secondary);
+  font-family: var(--g-font-sans);
+  font-size: var(--g-text-sm);
+  font-weight: var(--g-font-weight-medium);
+  cursor: pointer;
+  transition:
+    background-color var(--g-duration-fast) var(--g-easing),
+    border-color var(--g-duration-fast) var(--g-easing),
+    color var(--g-duration-fast) var(--g-easing);
+}
+
+.button:hover:not(:disabled) {
+  background: var(--g-color-bg-alt);
+  border-color: var(--g-color-border-strong);
+  color: var(--g-color-text);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--g-focus-color);
+  outline-offset: 2px;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.button.submitted {
+  border-color: var(--g-color-success);
+  background: var(--g-color-success-light);
+  color: var(--g-color-success-text);
+}
+
+.checkIcon {
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
+}

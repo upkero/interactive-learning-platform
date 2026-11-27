@@ -75,20 +75,7 @@ export function useDocumentStatusGuard({
       hasRedirectedRef.current = true;
       onRedirect?.(currentStep, redirectStep);
 
-      // For 'done' status, redirect to first published part or materials
-      let targetRoute: string;
-      if (redirectStep === "document" && document.status === "done") {
-        const firstPublishedPart = document.parts.find(
-          (p) => p.status === "published"
-        );
-        if (firstPublishedPart) {
-          targetRoute = `/parts/${firstPublishedPart.id}`;
-        } else {
-          targetRoute = "/materials";
-        }
-      } else {
-        targetRoute = getRouteForStep(redirectStep, documentId);
-      }
+      const targetRoute = getRouteForStep(redirectStep, documentId);
 
       if (useReplace) {
         router.replace(targetRoute);

@@ -8,7 +8,7 @@ export type WizardStep =
   | "topics" // /documents/[id]/topics
   | "questions" // /documents/[id]/questions
   | "progress" // /documents/[id]/progress
-  | "document"; // /documents/[id]
+  | "materials"; // /materials (replaces document view)
 
 /**
  * Map of wizard step to its route pattern (without locale prefix)
@@ -21,7 +21,7 @@ export const WIZARD_STEP_ROUTES: Record<
   topics: (documentId) => `/documents/${documentId}/topics`,
   questions: (documentId) => `/documents/${documentId}/questions`,
   progress: (documentId) => `/documents/${documentId}/progress`,
-  document: (documentId) => `/documents/${documentId}`,
+  materials: () => `/materials`,
 };
 
 /**
@@ -34,9 +34,9 @@ export type MaterialStatus = MaterialOut["status"];
  * Allowed steps for each material status.
  * Based on docs/ux/screens.md section 3 (adapted for new statuses):
  * - uploaded/parsing -> only upload allowed, others redirect to upload
- * - parsed -> topics and questions allowed, progress/document redirect to topics
+ * - parsed -> topics and questions allowed, progress redirect to topics
  * - generating -> progress allowed, others redirect to progress
- * - done -> document allowed, others redirect to document
+ * - done -> materials allowed (document view removed), others redirect to materials
  * - failed -> topics allowed (to retry), others redirect to topics
  */
 export const ALLOWED_STEPS_BY_STATUS: Record<MaterialStatus, WizardStep[]> = {
@@ -44,7 +44,7 @@ export const ALLOWED_STEPS_BY_STATUS: Record<MaterialStatus, WizardStep[]> = {
   parsing: ["upload"],
   parsed: ["topics", "questions"],
   generating: ["progress"],
-  done: ["document"],
+  done: ["materials"],
   failed: ["topics"],
 };
 
@@ -56,7 +56,7 @@ export const REDIRECT_TARGET_BY_STATUS: Record<MaterialStatus, WizardStep> = {
   parsing: "upload",
   parsed: "topics",
   generating: "progress",
-  done: "document",
+  done: "materials",
   failed: "topics",
 };
 

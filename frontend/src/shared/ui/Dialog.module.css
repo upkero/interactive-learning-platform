@@ -1,0 +1,120 @@
+.dialog {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  z-index: var(--g-z-modal);
+  max-width: none;
+  max-height: none;
+}
+
+.dialog::backdrop {
+  background: transparent;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 10, 11, 0.6);
+  backdrop-filter: blur(2px);
+  animation: fadeIn var(--g-duration-fast) var(--g-easing);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.content {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  background: var(--g-color-surface);
+  border: var(--g-hairline) solid var(--g-color-border);
+  border-radius: var(--g-radius-lg);
+  box-shadow: 0 20px 40px rgba(10, 10, 11, 0.3);
+  animation: slideUp var(--g-duration-base) var(--g-easing);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  margin: auto;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sm .content {
+  max-width: 360px;
+}
+
+.lg .content {
+  max-width: 720px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .content {
+    animation: none;
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--g-space-4) var(--g-space-5);
+  border-bottom: var(--g-hairline) solid var(--g-color-border);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--g-text-lg);
+  font-weight: var(--g-font-weight-bold);
+  color: var(--g-color-text);
+}
+
+.closeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: none;
+  border-radius: var(--g-radius-md);
+  background: transparent;
+  color: var(--g-color-text-secondary);
+  cursor: pointer;
+  transition:
+    background-color var(--g-duration-fast) var(--g-easing),
+    color var(--g-duration-fast) var(--g-easing);
+}
+
+.closeButton:hover {
+  background: var(--g-color-bg-alt);
+  color: var(--g-color-text);
+}
+
+.closeButton:focus-visible {
+  outline: 2px solid var(--g-focus-color);
+  outline-offset: 2px;
+}
+
+.body {
+  padding: var(--g-space-5);
+  overflow-y: auto;
+  flex: 1;
+}

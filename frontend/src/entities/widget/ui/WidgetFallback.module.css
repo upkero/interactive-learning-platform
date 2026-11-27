@@ -1,0 +1,35 @@
+.figure {
+  margin: var(--g-space-6) 0;
+  padding: var(--g-space-4);
+  background-color: var(--g-color-surface-variant);
+  border-radius: var(--g-radius-lg);
+  border: 1px solid var(--g-color-outline-variant);
+}
+
+.textFallback {
+  font-family: var(--g-font-mono);
+  font-size: var(--g-text-sm);
+  line-height: var(--g-line-height-normal);
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--g-color-on-surface-variant);
+}
+
+.caption {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g-space-1);
+  margin-top: var(--g-space-3);
+  padding-top: var(--g-space-3);
+  border-top: 1px solid var(--g-color-outline-variant);
+}
+
+.title {
+  font-weight: var(--g-font-weight-medium);
+  color: var(--g-color-on-surface);
+}
+
+.caption p {
+  font-size: var(--g-text-sm);
+  color: var(--g-color-on-surface-variant);
+}
