@@ -31,14 +31,6 @@ export function ProgressFeature({ documentId }: { documentId: string }) {
   // Track part durations for ETA calculation
   const partDurations = useRef<number[]>([]);
 
-  // Handle part status changes to track durations
-  useEffect(() => {
-    // This effect runs when state.parts changes
-    // We need to track when parts start generating and when they complete
-    // The SSE handler in useProgressState already dispatches PART_STATUS actions
-    // We'll use a separate effect to track timing
-  }, [state.parts]);
-
   // Calculate ETA based on completed part durations
   const eta = useMemo(() => {
     const publishedParts = state.parts.filter((p) => p.status === "published");

@@ -14,14 +14,6 @@ export type PartStatus = components["schemas"]["PartSummaryOut"]["status"];
 export type PartSummaryOut = components["schemas"]["PartSummaryOut"];
 
 /**
- * PartStatusEventData - the payload for part_status SSE event
- * which may include error_code for failed parts
- */
-export interface PartStatusEventData extends PartSummaryOut {
-  error_code?: string;
-}
-
-/**
  * Document status from the API (DocumentOut.status)
  */
 export type DocumentStatus = components["schemas"]["DocumentOut"]["status"];
@@ -93,14 +85,6 @@ type ProgressAction =
       payload: { eventId: string; timestamp: number; stage: string };
     }
   | {
-      type: "PART_STATUS";
-      payload: {
-        eventId: string;
-        timestamp: number;
-        part: PartStatusEventData;
-      };
-    }
-  | {
       type: "KEY_TERM";
       payload: {
         eventId: string;
@@ -169,10 +153,7 @@ function calculateEta(parts: PartInfo[]): number | null {
     return null;
   }
 
-  // We don't have actual duration data in the hydrated state,
-  // so we return null initially. The reducer will update ETA
-  // when it receives part_status events with timing info.
-  // This is handled in the reducer by tracking durations.
+  // The document summary does not include stage durations.
   return null;
 }
 
@@ -193,22 +174,6 @@ export function calculateEtaFromDurations(
 }
 
 /**
- * Map API part status to our internal PartStatus type
- * The API already uses the correct statuses, so this is mostly for type safety
- */
-function mapPartStatus(status: PartSummaryOut["status"]): PartStatus {
-  const validStatuses: PartStatus[] = [
-    "queued",
-    "main_pass",
-    "resolving",
-    "assembling",
-    "published",
-    "failed",
-  ];
-  return validStatuses.includes(status) ? status : "queued";
-}
-
-/**
  * Progress reducer - pure function with no side effects
  */
 export function progressReducer(
@@ -217,10 +182,10 @@ export function progressReducer(
 ): ProgressState {
   switch (action.type) {
     case "HYDRATE": {
-      const newState = initializeProgressState(action.payload.document);
-      // Preserve any existing stageLog and keyTerms if we're re-hydrating
-      // (though typically HYDRATE happens once on mount)
-      return newState;
+      const { parts, documentStatus, eta } = initializeProgressState(
+        action.payload.document
+      );
+      return { ...state, parts, documentStatus, eta };
     }
 
     case "STAGE_EVENT": {
@@ -246,70 +211,6 @@ export function progressReducer(
       return {
         ...state,
         stageLog: newStageLog,
-      };
-    }
-
-    case "PART_STATUS": {
-      // Deduplicate by eventId - check if we already processed this event
-      const eventId = action.payload.eventId;
-      const eventExists = state.stageLog.some(
-        (entry) => entry.eventId === eventId
-      );
-      if (eventExists) {
-        return state;
-      }
-
-      const part = action.payload.part;
-      const mappedStatus = mapPartStatus(part.status);
-
-      const newParts = state.parts.map((p) =>
-        p.id === part.id
-          ? { ...p, status: mappedStatus, errorCode: part.error_code }
-          : p
-      );
-
-      // If this is a new part not in the list, add it
-      const isNewPart = !state.parts.some((p) => p.id === part.id);
-      const finalParts = isNewPart
-        ? [
-            ...newParts,
-            {
-              id: part.id,
-              index: part.index,
-              title: part.title,
-              status: mappedStatus,
-              errorCode: part.error_code,
-            },
-          ].sort((a, b) => a.index - b.index)
-        : newParts;
-
-      // Calculate ETA - we need to track durations
-      // For now, we'll compute ETA based on published parts count
-      // The actual duration tracking would need to be passed in the action
-      // For the reducer to be pure, we compute ETA from the parts state
-      const publishedCount = finalParts.filter(
-        (p) => p.status === "published"
-      ).length;
-      const remainingCount = finalParts.filter(
-        (p) => p.status !== "published" && p.status !== "failed"
-      ).length;
-
-      // We can't compute exact ETA without duration data in state
-      // The UI component will compute ETA using its own duration tracking
-      // The reducer just returns null here, UI will override
-      let eta = state.eta;
-      if (publishedCount > 0 && remainingCount > 0) {
-        // ETA will be computed by UI with actual durations
-        // Here we just signal that ETA is now available (non-null)
-        // The actual value comes from UI's useMemo
-      } else if (publishedCount === 0) {
-        eta = null;
-      }
-
-      return {
-        ...state,
-        parts: finalParts,
-        eta, // Will be refined by UI component
       };
     }
 
@@ -427,10 +328,6 @@ export const progressActions = {
   stageEvent: (eventId: string, timestamp: number, stage: string) => ({
     type: "STAGE_EVENT" as const,
     payload: { eventId, timestamp, stage },
-  }),
-  partStatus: (eventId: string, timestamp: number, part: PartSummaryOut) => ({
-    type: "PART_STATUS" as const,
-    payload: { eventId, timestamp, part },
   }),
   keyTerm: (
     eventId: string,

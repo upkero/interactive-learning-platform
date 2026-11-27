@@ -5,9 +5,7 @@ import {
   initializeProgressState,
   calculateEtaFromDurations,
   type ProgressState,
-  type PartStatus,
   type PartSummaryOut,
-  type PartStatusEventData,
   type DocumentStatus,
 } from "./model";
 
@@ -65,7 +63,7 @@ describe("progressReducer", () => {
   });
 
   describe("HYDRATE action", () => {
-    it("should replace state with hydrated data", () => {
+    it("should refresh the document snapshot and preserve stream state", () => {
       const initialState: ProgressState = {
         parts: [],
         stageLog: [{ eventId: "old", timestamp: 1000, text: "old" }],
@@ -87,13 +85,13 @@ describe("progressReducer", () => {
       expect(newState.parts).toHaveLength(1);
       expect(newState.parts[0].status).toBe("published");
       expect(newState.documentStatus).toBe("generating");
-      expect(newState.stageLog).toHaveLength(0); // Reset
-      expect(newState.keyTerms).toHaveLength(0); // Reset
-      expect(newState.eta).toBeNull(); // No published parts in new data
-      expect(newState.connectionLost).toBe(false);
-      expect(newState.reconnectAttempts).toBe(0);
-      expect(newState.errorCode).toBeNull();
-      expect(newState.hasRedirected).toBe(false);
+      expect(newState.stageLog).toEqual(initialState.stageLog);
+      expect(newState.keyTerms).toEqual(initialState.keyTerms);
+      expect(newState.eta).toBeNull();
+      expect(newState.connectionLost).toBe(true);
+      expect(newState.reconnectAttempts).toBe(5);
+      expect(newState.errorCode).toBe("some_error");
+      expect(newState.hasRedirected).toBe(true);
     });
   });
 
@@ -143,97 +141,6 @@ describe("progressReducer", () => {
       expect(state.stageLog).toHaveLength(200);
       expect(state.stageLog[0].eventId).toBe("evt-50"); // First 50 trimmed
       expect(state.stageLog[199].eventId).toBe("evt-249");
-    });
-  });
-
-  describe("PART_STATUS action", () => {
-    it("should add new part", () => {
-      const initialState = initializeProgressState(createMockDocument());
-      const part = createMockPart({
-        id: "part-new",
-        index: 5,
-        status: "main_pass",
-      });
-      const action = progressActions.partStatus("evt-1", 1000, part);
-      const newState = progressReducer(initialState, action);
-
-      expect(newState.parts).toHaveLength(1);
-      expect(newState.parts[0].id).toBe("part-new");
-      expect(newState.parts[0].status).toBe("main_pass");
-    });
-
-    it("should update existing part status", () => {
-      const parts = [createMockPart({ id: "part-1", status: "queued" })];
-      const initialState = initializeProgressState(createMockDocument(parts));
-
-      const updatedPart = createMockPart({ id: "part-1", status: "published" });
-      const action = progressActions.partStatus("evt-1", 1000, updatedPart);
-      const newState = progressReducer(initialState, action);
-
-      expect(newState.parts).toHaveLength(1);
-      expect(newState.parts[0].status).toBe("published");
-    });
-
-    it("should sort parts by index", () => {
-      const initialState = initializeProgressState(createMockDocument());
-      const part2 = createMockPart({
-        id: "part-2",
-        index: 2,
-        status: "queued",
-      });
-      const part1 = createMockPart({
-        id: "part-1",
-        index: 1,
-        status: "queued",
-      });
-
-      let state = progressReducer(
-        initialState,
-        progressActions.partStatus("evt-2", 1000, part2)
-      );
-      state = progressReducer(
-        state,
-        progressActions.partStatus("evt-1", 1000, part1)
-      );
-
-      expect(state.parts[0].index).toBe(1);
-      expect(state.parts[1].index).toBe(2);
-    });
-
-    it("should handle all valid part statuses", () => {
-      const statuses: PartStatus[] = [
-        "queued",
-        "main_pass",
-        "resolving",
-        "assembling",
-        "published",
-        "failed",
-      ];
-
-      for (const status of statuses) {
-        const initialState = initializeProgressState(createMockDocument());
-        const part = createMockPart({ id: `part-${status}`, status });
-        const action = progressActions.partStatus("evt-1", 1000, part);
-        const newState = progressReducer(initialState, action);
-
-        expect(newState.parts[0].status).toBe(status);
-      }
-    });
-
-    it("should include errorCode for failed parts", () => {
-      const initialState = initializeProgressState(createMockDocument());
-      const part: PartStatusEventData = {
-        id: "part-1",
-        index: 1,
-        title: "Test Part",
-        status: "failed",
-        error_code: "generation_failed",
-      };
-      const action = progressActions.partStatus("evt-1", 1000, part);
-      const newState = progressReducer(initialState, action);
-
-      expect(newState.parts[0].status).toBe("failed");
-      expect(newState.parts[0].errorCode).toBe("generation_failed");
     });
   });
 
