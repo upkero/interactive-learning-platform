@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { ActionLink, PageShell } from "@/shared/ui";
-import { MaterialsContent } from "@/features/materials";
+import { MaterialsPageContent } from "./MaterialsPageContent";
 
 export default async function MaterialsPage({
   params,
@@ -17,7 +17,7 @@ export default async function MaterialsPage({
         <ActionLink href={`/${locale}/upload`}>{t("uploadButton")}</ActionLink>
       }
     >
-      <MaterialsContent />
+      <MaterialsPageContent />
     </PageShell>
   );
 }

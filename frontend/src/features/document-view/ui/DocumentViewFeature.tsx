@@ -156,6 +156,17 @@ export function DocumentViewFeature({ documentId, initialPartId, onShare }: Docu
     return null;
   }
 
+  const shareAction = document.role === 'owner' && (
+    <button
+      type="button"
+      className={styles.shareButton}
+      onClick={onShare}
+      aria-haspopup="dialog"
+    >
+      {t('shareLabel')}
+    </button>
+  );
+
   // Empty parts
   if (parts.length === 0) {
     return (
@@ -170,14 +181,7 @@ export function DocumentViewFeature({ documentId, initialPartId, onShare }: Docu
             >
               {tCommon('back')}
             </ActionLink>
-            <button
-              type="button"
-              className={styles.shareButton}
-              onClick={onShare}
-              aria-label={t('shareLabel')}
-            >
-              {t('shareLabel')}
-            </button>
+            {shareAction}
           </div>
         }
       >
@@ -200,14 +204,7 @@ export function DocumentViewFeature({ documentId, initialPartId, onShare }: Docu
           >
             {tCommon('back')}
           </ActionLink>
-          <button
-            type="button"
-            className={styles.shareButton}
-            onClick={onShare}
-            aria-label={t('shareLabel')}
-          >
-            {t('shareLabel')}
-          </button>
+          {shareAction}
         </div>
       }
     >

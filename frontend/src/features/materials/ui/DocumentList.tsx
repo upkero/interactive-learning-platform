@@ -15,6 +15,7 @@ type Scope = "mine" | "shared" | "all";
 
 interface DocumentListProps {
   scope?: Scope;
+  onShare: (documentId: string) => void;
 }
 
 const STATUS_STYLES: Record<MaterialOut["status"], string> = {
@@ -50,7 +51,7 @@ function getRoleLabel(
   return t("sharedByLabel", { email: doc.shared_by_email || "—" });
 }
 
-export function DocumentList({ scope = "mine" }: DocumentListProps) {
+export function DocumentList({ scope = "mine", onShare }: DocumentListProps) {
   const t = useTranslations("materials");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
@@ -189,7 +190,12 @@ export function DocumentList({ scope = "mine" }: DocumentListProps) {
         </thead>
         <tbody>
           {documents.map((doc) => (
-            <DocumentRow key={doc.document_id} doc={doc} format={format} />
+            <DocumentRow
+              key={doc.document_id}
+              doc={doc}
+              format={format}
+              onShare={onShare}
+            />
           ))}
         </tbody>
       </table>
@@ -200,9 +206,10 @@ export function DocumentList({ scope = "mine" }: DocumentListProps) {
 interface DocumentRowProps {
   doc: MaterialOut;
   format: ReturnType<typeof useFormatter>;
+  onShare: (documentId: string) => void;
 }
 
-function DocumentRow({ doc, format }: DocumentRowProps) {
+function DocumentRow({ doc, format, onShare }: DocumentRowProps) {
   const t = useTranslations("materials");
   const tCommon = useTranslations("common");
 
@@ -257,13 +264,17 @@ function DocumentRow({ doc, format }: DocumentRowProps) {
             {tCommon("next")}
           </Link>
           {isOwner && (
-            <Link
-              href={`/share?document=${doc.document_id}`}
-              className={styles.actionLink}
+            <button
+              type="button"
+              className={`${styles.actionLink} ${styles.shareButton}`}
+              onClick={() => {
+                onShare(doc.document_id);
+              }}
               aria-label={`${t("shareAction")}: ${doc.title}`}
+              aria-haspopup="dialog"
             >
               {t("shareAction")}
-            </Link>
+            </button>
           )}
         </div>
       </td>

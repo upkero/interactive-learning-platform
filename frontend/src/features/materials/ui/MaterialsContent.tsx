@@ -14,7 +14,11 @@ const FILTERS: { value: Filter; labelKey: string }[] = [
   { value: "shared", labelKey: "filterShared" },
 ];
 
-export function MaterialsContent() {
+interface MaterialsContentProps {
+  onShare: (documentId: string) => void;
+}
+
+export function MaterialsContent({ onShare }: MaterialsContentProps) {
   const t = useTranslations("materials");
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -76,7 +80,10 @@ export function MaterialsContent() {
               hidden={currentFilter !== value}
               className={styles.panel}
             >
-              <DocumentList scope={value === "all" ? undefined : value} />
+              <DocumentList
+                scope={value === "all" ? undefined : value}
+                onShare={onShare}
+              />
             </div>
           ))}
         </div>
