@@ -6,7 +6,9 @@ import ru from "./messages/ru.json";
 
 const messagesByLocale: Record<Locale, typeof ru> = { ru, en };
 
-export default getRequestConfig(async ({ requestLocale }) => {
+export default getRequestConfig(async (params) => {
+  // eslint-disable-next-line @typescript-eslint/no-deprecated -- Next 15 has no next/root-params.
+  const { requestLocale } = params;
   const requestedLocale = await requestLocale;
   const locale = hasLocale(locales, requestedLocale)
     ? requestedLocale

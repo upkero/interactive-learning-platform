@@ -5,13 +5,18 @@ import {
   QueryClientProvider,
   QueryCache,
 } from "@tanstack/react-query";
-import { usePathname, useRouter } from "next/navigation";
+import { useLocale } from "next-intl";
 import { type ReactNode, useState, useEffect, useCallback } from "react";
+import {
+  useNextPathname,
+  useNextRouter,
+} from "@/shared/i18n/navigation-client";
 import { isApiError } from "./errors";
 
 export function QueryProvider({ children }: { children: ReactNode }) {
-  const router = useRouter();
-  const pathname = usePathname();
+  const router = useNextRouter();
+  const pathname = useNextPathname();
+  const locale = useLocale();
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -41,54 +46,43 @@ export function QueryProvider({ children }: { children: ReactNode }) {
         },
         queryCache: new QueryCache({
           onError: (error) => {
-            // We can't do async redirect here, so we'll handle it in SessionGate
-            // and via a custom event
             if (isApiError(error) && error.status === 401) {
-              window.dispatchEvent(
-                new CustomEvent("grasp:unauthorized", { detail: { pathname } })
-              );
+              window.dispatchEvent(new Event("grasp:unauthorized"));
             }
           },
         }),
       })
   );
 
-  // Handle unauthorized event - separated to avoid async in event listener
-  const handleUnauthorized = useCallback(
-    (event: Event): void => {
-      const customEvent = event as CustomEvent<{ pathname: string }>;
-      const { pathname: currentPathname } = customEvent.detail;
+  const handleUnauthorized = useCallback((): void => {
+    void (async () => {
+      try {
+        // Dynamically import to avoid circular dependency
+        const { apiClient } = await import("./client");
+        await apiClient.POST("/api/v1/auth/logout");
+      } catch {
+        // Ignore logout errors
+      } finally {
+        queryClient.clear();
+        const encodedNext = encodeURIComponent(
+          pathname || `/${locale}/materials`
+        );
+        router.replace(`/${locale}/login?next=${encodedNext}`);
+      }
+    })();
+  }, [locale, pathname, queryClient, router]);
 
-      // Perform logout and redirect asynchronously
-      void (async () => {
-        try {
-          // Dynamically import to avoid circular dependency
-          const { apiClient } = await import("./client");
-          await apiClient.POST("/api/v1/auth/logout");
-        } catch {
-          // Ignore logout errors
-        } finally {
-          queryClient.clear();
-          // Get locale from pathname
-          const localeMatch = currentPathname.match(/^\/(ru|en)/);
-          const locale = localeMatch ? localeMatch[1] : "ru";
-          const encodedNext = encodeURIComponent(
-            currentPathname || `/${locale}/materials`
-          );
-          router.replace(`/${locale}/login?next=${encodedNext}`);
-        }
-      })();
-    },
-    [queryClient, router]
-  );
-
-  // Listen for unauthorized events and handle redirect
   useEffect(() => {
+    // The sign-in and registration pages probe /me before a session exists.
+    if (pathname === `/${locale}/login` || pathname === `/${locale}/register`) {
+      return;
+    }
+
     window.addEventListener("grasp:unauthorized", handleUnauthorized);
     return () => {
       window.removeEventListener("grasp:unauthorized", handleUnauthorized);
     };
-  }, [handleUnauthorized]);
+  }, [handleUnauthorized, locale, pathname]);
 
   return (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
