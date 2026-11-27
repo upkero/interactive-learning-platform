@@ -114,6 +114,7 @@ services:
     ports: ["3000:3000"]
     depends_on:
       api: { condition: service_healthy }
+      worker: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/ru/login"]
       interval: 10s
@@ -142,9 +143,7 @@ services:
       LOG_FORMAT: json
     tmpfs:
       - /tmp/prom:uid=1001,gid=1001,mode=0700
-    depends_on:
-      <<: *backend-deps
-      sandbox: { condition: service_healthy }
+    depends_on: *backend-deps
     networks:
       - default
       - sandbox_net
@@ -152,7 +151,7 @@ services:
       # Local embedding weights survive container restarts and image updates.
       - huggingface:/models
     healthcheck:
-      test: ["CMD-SHELL", "celery -A src.worker inspect ping || exit 1"]
+      test: ["CMD-SHELL", "celery -A src.worker inspect ping --destination celery@$$HOSTNAME"]
       interval: 15s
       timeout: 10s
       retries: 5

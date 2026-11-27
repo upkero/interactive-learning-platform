@@ -54,8 +54,8 @@ pnpm install --frozen-lockfile
 pnpm --filter grasp-frontend dev
 ```
 
-При запуске фронтенда в Compose используйте `up -d frontend worker` с теми же
-параметрами `--env-file` и `-f`.
+Для запуска фронтенда в Compose достаточно `up -d frontend` с теми же
+параметрами `--env-file` и `-f`: Compose дождётся готовности API и воркера.
 
 1. Откройте [страницу входа](http://localhost:3000/ru/login). Войдите как
    `bob@example.com` с паролем из `SEED_PASSWORD` в `backend/.env`
@@ -74,6 +74,10 @@ pnpm --filter grasp-frontend dev
 ```bash
 docker compose --env-file backend/.env -f infra/compose.yml ps
 ```
+
+Если импорт остаётся в очереди, проверьте статус `worker` и его журнал:
+`docker compose --env-file backend/.env -f infra/compose.yml logs --tail=100 worker`.
+При старте воркер выводит список очередей, в котором должна быть `parts.high`.
 
 Readiness-проверка API (БД, Redis, MinIO):
 
