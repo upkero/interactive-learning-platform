@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { useRouter } from "@/shared/i18n/navigation-client";
-import { useDocument } from "../model/useDocument";
+import { useDocument, type DocumentOut } from "../model/useDocument";
 import { isApiError } from "@/shared/api/errors";
 import type { MaterialStatus } from "./types";
 import {
@@ -24,6 +24,7 @@ interface UseDocumentStatusGuardOptions {
 }
 
 interface UseDocumentStatusGuardResult {
+  document: DocumentOut | undefined;
   /** Current material status (null while loading) */
   status: MaterialStatus | null;
   /** True while document is loading */
@@ -63,7 +64,16 @@ export function useDocumentStatusGuard({
 }: UseDocumentStatusGuardOptions): UseDocumentStatusGuardResult {
   const router = useRouter();
 
-  const { data: document, isLoading, error } = useDocument(documentId);
+  const { data: document, isLoading, error } = useDocument(documentId, {
+    // Ingestion persists its result without a completion event.
+    refetchInterval:
+      currentStep === "upload"
+        ? (query) => {
+            const status = query.state.data?.status;
+            return status === "uploaded" || status === "parsing" ? 2500 : false;
+          }
+        : false,
+  });
 
   const status = document?.status ?? null;
   const hasRedirectedRef = useRef(false);
@@ -71,6 +81,13 @@ export function useDocumentStatusGuard({
   // Check if redirect is needed and perform it
   useEffect(() => {
     if (isLoading || !document || hasRedirectedRef.current) return;
+
+    // Keep ingestion failures on the upload screen so users can replace the file.
+    if (
+      currentStep === "upload" &&
+      document.status === "failed" &&
+      document.error_code
+    ) return;
 
     if (
       currentStep === "document" &&
@@ -121,6 +138,7 @@ export function useDocumentStatusGuard({
   const isForbidden = isApiError(error) && error.status === 403;
 
   return {
+    document,
     status,
     isLoading,
     error: isNotFound || isForbidden ? error : null,

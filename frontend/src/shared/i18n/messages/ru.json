@@ -81,6 +81,7 @@
     "urlLabel": "Или вставьте ссылку на Google Docs",
     "urlPlaceholder": "https://docs.google.com/document/d/...",
     "importButton": "Импортировать",
+    "parsingPending": "Ждём начала обработки документа...",
     "parsingTitle": "Разбираем структуру документа...",
     "parsingFailed": "Не удалось разобрать документ",
     "replaceFileButton": "Выбрать другой файл",

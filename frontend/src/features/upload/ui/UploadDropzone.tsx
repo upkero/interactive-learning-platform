@@ -33,15 +33,6 @@ function validateFileExtension(file: File): string | null {
   return null;
 }
 
-function validateGoogleDocsUrl(url: string): string | null {
-  const trimmed = url.trim();
-  if (!trimmed) return "noUrlEntered";
-  if (!GOOGLE_DOCS_URL_PATTERN.test(trimmed)) {
-    return "invalid_gdocs_url";
-  }
-  return null;
-}
-
 export function UploadDropzone() {
   const t = useTranslations("upload");
   const tErrors = useTranslations("errors");
@@ -144,17 +135,19 @@ export function UploadDropzone() {
         setUploadProgress(null);
       }
     } else {
-      const urlErrorCode = validateGoogleDocsUrl(googleDocUrl);
-      if (urlErrorCode) {
-        setUrlError(tErrors(urlErrorCode));
+      const url = googleDocUrl.trim();
+      if (!url) {
+        setUrlError(t("noUrlEntered"));
+        return;
+      }
+      if (!GOOGLE_DOCS_URL_PATTERN.test(url)) {
+        setUrlError(tErrors("invalid_gdocs_url"));
         return;
       }
       setIsSubmitting(true);
       setUrlError(null);
       try {
-        const document = await importGdocsMutation.mutateAsync(
-          googleDocUrl.trim()
-        );
+        const document = await importGdocsMutation.mutateAsync(url);
         router.replace(`/upload?document=${document.id}`);
       } catch (error) {
         if (error instanceof ApiError) {

@@ -43,16 +43,19 @@ docker compose --env-file backend/.env -f infra/compose.yml --profile local-llm 
 
 ## Демо готового материала
 
-Демо-заполнение создаёт готовый конспект и тест в локальной БД. Для этого
-сценария достаточно API с его зависимостями и локального фронтенда.
+Демо-заполнение создаёт готовый конспект и тест в локальной БД. Воркер
+разбирает новые документы после загрузки.
 Генерация и обращения к LLM при просмотре конспекта и проверке ответа не нужны.
 
 ```bash
-docker compose --env-file backend/.env -f infra/compose.yml up -d api
+docker compose --env-file backend/.env -f infra/compose.yml up -d api worker
 docker compose --env-file backend/.env -f infra/compose.yml --profile seed run --rm seed
 pnpm install --frozen-lockfile
 pnpm --filter grasp-frontend dev
 ```
+
+При запуске фронтенда в Compose используйте `up -d frontend worker` с теми же
+параметрами `--env-file` и `-f`.
 
 1. Откройте [страницу входа](http://localhost:3000/ru/login). Войдите как
    `bob@example.com` с паролем из `SEED_PASSWORD` в `backend/.env`
@@ -62,6 +65,9 @@ pnpm --filter grasp-frontend dev
 3. Нажмите «Пройти тест по части», выберите **Activation** и нажмите
    «Завершить тест». На экране появятся результат **1 из 1**, **100%**
    и пояснение. «Вернуться к конспекту» открывает тот же материал.
+4. Чтобы проверить загрузку, выберите «Загрузить материал», добавьте
+   `backend/tests/fixtures/documents/course_en.md` и нажмите «Импортировать».
+   После разбора откроется список тем. Для этого файла разбор обходится без LLM.
 
 ## Проверка, что всё поднялось
 

@@ -81,6 +81,7 @@
     "urlLabel": "Or paste a Google Docs link",
     "urlPlaceholder": "https://docs.google.com/document/d/...",
     "importButton": "Import",
+    "parsingPending": "Waiting for document processing...",
     "parsingTitle": "Analyzing document structure...",
     "parsingFailed": "Failed to parse document",
     "replaceFileButton": "Choose another file",

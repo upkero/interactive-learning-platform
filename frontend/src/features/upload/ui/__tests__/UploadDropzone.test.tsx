@@ -43,7 +43,6 @@ const messages = {
     queue_unavailable: "Queue unavailable",
     network_error: "Network error",
     unknown_error: "Unknown error",
-    noUrlEntered: "Enter a Google Docs link",
   },
   common: {
     cancel: "Cancel",
@@ -356,9 +355,10 @@ describe("UploadDropzone", () => {
     it("should reject file larger than 50MB", async () => {
       renderComponent();
 
-      const largeFile = new File(["x".repeat(51 * 1024 * 1024)], "large.pdf", {
+      const largeFile = new File([], "large.pdf", {
         type: "application/pdf",
       });
+      Object.defineProperty(largeFile, "size", { value: 50 * 1024 * 1024 + 1 });
       const fileInputs = screen.getAllByLabelText(
         "Drag and drop a file here, or click to select"
       );

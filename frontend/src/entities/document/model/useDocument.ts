@@ -1,6 +1,10 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  type UseQueryOptions,
+} from "@tanstack/react-query";
 import { apiClient, unwrap, qk } from "@/shared/api";
 import type { components } from "@/shared/api/schema";
 
@@ -32,7 +36,7 @@ export interface DocumentPart {
 
 export function useDocument(
   documentId: string | null,
-  options?: { enabled?: boolean; refetchInterval?: number | false }
+  options?: Pick<UseQueryOptions<DocumentOut>, "enabled" | "refetchInterval">
 ) {
   return useQuery({
     queryKey: documentId

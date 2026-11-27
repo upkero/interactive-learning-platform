@@ -4,6 +4,5 @@ export { ParsingCard } from "./ui/ParsingCard";
 export {
   useUploadDocument,
   useImportGdocs,
-  useParsingProgress,
   type UploadProgressCallback,
 } from "./api";

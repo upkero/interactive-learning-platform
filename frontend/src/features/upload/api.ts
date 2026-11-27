@@ -3,8 +3,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { apiClient, unwrap, ApiError } from "@/shared/api";
 import type { components } from "@/shared/api/schema";
-import { useEventStream } from "@/shared/lib/sse/useEventStream";
-import { useDocument } from "@/entities/document";
 
 export type UploadProgressCallback = (percent: number) => void;
 
@@ -124,68 +122,4 @@ export function useImportGdocs() {
       );
     },
   });
-}
-
-interface UseParsingProgressOptions {
-  /** Polling interval in ms when SSE is unavailable (default: 2500) */
-  pollInterval?: number;
-}
-
-interface UseParsingProgressResult {
-  /** SSE connection status */
-  sseStatus: ReturnType<typeof useEventStream>["status"];
-  /** Current document status from polling fallback */
-  documentStatus: components["schemas"]["DocumentOut"]["status"] | null;
-  /** True while polling or SSE is active */
-  isActive: boolean;
-}
-
-/**
- * Track parsing progress via SSE with polling fallback.
- * Uses useEventStream for real-time updates and falls back to polling document status
- * when SSE is unavailable or disconnected, while document status is 'uploaded' or 'parsing'.
- */
-export function useParsingProgress(
-  documentId: string | null,
-  options: UseParsingProgressOptions = {}
-): UseParsingProgressResult {
-  const { pollInterval = 2500 } = options;
-
-  const sseUrl = documentId ? `/api/v1/documents/${documentId}/events` : null;
-
-  const { status: sseStatus } = useEventStream({
-    url: sseUrl,
-    enabled: !!documentId,
-    // Use default event types from useEventStream (stage, part_status, part_ready, document_done, error)
-    // No terminalEvents field - not in UseEventStreamOptions
-  });
-
-  // Fallback polling: refetch document while status is uploaded or parsing
-  const isPollingEnabled =
-    !!documentId &&
-    (sseStatus === "closed" ||
-      sseStatus === "idle" ||
-      sseStatus === "reconnecting");
-
-  const { data: document } = useDocument(documentId, {
-    enabled: isPollingEnabled,
-    refetchInterval: isPollingEnabled ? pollInterval : false,
-  });
-
-  const doc: components["schemas"]["DocumentOut"] | undefined = document;
-  const documentStatus = doc?.status ?? null;
-
-  // Active if SSE is connecting/open OR polling is active (document is uploaded/parsing)
-  const isActive =
-    sseStatus === "connecting" ||
-    sseStatus === "open" ||
-    sseStatus === "reconnecting" ||
-    documentStatus === "uploaded" ||
-    documentStatus === "parsing";
-
-  return {
-    sseStatus,
-    documentStatus,
-    isActive,
-  };
 }
