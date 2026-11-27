@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/shared/api/client';
-import type { components } from '@/shared/api/schema';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/shared/api/client";
+import type { components } from "@/shared/api/schema";
 
-export const QUIZ_QUERY_KEY = ['quiz'] as const;
+export const QUIZ_QUERY_KEY = ["quiz"] as const;
 
-export type QuestionType = 'single_choice' | 'multiple_choice';
+export type QuestionType = "single_choice" | "multiple_choice";
 
 export interface QuizQuestion {
   id: string;
@@ -53,22 +53,28 @@ export interface QuizAnswerResult {
   explanation?: string;
 }
 
-function mapChoiceQuizToQuestion(quiz: components['schemas']['ChoiceQuiz'] | components['schemas']['OrderingQuiz'] | components['schemas']['NumericQuiz']): QuizQuestion {
-  if ('options' in quiz) {
+function mapChoiceQuizToQuestion(
+  quiz:
+    | components["schemas"]["ChoiceQuiz"]
+    | components["schemas"]["OrderingQuiz"]
+    | components["schemas"]["NumericQuiz"]
+): QuizQuestion {
+  if ("options" in quiz) {
     return {
       id: quiz.key,
-      type: quiz.type === 'multiple_choice' ? 'multiple_choice' : 'single_choice',
+      type:
+        quiz.type === "multiple_choice" ? "multiple_choice" : "single_choice",
       text: quiz.prompt,
       options: quiz.options.map((opt) => ({ id: opt.id, text: opt.text })),
       key: quiz.key,
       ref: quiz.ref,
     };
   }
-  if ('items' in quiz) {
+  if ("items" in quiz) {
     // Ordering quiz - treat as single choice for now
     return {
       id: quiz.key,
-      type: 'single_choice',
+      type: "single_choice",
       text: quiz.prompt,
       options: quiz.items.map((item) => ({ id: item.id, text: item.text })),
       key: quiz.key,
@@ -78,7 +84,7 @@ function mapChoiceQuizToQuestion(quiz: components['schemas']['ChoiceQuiz'] | com
   // Numeric quiz
   return {
     id: quiz.key,
-    type: 'single_choice',
+    type: "single_choice",
     text: quiz.prompt,
     options: [],
     key: quiz.key,
@@ -91,11 +97,14 @@ export function useQuiz(partId: string | null) {
     queryKey: [...QUIZ_QUERY_KEY, partId],
     enabled: !!partId,
     queryFn: async () => {
-      if (!partId) throw new Error('Part ID is required');
-      const { data, response } = await apiClient.GET('/api/v1/parts/{part_id}', {
-        params: { path: { part_id: partId } },
-      });
-      if (!response.ok || !data) throw new Error('Failed to load part');
+      if (!partId) throw new Error("Part ID is required");
+      const { data, response } = await apiClient.GET(
+        "/api/v1/parts/{part_id}",
+        {
+          params: { path: { part_id: partId } },
+        }
+      );
+      if (!response.ok || !data) throw new Error("Failed to load part");
       const part = data;
       const quizzes = part.content?.quizzes ?? [];
       const questions = quizzes.map((quiz) => mapChoiceQuizToQuestion(quiz));
@@ -116,10 +125,11 @@ export function useSubmitQuiz() {
       body: QuizSubmitRequest;
     }) => {
       // New API: submit each quiz answer individually to /quiz-attempts
-      const partData = await apiClient.GET('/api/v1/parts/{part_id}', {
+      const partData = await apiClient.GET("/api/v1/parts/{part_id}", {
         params: { path: { part_id: partId } },
       });
-      if (!partData.response.ok || !partData.data) throw new Error('Failed to load part');
+      if (!partData.response.ok || !partData.data)
+        throw new Error("Failed to load part");
       const part = partData.data;
       const quizzes = part.content?.quizzes ?? [];
 
@@ -130,16 +140,20 @@ export function useSubmitQuiz() {
         const quiz = quizzes.find((q) => q.key === answer.question_id);
         if (!quiz) continue;
 
-        const { data: attemptData, response: attemptResponse } = await apiClient.POST('/api/v1/quiz-attempts', {
-          body: {
-            part_id: partId,
-            quiz_key: answer.question_id,
-            answer: answer.option_ids.length === 1 ? answer.option_ids[0] : answer.option_ids,
-          },
-        });
+        const { data: attemptData, response: attemptResponse } =
+          await apiClient.POST("/api/v1/quiz-attempts", {
+            body: {
+              part_id: partId,
+              quiz_key: answer.question_id,
+              answer:
+                answer.option_ids.length === 1
+                  ? answer.option_ids[0]
+                  : answer.option_ids,
+            },
+          });
 
         if (!attemptResponse.ok || !attemptData) {
-          throw new Error('Failed to submit quiz attempt');
+          throw new Error("Failed to submit quiz attempt");
         }
 
         const attempt = attemptData;
@@ -149,7 +163,10 @@ export function useSubmitQuiz() {
         results.push({
           question_id: answer.question_id,
           selected_option_ids: answer.option_ids,
-          correct_option_ids: attempt.correct_answer instanceof Array ? attempt.correct_answer : [String(attempt.correct_answer)],
+          correct_option_ids:
+            attempt.correct_answer instanceof Array
+              ? attempt.correct_answer
+              : [String(attempt.correct_answer)],
           is_correct: isCorrect,
           explanation: attempt.explanation ?? undefined,
         });
@@ -167,15 +184,19 @@ export function useSubmitQuiz() {
       };
     },
     onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({ queryKey: [...QUIZ_QUERY_KEY, variables.partId, 'result'] });
-      void queryClient.invalidateQueries({ queryKey: ['document', variables.partId.split('-')[0], 'parts'] });
+      void queryClient.invalidateQueries({
+        queryKey: [...QUIZ_QUERY_KEY, variables.partId, "result"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["document", variables.partId.split("-")[0], "parts"],
+      });
     },
   });
 }
 
 export function useQuizResult(partId: string | null) {
   return useQuery({
-    queryKey: [...QUIZ_QUERY_KEY, partId, 'result'],
+    queryKey: [...QUIZ_QUERY_KEY, partId, "result"],
     enabled: !!partId,
     queryFn: () => {
       // New API doesn't have a separate result endpoint

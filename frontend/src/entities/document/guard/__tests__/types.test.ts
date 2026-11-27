@@ -43,8 +43,8 @@ describe("DocumentStatusGuard - types", () => {
       expect(ALLOWED_STEPS_BY_STATUS.generating).toEqual(["progress"]);
     });
 
-    it("done should only allow document", () => {
-      expect(ALLOWED_STEPS_BY_STATUS.done).toEqual(["document"]);
+    it("done should only allow materials", () => {
+      expect(ALLOWED_STEPS_BY_STATUS.done).toEqual(["materials"]);
     });
 
     it("failed should allow topics", () => {
@@ -84,8 +84,8 @@ describe("DocumentStatusGuard - types", () => {
       expect(REDIRECT_TARGET_BY_STATUS.generating).toBe("progress");
     });
 
-    it("done should redirect to document", () => {
-      expect(REDIRECT_TARGET_BY_STATUS.done).toBe("document");
+    it("done should redirect to materials", () => {
+      expect(REDIRECT_TARGET_BY_STATUS.done).toBe("materials");
     });
 
     it("failed should redirect to topics", () => {
@@ -114,7 +114,7 @@ describe("DocumentStatusGuard - types", () => {
       },
       {
         status: "uploaded",
-        currentStep: "document",
+        currentStep: "materials",
         expectedRedirect: "upload",
       },
 
@@ -133,7 +133,7 @@ describe("DocumentStatusGuard - types", () => {
       },
       {
         status: "parsing",
-        currentStep: "document",
+        currentStep: "materials",
         expectedRedirect: "upload",
       },
 
@@ -142,7 +142,11 @@ describe("DocumentStatusGuard - types", () => {
       { status: "parsed", currentStep: "topics", expectedRedirect: null },
       { status: "parsed", currentStep: "questions", expectedRedirect: null },
       { status: "parsed", currentStep: "progress", expectedRedirect: "topics" },
-      { status: "parsed", currentStep: "document", expectedRedirect: "topics" },
+      {
+        status: "parsed",
+        currentStep: "materials",
+        expectedRedirect: "topics",
+      },
 
       // generating status
       {
@@ -163,20 +167,24 @@ describe("DocumentStatusGuard - types", () => {
       { status: "generating", currentStep: "progress", expectedRedirect: null },
       {
         status: "generating",
-        currentStep: "document",
+        currentStep: "materials",
         expectedRedirect: "progress",
       },
 
       // done status
-      { status: "done", currentStep: "upload", expectedRedirect: "document" },
-      { status: "done", currentStep: "topics", expectedRedirect: "document" },
+      { status: "done", currentStep: "upload", expectedRedirect: "materials" },
+      { status: "done", currentStep: "topics", expectedRedirect: "materials" },
       {
         status: "done",
         currentStep: "questions",
-        expectedRedirect: "document",
+        expectedRedirect: "materials",
       },
-      { status: "done", currentStep: "progress", expectedRedirect: "document" },
-      { status: "done", currentStep: "document", expectedRedirect: null },
+      {
+        status: "done",
+        currentStep: "progress",
+        expectedRedirect: "materials",
+      },
+      { status: "done", currentStep: "materials", expectedRedirect: null },
 
       // failed status - only topics allowed
       { status: "failed", currentStep: "upload", expectedRedirect: "topics" },
@@ -193,7 +201,7 @@ describe("DocumentStatusGuard - types", () => {
       },
       {
         status: "failed",
-        currentStep: "document",
+        currentStep: "materials",
         expectedRedirect: "topics",
       },
     ];
@@ -234,10 +242,8 @@ describe("DocumentStatusGuard - types", () => {
       );
     });
 
-    it("should return correct route for document step", () => {
-      expect(getRouteForStep("document", documentId)).toBe(
-        `/documents/${documentId}`
-      );
+    it("should return correct route for materials step", () => {
+      expect(getRouteForStep("materials", documentId)).toBe(`/materials`);
     });
   });
 });

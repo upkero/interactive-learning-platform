@@ -1,11 +1,12 @@
 /// <reference types="vitest/globals" />
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   render,
   screen,
   fireEvent,
   waitFor,
   act,
+  cleanup,
 } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { UploadDropzone } from "../UploadDropzone";
@@ -106,6 +107,10 @@ describe("UploadDropzone", () => {
       isError: false,
       error: null,
     });
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   function renderComponent() {

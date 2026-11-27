@@ -1,4 +1,4 @@
-import { QuizFeature } from '@/features/quiz';
+import { QuizRunner } from "@/features/quiz";
 
 export default async function QuizPage({
   params,
@@ -7,5 +7,5 @@ export default async function QuizPage({
 }) {
   const { id } = await params;
 
-  return <QuizFeature partId={id} documentId={id.split('-')[0]} />;
+  return <QuizRunner partId={id} />;
 }

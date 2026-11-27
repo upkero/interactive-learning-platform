@@ -1,1 +1,0 @@
-export { DocumentViewFeature } from './ui/DocumentViewFeature';

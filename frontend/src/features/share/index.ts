@@ -1,1 +1,2 @@
-export { ShareModal } from './ui/ShareModal';
+export { ShareDialog } from "./ui/ShareDialog";
+export { useShareMaterial } from "./api";
