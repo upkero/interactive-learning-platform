@@ -10,18 +10,21 @@ import math
 import os
 import random
 import re
+import warnings
 from collections.abc import Sequence
 from time import perf_counter
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import event, insert, text
+from sqlalchemy.exc import SADeprecationWarning
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.widgets import WidgetKind
 from src.app.core.settings.solver import SolverSettings
+from src.app.interfaces.embeddings.embedding_service import EmbeddingServiceInterface
 from src.app.models.widget import Widget
 from src.app.models.widget_description import EMBEDDING_DIM, WidgetDescription
 from src.app.repositories.primitive_repository import PrimitiveRepository
@@ -31,11 +34,18 @@ from src.app.repositories.widget_search_repository import WidgetSearchRepository
 from src.app.services.solver.search.widget_search import WidgetSearch
 from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
 from tests.support.types import SessionFactory
+from tests.support.widget_search_latency import (
+    LATENCY_LIMIT_MS,
+    assert_p95_below,
+    nearest_rank_percentile,
+)
 
 pytestmark = pytest.mark.integration
 
+PRODUCTION_SEARCH_MAX_DISTANCE = cast(float, SolverSettings.model_fields["search_max_distance"].default)
 
-class _FakeEmbeddingService:
+
+class _FakeEmbeddingService(EmbeddingServiceInterface):
     def __init__(self, vector: list[float]) -> None:
         self._vector = vector
         self.calls: list[list[str]] = []
@@ -145,7 +155,11 @@ async def test_inactive_widget_is_never_returned(db: AsyncEngine, session_factor
         search = WidgetSearch(
             session_factory=async_sessionmaker(connection),
             embeddings=_FakeEmbeddingService(_unit()),
-            settings=SolverSettings(_env_file=None, search_overfetch=40, search_max_distance=0.55),
+            settings=SolverSettings(
+                _env_file=None,
+                search_overfetch=40,
+                search_max_distance=PRODUCTION_SEARCH_MAX_DISTANCE,
+            ),
             metrics=RecordingMetricsCollector(),
         )
         candidates = await search.search("intent", k=1)
@@ -186,6 +200,43 @@ async def test_primitive_filter_and_unfiltered_query(session_factory: SessionFac
     assert [match.widget_id for match in without_filter] == [filtered, other]
 
 
+async def test_hnsw_candidate_list_covers_the_configured_overfetch(session_factory: SessionFactory) -> None:
+    async with session_factory() as session:
+        matches = await WidgetSearchRepository(session).find_nearest_widgets(
+            query_vector=_unit(),
+            k=1,
+            overfetch=150,
+        )
+        ef_search = await session.scalar(text("SHOW hnsw.ef_search"))
+
+    assert matches == []
+    assert ef_search == "150"
+
+
+async def test_distinct_on_implementations_do_not_use_the_deprecated_sqlalchemy_api(
+    session_factory: SessionFactory,
+) -> None:
+    await _primitive(session_factory, "three-frame")
+    widget = await _config_widget(
+        session_factory,
+        primitive_id="three-frame",
+        descriptions=[("main", _unit())],
+    )
+
+    async with session_factory() as session:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", SADeprecationWarning)
+            matches = await WidgetSearchRepository(session).find_nearest_widgets(
+                query_vector=_unit(),
+                k=1,
+                overfetch=40,
+            )
+            enriched = await WidgetRepository(session).get_many_with_main_description([widget])
+
+    assert [match.widget_id for match in matches] == [widget]
+    assert enriched[widget].description == "main"
+
+
 async def test_search_fills_short_primitive_result_after_threshold(
     db: AsyncEngine,
     session_factory: SessionFactory,
@@ -223,7 +274,11 @@ async def test_search_fills_short_primitive_result_after_threshold(
     monkeypatch.setitem(
         container.__dict__,
         "solver_settings",
-        SolverSettings(_env_file=None, search_overfetch=40, search_max_distance=0.55),
+        SolverSettings(
+            _env_file=None,
+            search_overfetch=40,
+            search_max_distance=PRODUCTION_SEARCH_MAX_DISTANCE,
+        ),
     )
 
     event.listen(db.sync_engine, "before_cursor_execute", record_select)
@@ -317,10 +372,15 @@ async def test_explain_of_search_uses_hnsw_index(db: AsyncEngine, session_factor
     search = WidgetSearch(
         session_factory=async_sessionmaker(engine),
         embeddings=_FakeEmbeddingService(_unit()),
-        settings=SolverSettings(_env_file=None, search_overfetch=40, search_max_distance=0.55),
+        settings=SolverSettings(
+            _env_file=None,
+            search_overfetch=40,
+            search_max_distance=PRODUCTION_SEARCH_MAX_DISTANCE,
+        ),
         metrics=RecordingMetricsCollector(),
     )
     try:
+        measurements: list[tuple[str | None, list[float], float]] = []
         for hint in (None, "three-frame", "key-terms"):
             for _ in range(5):
                 await search.search("intent", primitive_hint=hint)
@@ -330,7 +390,13 @@ async def test_explain_of_search_uses_hnsw_index(db: AsyncEngine, session_factor
                 candidates = await search.search("intent", primitive_hint=hint)
                 samples.append((perf_counter() - started) * 1000)
                 assert len(candidates) == 5
-            p95 = sorted(samples)[math.ceil(len(samples) * 0.95) - 1]
-            print(f"Local search p95 (100 requests, primitive_hint={hint!r}): {p95:.2f} ms")
+            p95 = nearest_rank_percentile(samples, 95)
+            measurements.append((hint, samples, p95))
+            print(
+                f"WIDGET_SEARCH_LATENCY hint={hint or 'none'} p95_ms={p95:.3f} "
+                f"limit_ms={LATENCY_LIMIT_MS:.3f} status={'pass' if p95 < LATENCY_LIMIT_MS else 'fail'}"
+            )
+        for _, samples, _ in measurements:
+            assert_p95_below(samples, limit_ms=LATENCY_LIMIT_MS)
     finally:
         await engine.dispose()

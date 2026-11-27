@@ -5,6 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -94,7 +95,7 @@ class WidgetRepository(WidgetRepositoryProtocol):
         description = (
             select(WidgetDescription.widget_id, WidgetDescription.text)
             .where(WidgetDescription.widget_id.in_(widget_ids))
-            .distinct(WidgetDescription.widget_id)
+            .ext(distinct_on(WidgetDescription.widget_id))
             .order_by(
                 WidgetDescription.widget_id,
                 WidgetDescription.is_paraphrase,

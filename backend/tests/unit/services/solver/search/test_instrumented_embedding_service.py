@@ -4,19 +4,21 @@ from collections.abc import Sequence
 
 import pytest
 
+from src.app.interfaces.embeddings.embedding_service import EmbeddingServiceInterface
 from src.app.services.solver.search.instrumented_embedding_service import InstrumentedEmbeddingService
 from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
 
 
-class FakeService:
+class FakeService(EmbeddingServiceInterface):
     def __init__(self, *, fail: bool = False) -> None:
         self.fail = fail
+        self.error = RuntimeError("model failed")
         self.calls: list[list[str]] = []
 
     async def embed(self, texts: Sequence[str]) -> list[list[float]]:
         self.calls.append(list(texts))
         if self.fail:
-            raise RuntimeError("model failed")
+            raise self.error
         return [[float(len(text))] for text in texts]
 
 
@@ -34,10 +36,12 @@ async def test_success_records_duration_without_error() -> None:
 
 async def test_failure_records_error_and_duration_then_reraises() -> None:
     metrics = RecordingMetricsCollector()
-    service = InstrumentedEmbeddingService(service=FakeService(fail=True), metrics=metrics)
+    underlying = FakeService(fail=True)
+    service = InstrumentedEmbeddingService(service=underlying, metrics=metrics)
 
-    with pytest.raises(RuntimeError, match="model failed"):
+    with pytest.raises(RuntimeError, match="model failed") as error:
         await service.embed(["a"])
 
+    assert error.value is underlying.error
     assert len(metrics.counters_named("embeddings.create_errors")) == 1
     assert len(metrics.histograms_named("embeddings.create_duration_seconds")) == 1

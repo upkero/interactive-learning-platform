@@ -1,12 +1,17 @@
 """In-memory Redis double for the embedding cache tests."""
 
-from collections.abc import Sequence
+from collections.abc import Iterable
 from typing import Any
 
 from redis.exceptions import RedisError
 
+from src.app.interfaces.embeddings.embedding_service import (
+    EmbeddingCachePipelineProtocol,
+    EmbeddingCacheProtocol,
+)
 
-class FakePipeline:
+
+class FakePipeline(EmbeddingCachePipelineProtocol):
     def __init__(self, redis: "FakeRedis") -> None:
         self._redis = redis
         self._operations: list[tuple[str, bytes, int | None]] = []
@@ -32,7 +37,7 @@ class FakePipeline:
         return [True] * len(self._operations)
 
 
-class FakeRedis:
+class FakeRedis(EmbeddingCacheProtocol):
     """Small subset of redis.asyncio used by ``EmbeddingService``."""
 
     def __init__(self, *, fail_reads: bool = False, fail_writes: bool = False) -> None:
@@ -42,11 +47,33 @@ class FakeRedis:
         self.mget_calls: list[list[str]] = []
         self.set_calls: list[tuple[str, bytes, int | None]] = []
 
-    async def mget(self, keys: Sequence[str]) -> list[bytes | None]:
-        self.mget_calls.append(list(keys))
+    async def mget(
+        self,
+        keys: bytes | str | memoryview | Iterable[bytes | str | memoryview],
+        *args: bytes | bytearray | memoryview | str | int | float,
+    ) -> list[bytes | None]:
+        del args
+        decoded = [self._decode_key(key) for key in self._keys(keys)]
+        self.mget_calls.append(decoded)
         if self.fail_reads:
             raise RedisError("read failed")
-        return [self.store.get(key) for key in keys]
+        return [self.store.get(key) for key in decoded]
+
+    @staticmethod
+    def _keys(
+        keys: bytes | str | memoryview | Iterable[bytes | str | memoryview],
+    ) -> list[bytes | str | memoryview]:
+        if isinstance(keys, (bytes, str, memoryview)):
+            return [keys]
+        return list(keys)
+
+    @staticmethod
+    def _decode_key(key: bytes | str | memoryview) -> str:
+        if isinstance(key, str):
+            return key
+        if isinstance(key, bytes):
+            return key.decode()
+        return key.tobytes().decode()
 
     def pipeline(self, *, transaction: bool = True) -> FakePipeline:
         del transaction

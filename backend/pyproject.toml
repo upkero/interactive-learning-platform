@@ -10,7 +10,7 @@ dependencies = [
     "pydantic-settings>=2.7.0",
 
     # База данных PostgreSQL и векторы
-    "sqlalchemy[asyncio]>=2.0.36",
+    "sqlalchemy[asyncio]>=2.1.0",
     "asyncpg>=0.30.0",
     "alembic>=1.14.0",
     "pgvector>=0.3.6",

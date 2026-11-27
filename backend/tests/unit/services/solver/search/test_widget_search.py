@@ -11,6 +11,8 @@ from src.app.contracts.solver.widget_candidate import WidgetMatch
 from src.app.contracts.widgets import WidgetKind, WidgetRecord
 from src.app.core.settings.solver import SolverSettings
 from src.app.exceptions.embeddings import EmbeddingResultMismatchError
+from src.app.interfaces.embeddings.embedding_service import EmbeddingServiceInterface
+from src.app.interfaces.repositories.widget_search import WidgetSearchRepositoryProtocol
 from src.app.services.solver.library.primitive_catalog import PrimitiveCatalog
 from src.app.services.solver.search.widget_search import WidgetSearch
 from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
@@ -25,7 +27,7 @@ class FakeSession:
         return None
 
 
-class FakeEmbeddingService:
+class FakeEmbeddingService(EmbeddingServiceInterface):
     def __init__(self, vectors: list[list[float]] | None = None) -> None:
         self.vectors = vectors if vectors is not None else [[0.1, 0.2, 0.3, 0.4]]
         self.calls: list[list[str]] = []
@@ -35,7 +37,7 @@ class FakeEmbeddingService:
         return self.vectors
 
 
-class ScriptedSearchRepository:
+class ScriptedSearchRepository(WidgetSearchRepositoryProtocol):
     def __init__(self, responses: list[list[WidgetMatch]]) -> None:
         self.responses = responses
         self.calls: list[dict[str, object]] = []

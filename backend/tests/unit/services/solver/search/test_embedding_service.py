@@ -6,6 +6,7 @@ from collections.abc import Sequence
 
 import pytest
 
+from src.app.embeddings.base import Embedder
 from src.app.exceptions.embeddings import (
     EmbeddingGenerationError,
     EmbeddingResultMismatchError,
@@ -16,7 +17,7 @@ from tests.support.fakes.cache.redis import FakeRedis
 from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
 
 
-class FakeEmbedder:
+class FakeEmbedder(Embedder):
     """Deterministic vector per text; records every model call."""
 
     model_name = "fake-model"
@@ -62,7 +63,7 @@ def _service(
     collector = metrics or RecordingMetricsCollector()
     service = EmbeddingService(
         embedder=model,
-        redis=cache,  # type: ignore[arg-type]
+        redis=cache,
         metrics=collector,
         batch_size=batch_size,
         ttl_seconds=ttl_seconds,

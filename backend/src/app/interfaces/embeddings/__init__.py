@@ -1,5 +1,13 @@
-"""Embedding service interface."""
+"""Embedding service interfaces."""
 
-from src.app.interfaces.embeddings.embedding_service import EmbeddingServiceInterface
+from src.app.interfaces.embeddings.embedding_service import (
+    EmbeddingCachePipelineProtocol,
+    EmbeddingCacheProtocol,
+    EmbeddingServiceInterface,
+)
 
-__all__ = ["EmbeddingServiceInterface"]
+__all__ = [
+    "EmbeddingCachePipelineProtocol",
+    "EmbeddingCacheProtocol",
+    "EmbeddingServiceInterface",
+]

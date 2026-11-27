@@ -20,7 +20,6 @@ from hashlib import sha256
 from math import isfinite
 
 import anyio.to_thread
-from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
 from src.app.embeddings.base import Embedder
@@ -30,7 +29,7 @@ from src.app.exceptions.embeddings import (
     EmbeddingResultMismatchError,
     EmptyEmbeddingInputError,
 )
-from src.app.interfaces.embeddings.embedding_service import EmbeddingServiceInterface
+from src.app.interfaces.embeddings.embedding_service import EmbeddingCacheProtocol, EmbeddingServiceInterface
 from src.app.interfaces.observability.metrics_collector import MetricsCollector
 
 _LOGGER = logging.getLogger(__name__)
@@ -43,7 +42,7 @@ class EmbeddingService(EmbeddingServiceInterface):
         self,
         *,
         embedder: Embedder,
-        redis: Redis,
+        redis: EmbeddingCacheProtocol,
         metrics: MetricsCollector,
         batch_size: int = 32,
         ttl_seconds: int = 30 * 24 * 3600,

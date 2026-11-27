@@ -16,6 +16,7 @@ is why the overfetch exists.
 from collections.abc import Sequence
 
 from sqlalchemy import select, text
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.contracts.solver.widget_candidate import WidgetMatch
@@ -41,7 +42,11 @@ class WidgetSearchRepository(WidgetSearchRepositoryProtocol):
     ) -> list[WidgetMatch]:
         if k <= 0 or overfetch <= 0:
             return []
-        await self._session.execute(text(f"SET LOCAL hnsw.ef_search = {EF_SEARCH}"))
+        # pgvector's candidate list must be at least as large as the number
+        # of rows requested from the index, otherwise a configured overfetch
+        # above EF_SEARCH can be silently truncated.
+        ef_search = max(EF_SEARCH, overfetch)
+        await self._session.execute(text(f"SET LOCAL hnsw.ef_search = {ef_search}"))
         await self._session.execute(text("SET LOCAL hnsw.iterative_scan = relaxed_order"))
 
         distance = WidgetDescription.embedding.cosine_distance(list(query_vector)).label("distance")
@@ -63,7 +68,7 @@ class WidgetSearchRepository(WidgetSearchRepositoryProtocol):
 
         best = (
             select(nearest.c.widget_id, nearest.c.text, nearest.c.distance)
-            .distinct(nearest.c.widget_id)
+            .ext(distinct_on(nearest.c.widget_id))
             .order_by(nearest.c.widget_id, nearest.c.distance, nearest.c.id)
             .subquery("best")
         )
