@@ -13,6 +13,7 @@ from uuid import UUID
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.dialects import postgresql
 
 from src.app.contracts.widgets import WidgetKind, WidgetStatus
 from src.app.core.settings.solver import SolverSettings
@@ -20,7 +21,7 @@ from src.app.models.widget_description import EMBEDDING_DIM
 from src.app.repositories.primitive_repository import PrimitiveRepository
 from src.app.repositories.widget_description_repository import WidgetDescriptionRepository
 from src.app.repositories.widget_repository import WidgetRepository
-from src.app.repositories.widget_search_repository import WidgetSearchRepository
+from src.app.repositories.widget_search_repository import EF_SEARCH, WidgetSearchRepository, _nearest_widgets_statement
 from src.app.services.solver.library.primitive_catalog import PrimitiveCatalog
 from src.app.services.solver.search.widget_search import WidgetSearch
 from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
@@ -209,7 +210,7 @@ async def test_service_fills_short_primitive_result_without_filter(session_facto
 
 
 async def test_explain_of_search_uses_hnsw_index(session_factory: SessionFactory) -> None:
-    """Planner check on the acceptance seed of 1000 descriptions."""
+    """Verify HNSW eligibility for the repository's nearest-neighbor ordering."""
     await _primitive(session_factory, "three-frame")
     rng = random.Random(7)
     vectors: list[list[float]] = []
@@ -222,28 +223,16 @@ async def test_explain_of_search_uses_hnsw_index(session_factory: SessionFactory
         primitive_id="three-frame",
         descriptions=[(f"description {index}", vector) for index, vector in enumerate(vectors)],
     )
-    target = "[" + ",".join(f"{value:.6f}" for value in vectors[0]) + "]"
-    query = f"""
-        EXPLAIN
-        WITH nearest AS (
-            SELECT d.widget_id, d.text, d.embedding <=> '{target}'::vector AS distance
-            FROM widget_descriptions d
-            JOIN widgets w ON w.id = d.widget_id
-            WHERE w.status = 'active'
-            ORDER BY d.embedding <=> '{target}'::vector
-            LIMIT 40
-        ), best AS (
-            SELECT DISTINCT ON (widget_id) widget_id, text, distance
-            FROM nearest
-            ORDER BY widget_id, distance
-        )
-        SELECT widget_id, text, distance FROM best ORDER BY distance LIMIT 5
-    """
+    query = _nearest_widgets_statement(vectors[0], k=5, overfetch=40, primitive_id=None).compile(
+        dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+    )
     async with session_factory() as session:
-        await session.execute(text("SET LOCAL enable_seqscan = off"))
-        await session.execute(text("SET LOCAL hnsw.ef_search = 100"))
+        await session.execute(text("ANALYZE widgets, widget_descriptions"))
+        # For this small fixture, PostgreSQL can prefer a scan followed by an explicit sort.
+        # Discourage that sort to verify the KNN ordering can use HNSW.
+        await session.execute(text("SET LOCAL enable_sort = off"))
+        await session.execute(text(f"SET LOCAL hnsw.ef_search = {EF_SEARCH}"))
         await session.execute(text("SET LOCAL hnsw.iterative_scan = relaxed_order"))
-        plan_rows = (await session.execute(text(query))).scalars().all()
+        plan_rows = (await session.execute(text(f"EXPLAIN {query}"))).scalars().all()
     plan = "\n".join(plan_rows)
-    assert "ix_widget_descriptions_embedding_hnsw" in plan
-    assert "Index Scan" in plan
+    assert "Index Scan using ix_widget_descriptions_embedding_hnsw" in plan, plan
