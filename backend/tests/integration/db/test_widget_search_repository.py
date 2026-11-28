@@ -323,6 +323,8 @@ async def test_search_fills_short_primitive_result_after_threshold(
             search_max_distance=PRODUCTION_SEARCH_MAX_DISTANCE,
         ),
     )
+    # Clear cached widget_search so it's recreated with patched dependencies
+    container.__dict__.pop("widget_search", None)
 
     event.listen(db.sync_engine, "before_cursor_execute", record_select)
     try:
