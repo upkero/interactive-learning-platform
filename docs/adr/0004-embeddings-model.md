@@ -134,6 +134,44 @@ SHA-256 корпуса — `1988d0dafeb81d97533dacedd0811054f226adff5d8a3aab1656
 5 процентных пунктов нет. Это не означает, что Voyage фактически хуже: его
 сравнительные метрики и порог не измерялись.
 
+### p95 векторного поиска
+
+p95 векторного поиска измерен отдельно от пакетного кодирования. Значение
+`2.963997` с в таблице выше относится только к embedding-батчу и не является
+latency поиска.
+
+Замер привязан к commit `d5784be22913c74fd2b570f598171c878eec203c`.
+Harness:
+`backend/tests/integration/db/test_widget_search_repository.py::test_explain_of_search_uses_hnsw_index`
+с `ILP_MEASURE_WIDGET_SEARCH_LATENCY=1`. Использованы production threshold
+`0.4449`, `k=5`, `overfetch=40` и `hnsw.ef_search=100`; для каждого hint
+выполнены 5 warmup- и 100 timed-запросов, p95 вычислен методом nearest-rank.
+Synthetic seed `Random(7)`: 200 виджетов, 1000 описаний, 180 активных.
+Три независимых run дали:
+
+| Hint | Run 1 p95, мс | Run 2 p95, мс | Run 3 p95, мс | Median, мс | Max, мс |
+|---|---:|---:|---:|---:|---:|
+| `None` | 13.019 | 13.403 | 13.216 | 13.216 | 13.403 |
+| `three-frame` | 14.113 | 14.388 | 14.342 | 14.342 | 14.388 |
+| `key-terms` | 31.107 | 31.172 | 31.091 | 31.107 | 31.172 |
+
+**Вердикт: PASS.** Worst p95 — `31.172` мс, что ниже критерия `50` мс; запас
+составляет `18.828` мс. Все 8 integration tests в
+`test_widget_search_repository.py` прошли с `-W error`; HNSW Index Scan
+подтверждён. Отдельно покрыт случай `hnsw.ef_search=150`.
+
+Окружение — локальный CI/Docker proxy на Windows 11 (Docker Engine 28.4.0),
+PostgreSQL 17.9 с pgvector 0.8.2, Redis 7.4.12, SQLAlchemy 2.1.5 и Python
+3.12.16. Измерен только service-level путь PostgreSQL/HNSW с fake embedding;
+latency реального embedding, HTTP и Redis в него не входят. Это не
+end-to-end latency и не замер на VPS или production-like корпусе.
+
+Решение Lead от 2026-11-28 допускает CI/local proxy для закрытия критерия
+p95 < 50 мс в этой истории и явно фиксирует отклонение от требования измерить
+search latency на целевом VPS. Условие VPS-критерия этим замером не считается
+выполненным. Целевой VPS/production-like benchmark с реальными BGE embeddings
+можно выполнить позже; он не блокирует текущее решение.
+
 ## Текущее решение
 
 `EMBEDDINGS_PROVIDER=bge_m3` используется по умолчанию. BGE-M3 — локальная
