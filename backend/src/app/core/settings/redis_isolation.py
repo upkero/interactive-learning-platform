@@ -92,30 +92,62 @@ def _redis_target(url: str) -> RedisTarget | None:
     return RedisTarget(database=database, host=host, port=port)
 
 
-def validate_redis_isolation(
+def _reject_shared_database(
     *,
-    embeddings_cache_redis_url: str,
-    rate_limit_storage_uri: str,
+    embeddings_target: RedisTarget,
+    other_target: RedisTarget | None,
+    other_role: str,
+    other_setting: str,
 ) -> None:
-    """Reject a shared Redis logical database for rate limits and embeddings.
-
-    Memory-backed rate limits and separate Redis servers cannot collide with
-    the embedding cache, so only two parseable Redis targets are compared.
-    """
-    if urlsplit(rate_limit_storage_uri).scheme.lower() == "memory":
-        return
-
-    embeddings_target = _redis_target(embeddings_cache_redis_url)
-    rate_limit_target = _redis_target(rate_limit_storage_uri)
-    if embeddings_target is None or rate_limit_target is None:
-        return
-    if not embeddings_target.same_database_as(rate_limit_target):
+    """Reject one role that shares the embedding cache's Redis database."""
+    if other_target is None or not embeddings_target.same_database_as(other_target):
         return
 
     raise RedisIsolationConfigurationError(
-        "RATE_LIMIT_STORAGE_URI and EMBEDDINGS_CACHE_REDIS_URL must not use the same Redis "
-        f"logical database (both target {embeddings_target.label()}). "
+        f"Embedding cache (EMBEDDINGS_CACHE_REDIS_URL) and {other_role} ({other_setting}) must not use "
+        f"the same Redis logical database (both target {embeddings_target.label()}). "
         "Configure distinct Redis databases or separate Redis hosts."
+    )
+
+
+def validate_redis_isolation(
+    *,
+    embeddings_cache_redis_url: str,
+    celery_broker_url: str,
+    progress_redis_url: str,
+    rate_limit_storage_uri: str,
+) -> None:
+    """Reject embedding-cache collisions with the broker, progress, or rate limits.
+
+    Only roles backed by Redis can collide. A memory or other non-Redis role is
+    skipped independently, so a non-Redis broker does not hide a progress or
+    rate-limit collision with the embedding cache.
+    """
+    embeddings_target = _redis_target(embeddings_cache_redis_url)
+    celery_target = _redis_target(celery_broker_url)
+    progress_target = _redis_target(progress_redis_url)
+    rate_limit_target = _redis_target(rate_limit_storage_uri)
+
+    if embeddings_target is None:
+        return
+
+    _reject_shared_database(
+        embeddings_target=embeddings_target,
+        other_target=celery_target,
+        other_role="Celery broker",
+        other_setting="CELERY_BROKER_URL",
+    )
+    _reject_shared_database(
+        embeddings_target=embeddings_target,
+        other_target=progress_target,
+        other_role="progress streams",
+        other_setting="REDIS_PROGRESS_URL",
+    )
+    _reject_shared_database(
+        embeddings_target=embeddings_target,
+        other_target=rate_limit_target,
+        other_role="rate-limit counters",
+        other_setting="RATE_LIMIT_STORAGE_URI",
     )
 
 

@@ -74,48 +74,107 @@ def test_redis_roles_use_distinct_logical_databases() -> None:
     assert len(set(databases)) == len(databases)
 
 
-def test_same_redis_database_is_rejected() -> None:
-    with pytest.raises(RedisIsolationConfigurationError, match="same Redis logical database"):
-        validate_redis_isolation(
-            embeddings_cache_redis_url="redis://localhost:6379/3",
-            rate_limit_storage_uri="redis://localhost:6379/3",
+def _validate_isolation(
+    *,
+    embeddings_cache_redis_url: str = "redis://localhost:6379/3",
+    celery_broker_url: str = "redis://localhost:6379/0",
+    progress_redis_url: str = "redis://localhost:6379/1",
+    rate_limit_storage_uri: str = "redis://localhost:6379/2",
+) -> None:
+    validate_redis_isolation(
+        embeddings_cache_redis_url=embeddings_cache_redis_url,
+        celery_broker_url=celery_broker_url,
+        progress_redis_url=progress_redis_url,
+        rate_limit_storage_uri=rate_limit_storage_uri,
+    )
+
+
+def test_embedding_cache_collision_with_celery_broker_is_rejected() -> None:
+    with pytest.raises(RedisIsolationConfigurationError, match="same Redis logical database") as error:
+        _validate_isolation(
+            celery_broker_url="redis://localhost:6379/3",
+            rate_limit_storage_uri="memory://",
         )
+
+    message = str(error.value)
+    assert "Embedding cache (EMBEDDINGS_CACHE_REDIS_URL)" in message
+    assert "Celery broker (CELERY_BROKER_URL)" in message
+    assert "localhost:6379/3" in message
+
+
+def test_embedding_cache_collision_with_progress_is_rejected() -> None:
+    with pytest.raises(RedisIsolationConfigurationError, match="same Redis logical database") as error:
+        _validate_isolation(
+            progress_redis_url="redis://localhost:6379/3",
+            rate_limit_storage_uri="memory://",
+        )
+
+    message = str(error.value)
+    assert "Embedding cache (EMBEDDINGS_CACHE_REDIS_URL)" in message
+    assert "progress streams (REDIS_PROGRESS_URL)" in message
+    assert "localhost:6379/3" in message
+
+
+def test_embedding_cache_collision_with_rate_limit_is_rejected() -> None:
+    with pytest.raises(RedisIsolationConfigurationError, match="same Redis logical database") as error:
+        _validate_isolation(rate_limit_storage_uri="redis://localhost:6379/3")
+
+    message = str(error.value)
+    assert "Embedding cache (EMBEDDINGS_CACHE_REDIS_URL)" in message
+    assert "rate-limit counters (RATE_LIMIT_STORAGE_URI)" in message
+    assert "localhost:6379/3" in message
+
+
+@pytest.mark.parametrize(
+    ("role", "other_url"),
+    [
+        ("broker", "redis://localhost:6379/4"),
+        ("progress", "redis://localhost:6379/4"),
+        ("rate", "redis://localhost:6379/4"),
+        ("broker", "redis://broker.example:6379/3"),
+        ("progress", "redis://progress.example:6379/3"),
+        ("rate", "redis://rate.example:6379/3"),
+        ("broker", "redis://localhost:6380/3"),
+        ("progress", "redis://localhost:6380/3"),
+        ("rate", "redis://localhost:6380/3"),
+    ],
+)
+def test_different_database_host_or_port_is_allowed(role: str, other_url: str) -> None:
+    if role == "broker":
+        _validate_isolation(celery_broker_url=other_url)
+    elif role == "progress":
+        _validate_isolation(progress_redis_url=other_url)
+    else:
+        assert role == "rate"
+        _validate_isolation(rate_limit_storage_uri=other_url)
+
+
+def test_memory_rate_limit_with_isolated_broker_and_progress_is_allowed() -> None:
+    _validate_isolation(rate_limit_storage_uri="memory://")
+
+
+def test_non_redis_broker_is_allowed() -> None:
+    _validate_isolation(celery_broker_url="memory://")
+
+
+def test_non_redis_progress_is_allowed() -> None:
+    _validate_isolation(progress_redis_url="memory://")
+
+
+def test_pairs_not_involving_embedding_cache_are_not_checked() -> None:
+    _validate_isolation(
+        celery_broker_url="redis://localhost:6379/0",
+        progress_redis_url="redis://localhost:6379/0",
+        rate_limit_storage_uri="redis://localhost:6379/0",
+    )
 
 
 def test_redis_url_variants_are_normalized_before_comparison() -> None:
     with pytest.raises(RedisIsolationConfigurationError, match="same Redis logical database"):
-        validate_redis_isolation(
+        _validate_isolation(
             embeddings_cache_redis_url="redis://LOCALHOST:6379/03",
             rate_limit_storage_uri="redis+asyncio://localhost:6379/3",
         )
-
-
-def test_different_redis_database_is_allowed() -> None:
-    validate_redis_isolation(
-        embeddings_cache_redis_url="redis://localhost:6379/3",
-        rate_limit_storage_uri="redis://localhost:6379/2",
-    )
-
-
-def test_memory_rate_limit_is_allowed() -> None:
-    validate_redis_isolation(
-        embeddings_cache_redis_url="redis://localhost:6379/3",
-        rate_limit_storage_uri="memory://",
-    )
-
-
-@pytest.mark.parametrize(
-    "rate_limit_storage_uri",
-    [
-        "redis://cache.example:6379/3",
-        "redis://localhost:6380/3",
-    ],
-)
-def test_different_redis_host_or_port_is_allowed(rate_limit_storage_uri: str) -> None:
-    validate_redis_isolation(
-        embeddings_cache_redis_url="redis://localhost:6379/3",
-        rate_limit_storage_uri=rate_limit_storage_uri,
-    )
 
 
 @pytest.mark.parametrize(
@@ -126,10 +185,7 @@ def test_different_redis_host_or_port_is_allowed(rate_limit_storage_uri: str) ->
     ],
 )
 def test_redis_url_variants_with_different_database_are_allowed(rate_limit_storage_uri: str) -> None:
-    validate_redis_isolation(
-        embeddings_cache_redis_url="redis://localhost:6379/3",
-        rate_limit_storage_uri=rate_limit_storage_uri,
-    )
+    _validate_isolation(rate_limit_storage_uri=rate_limit_storage_uri)
 
 
 @pytest.mark.parametrize(
@@ -144,7 +200,7 @@ def test_equivalent_redis_url_forms_collide(
     rate_limit_storage_uri: str,
 ) -> None:
     with pytest.raises(RedisIsolationConfigurationError, match="same Redis logical database"):
-        validate_redis_isolation(
+        _validate_isolation(
             embeddings_cache_redis_url=embeddings_cache_redis_url,
             rate_limit_storage_uri=rate_limit_storage_uri,
         )
@@ -161,27 +217,38 @@ def test_different_logical_databases_in_equivalent_url_forms_are_allowed(
     embeddings_cache_redis_url: str,
     rate_limit_storage_uri: str,
 ) -> None:
-    validate_redis_isolation(
+    _validate_isolation(
         embeddings_cache_redis_url=embeddings_cache_redis_url,
         rate_limit_storage_uri=rate_limit_storage_uri,
     )
 
 
-def test_malformed_redis_uri_fails_fast_without_false_collision() -> None:
+def test_malformed_cache_redis_uri_fails_fast_without_false_collision() -> None:
     with pytest.raises(ValueError, match="Invalid value for 'db'") as error:
-        validate_redis_isolation(
-            embeddings_cache_redis_url="redis://host:6379?db=not-a-number",
-            rate_limit_storage_uri="redis://host:6379/3",
-        )
+        _validate_isolation(embeddings_cache_redis_url="redis://host:6379?db=not-a-number")
+
+    assert not isinstance(error.value, RedisIsolationConfigurationError)
+
+
+def test_malformed_broker_redis_uri_fails_fast_without_false_collision() -> None:
+    with pytest.raises(ValueError, match="Invalid value for 'db'") as error:
+        _validate_isolation(celery_broker_url="redis://host:6379?db=not-a-number")
 
     assert not isinstance(error.value, RedisIsolationConfigurationError)
 
 
 def test_non_redis_rate_limit_uri_is_not_reported_as_redis_collision() -> None:
-    validate_redis_isolation(
-        embeddings_cache_redis_url="redis://host:6379/3",
-        rate_limit_storage_uri="memcached://cache:11211",
-    )
+    _validate_isolation(rate_limit_storage_uri="memcached://cache:11211")
+
+
+def test_collision_message_does_not_expose_credentials() -> None:
+    with pytest.raises(RedisIsolationConfigurationError) as error:
+        _validate_isolation(celery_broker_url="redis://cache-user:cache-password@localhost:6379/3")
+
+    message = str(error.value)
+    assert "localhost:6379/3" in message
+    assert "cache-user" not in message
+    assert "cache-password" not in message
 
 
 def test_redis_url_parser_does_not_connect_or_resolve_dns(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -194,18 +261,17 @@ def test_redis_url_parser_does_not_connect_or_resolve_dns(monkeypatch: pytest.Mo
     monkeypatch.setattr(RedisConnection, "_connect", forbidden)
 
     with pytest.raises(RedisIsolationConfigurationError, match="same Redis logical database"):
-        validate_redis_isolation(
+        _validate_isolation(
             embeddings_cache_redis_url="redis://does-not-resolve.invalid:6379?db=3",
             rate_limit_storage_uri="redis://does-not-resolve.invalid:6379/3",
         )
 
 
-def test_application_startup_rejects_shared_embedding_and_rate_limit_redis_database(tmp_path: Path) -> None:
+def _hermetic_subprocess_env(tmp_path: Path, **overrides: str) -> dict[str, str]:
     env = {
         "APP_ENVIRONMENT": "test",
         "AUTH_JWT_SECRET": "test-secret-key-must-be-at-least-32-chars-long",
-        "EMBEDDINGS_CACHE_REDIS_URL": "redis://localhost:6379/3",
-        "RATE_LIMIT_STORAGE_URI": "redis://localhost:6379/3",
+        "RATE_LIMIT_STORAGE_URI": "redis://localhost:6379/2",
         "PYTHONPATH": str(Path(__file__).resolve().parents[3]),
     }
     # Keep the subprocess configuration explicit. Only Windows loader variables
@@ -214,11 +280,43 @@ def test_application_startup_rejects_shared_embedding_and_rate_limit_redis_datab
         value = os.environ.get(name)
         if value is not None:
             env[name] = value
+    env.update(overrides)
+    return env
 
+
+@pytest.mark.parametrize("module", ["src.main", "src.worker"])
+def test_process_import_with_default_redis_roles_succeeds(module: str, tmp_path: Path) -> None:
     result = subprocess.run(
-        [sys.executable, "-c", "import src.main"],
+        [sys.executable, "-c", f"import {module}"],
         cwd=tmp_path,
-        env=env,
+        env=_hermetic_subprocess_env(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    ("module", "collision_env", "expected_role"),
+    [
+        ("src.main", {"CELERY_BROKER_URL": "redis://localhost:6379/3"}, "Celery broker (CELERY_BROKER_URL)"),
+        ("src.main", {"REDIS_PROGRESS_URL": "redis://localhost:6379/3"}, "progress streams (REDIS_PROGRESS_URL)"),
+        ("src.worker", {"CELERY_BROKER_URL": "redis://localhost:6379/3"}, "Celery broker (CELERY_BROKER_URL)"),
+        ("src.worker", {"REDIS_PROGRESS_URL": "redis://localhost:6379/3"}, "progress streams (REDIS_PROGRESS_URL)"),
+    ],
+)
+def test_process_import_rejects_embedding_cache_collision(
+    module: str,
+    collision_env: dict[str, str],
+    expected_role: str,
+    tmp_path: Path,
+) -> None:
+    result = subprocess.run(
+        [sys.executable, "-c", f"import {module}"],
+        cwd=tmp_path,
+        env=_hermetic_subprocess_env(tmp_path, **collision_env),
         capture_output=True,
         text=True,
         check=False,
@@ -226,8 +324,9 @@ def test_application_startup_rejects_shared_embedding_and_rate_limit_redis_datab
 
     assert result.returncode != 0
     assert "RedisIsolationConfigurationError:" in result.stderr
-    assert "RATE_LIMIT_STORAGE_URI" in result.stderr
-    assert "EMBEDDINGS_CACHE_REDIS_URL" in result.stderr
+    assert "Embedding cache (EMBEDDINGS_CACHE_REDIS_URL)" in result.stderr
+    assert expected_role in result.stderr
+    assert "localhost:6379/3" in result.stderr
     assert "same Redis logical database" in result.stderr
     assert "AUTH_JWT_SECRET" not in result.stderr
     assert "jwt_secret" not in result.stderr

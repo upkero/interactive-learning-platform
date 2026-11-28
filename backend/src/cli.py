@@ -18,7 +18,9 @@ from uuid import UUID
 
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.core.settings.app import get_app_settings
+from src.app.core.settings.celery import get_celery_settings
 from src.app.core.settings.embeddings import get_embeddings_settings
+from src.app.core.settings.progress import get_progress_settings
 from src.app.core.settings.rate_limit import get_rate_limit_settings
 from src.app.core.settings.redis_isolation import validate_redis_isolation
 from src.app.core.settings.seed import get_seed_settings
@@ -60,6 +62,8 @@ async def _run_reembed_descriptions() -> int:
     """
     validate_redis_isolation(
         embeddings_cache_redis_url=get_embeddings_settings().cache_redis_url,
+        celery_broker_url=get_celery_settings().broker_url,
+        progress_redis_url=str(get_progress_settings().url),
         rate_limit_storage_uri=get_rate_limit_settings().storage_uri,
     )
     app_settings = get_app_settings()
