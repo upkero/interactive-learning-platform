@@ -160,8 +160,9 @@ def test_memory_rate_limit_with_isolated_broker_and_progress_is_allowed() -> Non
     _validate_isolation(rate_limit_storage_uri="memory://")
 
 
-def test_non_redis_broker_is_allowed() -> None:
-    _validate_isolation(celery_broker_url="memory://")
+@pytest.mark.parametrize("non_redis_url", ["memory://", "sentinel://", "memcached://"])
+def test_non_redis_broker_is_allowed(non_redis_url: str) -> None:
+    _validate_isolation(celery_broker_url=non_redis_url)
 
 
 def test_non_redis_progress_is_allowed() -> None:
@@ -227,6 +228,45 @@ def test_different_logical_databases_in_equivalent_url_forms_are_allowed(
     _validate_isolation(
         embeddings_cache_redis_url=embeddings_cache_redis_url,
         rate_limit_storage_uri=rate_limit_storage_uri,
+    )
+
+
+@pytest.mark.parametrize(
+    ("embeddings_cache_redis_url", "celery_broker_url"),
+    [
+        ("redis://host:6379/3", "rediss://host:6379/3"),
+        ("unix:///tmp/redis.sock", "redis+socket:///tmp/redis.sock"),
+        ("unix:///tmp/redis.sock", "rediss+socket:///tmp/redis.sock"),
+        ("unix:///tmp/redis.sock?db=2", "redis+socket:///tmp/redis.sock?virtual_host=2"),
+        ("unix:///tmp//redis.sock", "redis+socket:///tmp/redis.sock"),
+    ],
+)
+def test_same_endpoint_in_different_schemes_collide(
+    embeddings_cache_redis_url: str,
+    celery_broker_url: str,
+) -> None:
+    with pytest.raises(RedisIsolationConfigurationError, match="same Redis logical database"):
+        _validate_isolation(
+            embeddings_cache_redis_url=embeddings_cache_redis_url,
+            celery_broker_url=celery_broker_url,
+        )
+
+
+@pytest.mark.parametrize(
+    ("embeddings_cache_redis_url", "celery_broker_url"),
+    [
+        ("unix:///tmp/redis.sock?db=2", "redis+socket:///tmp/redis.sock"),
+        ("unix:///tmp/redis.sock", "redis+socket:///var/run/other.sock"),
+        ("redis://host:6379/3", "redis+socket:///tmp/redis.sock"),
+    ],
+)
+def test_different_socket_database_endpoint_or_transport_is_allowed(
+    embeddings_cache_redis_url: str,
+    celery_broker_url: str,
+) -> None:
+    _validate_isolation(
+        embeddings_cache_redis_url=embeddings_cache_redis_url,
+        celery_broker_url=celery_broker_url,
     )
 
 

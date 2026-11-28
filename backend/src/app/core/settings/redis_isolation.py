@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import posixpath
 from dataclasses import dataclass
 from typing import cast
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, unquote, urlsplit
 
 from redis import Redis
 
@@ -25,6 +26,14 @@ _CANONICAL_SCHEMES = {
     "unix": "unix",
     "redis+unix": "unix",
     "async+redis+unix": "unix",
+}
+
+# Kombu's Redis transport uses these schemes for Unix-domain sockets.  The
+# logical database is selected by ``virtual_host`` rather than by a path
+# segment, because the path itself identifies the socket.
+_KOMBU_SOCKET_SCHEMES = {
+    "redis+socket",
+    "rediss+socket",
 }
 
 
@@ -66,8 +75,50 @@ def _canonical_redis_url(url: str) -> str | None:
     return f"{canonical_scheme}://{suffix}"
 
 
+def _normalise_unix_path(path: str) -> str:
+    """Return a stable string form of a Unix-socket path."""
+    if not path:
+        return path
+    normalised = posixpath.normpath(unquote(path))
+    if normalised.startswith("/"):
+        return "/" + normalised.lstrip("/")
+    return normalised
+
+
+def _kombu_socket_database(query: dict[str, str]) -> int:
+    """Parse Kombu's socket-URL database selection."""
+    virtual_host = query.get("virtual_host")
+    if virtual_host is None or virtual_host in {"", "/"}:
+        return 0
+    if virtual_host.startswith("/"):
+        virtual_host = virtual_host[1:]
+    try:
+        return int(virtual_host)
+    except ValueError as exc:
+        raise ValueError(f"Invalid value for 'virtual_host' in Redis socket URL: {virtual_host!r}") from exc
+
+
+def _kombu_socket_target(url: str) -> RedisTarget:
+    """Parse a Kombu Redis Unix-socket URL without connecting to Redis."""
+    parsed = urlsplit(url)
+    if not parsed.path:
+        raise ValueError("Redis socket URL must include a socket path")
+
+    query = dict(parse_qsl(parsed.query))
+    return RedisTarget(
+        database=_kombu_socket_database(query),
+        unix_path=_normalise_unix_path(parsed.path),
+    )
+
+
 def _redis_target(url: str) -> RedisTarget | None:
-    """Parse a Redis URL with redis-py's URL semantics."""
+    """Parse a Redis URL with redis-py or Kombu URL semantics."""
+    scheme = urlsplit(url).scheme.lower()
+    if scheme in _KOMBU_SOCKET_SCHEMES:
+        if "://" not in url:
+            return None
+        return _kombu_socket_target(url)
+
     canonical_url = _canonical_redis_url(url)
     if canonical_url is None:
         return None
@@ -83,7 +134,7 @@ def _redis_target(url: str) -> RedisTarget | None:
     if canonical_url.startswith("unix://"):
         raw_path = parsed.get("path")
         unix_path = raw_path if isinstance(raw_path, str) else ""
-        return RedisTarget(database=database, unix_path=unix_path)
+        return RedisTarget(database=database, unix_path=_normalise_unix_path(unix_path))
 
     raw_host = parsed.get("host")
     raw_port = parsed.get("port")
