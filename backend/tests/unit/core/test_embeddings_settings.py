@@ -1,6 +1,7 @@
 """Unit tests of embedding settings (story 2.3)."""
 
 import os
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -9,6 +10,7 @@ from urllib.parse import urlsplit
 import pytest
 import redis.asyncio as aioredis
 from pydantic import SecretStr, ValidationError
+from redis.connection import Connection as RedisConnection
 
 from src.app.bootstrap import container as container_module
 from src.app.bootstrap.container import ApplicationContainer
@@ -130,11 +132,88 @@ def test_redis_url_variants_with_different_database_are_allowed(rate_limit_stora
     )
 
 
+@pytest.mark.parametrize(
+    ("embeddings_cache_redis_url", "rate_limit_storage_uri"),
+    [
+        ("redis://host:6379?db=3", "redis://host:6379/3"),
+        ("redis+unix:///path.sock?db=3", "unix:///path.sock?db=3"),
+    ],
+)
+def test_equivalent_redis_url_forms_collide(
+    embeddings_cache_redis_url: str,
+    rate_limit_storage_uri: str,
+) -> None:
+    with pytest.raises(RedisIsolationConfigurationError, match="same Redis logical database"):
+        validate_redis_isolation(
+            embeddings_cache_redis_url=embeddings_cache_redis_url,
+            rate_limit_storage_uri=rate_limit_storage_uri,
+        )
+
+
+@pytest.mark.parametrize(
+    ("embeddings_cache_redis_url", "rate_limit_storage_uri"),
+    [
+        ("redis://host:6379?db=3", "redis://host:6379/2"),
+        ("redis+unix:///path.sock?db=3", "unix:///path.sock?db=2"),
+    ],
+)
+def test_different_logical_databases_in_equivalent_url_forms_are_allowed(
+    embeddings_cache_redis_url: str,
+    rate_limit_storage_uri: str,
+) -> None:
+    validate_redis_isolation(
+        embeddings_cache_redis_url=embeddings_cache_redis_url,
+        rate_limit_storage_uri=rate_limit_storage_uri,
+    )
+
+
+def test_malformed_redis_uri_fails_fast_without_false_collision() -> None:
+    with pytest.raises(ValueError, match="Invalid value for 'db'") as error:
+        validate_redis_isolation(
+            embeddings_cache_redis_url="redis://host:6379?db=not-a-number",
+            rate_limit_storage_uri="redis://host:6379/3",
+        )
+
+    assert not isinstance(error.value, RedisIsolationConfigurationError)
+
+
+def test_non_redis_rate_limit_uri_is_not_reported_as_redis_collision() -> None:
+    validate_redis_isolation(
+        embeddings_cache_redis_url="redis://host:6379/3",
+        rate_limit_storage_uri="memcached://cache:11211",
+    )
+
+
+def test_redis_url_parser_does_not_connect_or_resolve_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    def forbidden(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("Redis URL parsing must not perform network or DNS operations")
+
+    monkeypatch.setattr(socket, "create_connection", forbidden)
+    monkeypatch.setattr(socket, "getaddrinfo", forbidden)
+    monkeypatch.setattr(RedisConnection, "connect", forbidden)
+    monkeypatch.setattr(RedisConnection, "_connect", forbidden)
+
+    with pytest.raises(RedisIsolationConfigurationError, match="same Redis logical database"):
+        validate_redis_isolation(
+            embeddings_cache_redis_url="redis://does-not-resolve.invalid:6379?db=3",
+            rate_limit_storage_uri="redis://does-not-resolve.invalid:6379/3",
+        )
+
+
 def test_application_startup_rejects_shared_embedding_and_rate_limit_redis_database(tmp_path: Path) -> None:
-    env = os.environ.copy()
-    env["EMBEDDINGS_CACHE_REDIS_URL"] = "redis://localhost:6379/3"
-    env["RATE_LIMIT_STORAGE_URI"] = "redis://localhost:6379/3"
-    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[3])
+    env = {
+        "APP_ENVIRONMENT": "test",
+        "AUTH_JWT_SECRET": "test-secret-key-must-be-at-least-32-chars-long",
+        "EMBEDDINGS_CACHE_REDIS_URL": "redis://localhost:6379/3",
+        "RATE_LIMIT_STORAGE_URI": "redis://localhost:6379/3",
+        "PYTHONPATH": str(Path(__file__).resolve().parents[3]),
+    }
+    # Keep the subprocess configuration explicit. Only Windows loader variables
+    # are inherited; application settings cannot leak from the developer's shell.
+    for name in ("SYSTEMROOT", "WINDIR"):
+        value = os.environ.get(name)
+        if value is not None:
+            env[name] = value
 
     result = subprocess.run(
         [sys.executable, "-c", "import src.main"],
@@ -146,9 +225,12 @@ def test_application_startup_rejects_shared_embedding_and_rate_limit_redis_datab
     )
 
     assert result.returncode != 0
+    assert "RedisIsolationConfigurationError:" in result.stderr
     assert "RATE_LIMIT_STORAGE_URI" in result.stderr
     assert "EMBEDDINGS_CACHE_REDIS_URL" in result.stderr
     assert "same Redis logical database" in result.stderr
+    assert "AUTH_JWT_SECRET" not in result.stderr
+    assert "jwt_secret" not in result.stderr
 
 
 def test_container_builds_embedding_cache_client_from_dedicated_settings(
