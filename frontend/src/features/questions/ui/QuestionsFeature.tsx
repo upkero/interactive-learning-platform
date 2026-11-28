@@ -10,6 +10,9 @@ import { ApiError } from "@/shared/api/errors";
 import { ActionLink } from "@/shared/ui/action-link/ActionLink";
 import { PageShell } from "@/shared/ui/page-shell/PageShell";
 import { Surface } from "@/shared/ui/surface/Surface";
+import { Link } from "@/shared/i18n/navigation";
+import { parseTopicsParam } from "@/shared/lib/urlParams";
+import { useQueryClient } from "@tanstack/react-query";
 import styles from "./QuestionsFeature.module.css";
 
 type Level = "novice" | "intermediate" | "advanced";
@@ -62,6 +65,7 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
 
   const generateMutation = useStartGeneration();
   const quotaQuery = useQuota();
+  const queryClient = useQueryClient();
 
   // Centralized status guard - questions step allows 'parsed' status
   const {
@@ -73,18 +77,11 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
     currentStep: "questions",
   });
 
-  // Read selected topic IDs from URL on mount
+  // Read selected topic IDs from URL on mount (once)
   useEffect(() => {
-    const topicsParam = searchParams.get("topics");
-    if (topicsParam) {
-      try {
-        const ids = topicsParam.split(",").filter((id) => id.length > 0);
-        if (ids.length > 0) {
-          setSelectedTopicIds(ids);
-        }
-      } catch {
-        // Invalid format, ignore
-      }
+    const ids = parseTopicsParam(searchParams);
+    if (ids.length > 0) {
+      setSelectedTopicIds(ids);
     }
   }, [documentId, searchParams]);
 
@@ -98,6 +95,7 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitErrorCode, setSubmitErrorCode] = useState<string | null>(null);
   const inFlightRef = useRef(false);
 
   // Initialize form from meQuery data when available
@@ -136,8 +134,12 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
   );
 
   const handleBack = useCallback(() => {
-    router.push(`/documents/${documentId}/topics`);
-  }, [router, documentId]);
+    const topicsParam =
+      selectedTopicIds.length > 0
+        ? `?topics=${selectedTopicIds.join(",")}`
+        : "";
+    router.push(`/documents/${documentId}/topics${topicsParam}`);
+  }, [router, documentId, selectedTopicIds]);
 
   const handleSubmit = useCallback(async () => {
     if (!canSubmit) return;
@@ -179,11 +181,15 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
       router.replace(`/documents/${documentId}/progress`);
     } catch (error: unknown) {
       if (error instanceof ApiError) {
+        setSubmitErrorCode(error.code);
         if (error.code === "quota_exceeded") {
-          // Redirect back to topics with error flag
-          router.replace(
-            `/documents/${documentId}/topics?error=quota_exceeded`
-          );
+          // Invalidate quota query to refresh the quota display
+          void queryClient.invalidateQueries({ queryKey: ["me", "quota"] });
+          // Stay on page, show error with link to topics
+          setSubmitError(tErrors(error.code));
+        } else if (error.code === "document_not_ready") {
+          // Stay on page, show error with link to topics
+          setSubmitError(tErrors(error.code));
         } else if (error.code === "processing_limit_reached") {
           // Stay on page, show error
           setSubmitError(tErrors("processing_limit_reached"));
@@ -192,6 +198,7 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
           setSubmitError(tErrors(error.code));
         }
       } else {
+        setSubmitErrorCode("unknown_error");
         setSubmitError(tErrors("unknown_error"));
       }
     } finally {
@@ -204,6 +211,7 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
     formData,
     generateMutation,
     meQuery.data,
+    queryClient,
     router,
     selectedTopicIds,
     tErrors,
@@ -296,16 +304,24 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
     return null;
   }
 
-  // Show quota_exceeded error if coming from topics page
-  const showQuotaError = searchParams.get("error") === "quota_exceeded";
-
   const plan = planQuery.data;
+
+  // Check if we should show the "Back to topics" link
+  const showBackToTopicsLink =
+    submitErrorCode === "quota_exceeded" ||
+    submitErrorCode === "document_not_ready";
 
   return (
     <PageShell title={t("title")}>
-      {showQuotaError && (
+      {showBackToTopicsLink && submitError && (
         <div className={styles.quotaErrorBanner} role="alert">
-          {tErrors("quota_exceeded")}
+          <p>{submitError}</p>
+          <Link
+            href={`/documents/${documentId}/topics?topics=${selectedTopicIds.join(",")}`}
+            className={styles.backToTopicsLink}
+          >
+            {t("backToTopics")}
+          </Link>
         </div>
       )}
 
@@ -410,13 +426,7 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
         </div>
       )}
 
-      {showQuotaError && (
-        <div className={styles.quotaErrorBanner} role="alert">
-          {tErrors("quota_exceeded")}
-        </div>
-      )}
-
-      {submitError && (
+      {submitError && !showBackToTopicsLink && (
         <div className={styles.errorSurface} role="alert">
           <Surface>
             <p className={styles.submitError}>{submitError}</p>
@@ -426,7 +436,7 @@ export function QuestionsFeature({ documentId }: { documentId: string }) {
 
       <div className={styles.pageActions}>
         <ActionLink
-          href={`/documents/${documentId}/topics`}
+          href={`/documents/${documentId}/topics${selectedTopicIds.length > 0 ? `?topics=${selectedTopicIds.join(",")}` : ""}`}
           variant="secondary"
           onClick={handleBack}
           disabled={isSubmitting}

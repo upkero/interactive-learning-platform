@@ -1,3 +1,8 @@
+.container {
+  display: flex;
+  flex-direction: column;
+}
+
 .tableWrapper {
   overflow-x: auto;
   border: var(--g-hairline) solid var(--g-color-border);
@@ -273,13 +278,112 @@
   outline-offset: 2px;
 }
 
+/* Mobile card list */
+.cardList {
+  display: none;
+  flex-direction: column;
+  gap: var(--g-space-3);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  border: var(--g-hairline) solid var(--g-color-border);
+  border-radius: var(--g-radius-lg);
+  background: var(--g-color-bg-elevated);
+  overflow: hidden;
+}
+
+.cardHeader {
+  padding: var(--g-space-3) var(--g-space-4);
+  border-bottom: var(--g-hairline) solid var(--g-color-border);
+}
+
+.cardTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--g-space-2);
+  color: var(--g-color-text);
+  font-weight: var(--g-font-medium);
+  font-size: var(--g-text-base);
+  transition: color var(--g-duration-fast) var(--g-easing);
+}
+
+.cardTitle:hover {
+  color: var(--g-color-primary);
+}
+
+.cardTitle:focus-visible {
+  outline: 2px solid var(--g-focus-color);
+  outline-offset: 2px;
+  border-radius: var(--g-radius-sm);
+}
+
+.cardBody {
+  padding: var(--g-space-3) var(--g-space-4);
+}
+
+.cardDetails {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--g-space-2) var(--g-space-4);
+  margin: 0;
+  font-size: var(--g-text-sm);
+}
+
+.cardDetailRow {
+  display: contents;
+}
+
+.cardDetailLabel {
+  color: var(--g-color-text-muted);
+  font-weight: var(--g-font-medium);
+}
+
+.cardDetailValue {
+  color: var(--g-color-text);
+}
+
+.cardFooter {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--g-space-2) var(--g-space-4);
+  border-top: var(--g-hairline) solid var(--g-color-border);
+  background: var(--g-color-bg);
+}
+
+.cardActions {
+  display: flex;
+  gap: var(--g-space-2);
+}
+
+/* Responsive: table on desktop, cards on mobile */
+@media (min-width: 641px) {
+  .tableWrapper {
+    display: block;
+  }
+  .cardList {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .tableWrapper {
+    display: none;
+  }
+  .cardList {
+    display: flex;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .row,
   .titleLink,
   .actionLink,
   .emptyAction,
   .retryButton,
-  .skeletonCell {
+  .skeletonCell,
+  .cardTitle {
     transition: none;
     animation: none;
   }

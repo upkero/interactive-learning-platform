@@ -26,28 +26,198 @@ const STATUS_STYLES: Record<MaterialOut["status"], string> = {
   failed: "status-error",
 };
 
-function getStatusLabel(
+interface DocumentDisplayData {
+  statusLabel: string;
+  roleLabel: string;
+  formattedDate: string;
+  statusStyle: string;
+  route: string;
+  isOwner: boolean;
+}
+
+function getDocumentDisplayData(
   t: ReturnType<typeof useTranslations>,
+  format: ReturnType<typeof useFormatter>,
   doc: MaterialOut
-): string {
+): DocumentDisplayData {
   const { status, parts_published, parts_total } = doc;
+  let statusLabel: string;
   if (status === "generating") {
-    return t(`status.${status}`, {
+    statusLabel = t(`status.${status}`, {
       published: parts_published,
       total: parts_total,
     });
+  } else {
+    statusLabel = t(`status.${status}`);
   }
-  return t(`status.${status}`);
+
+  const roleLabel =
+    doc.role === "owner"
+      ? t("ownerLabel")
+      : t("sharedByLabel", { email: doc.shared_by_email || "—" });
+
+  const formattedDate = format.dateTime(new Date(doc.updated_at), {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  return {
+    statusLabel,
+    roleLabel,
+    formattedDate,
+    statusStyle: STATUS_STYLES[doc.status],
+    route: getMaterialRoute(doc),
+    isOwner: doc.role === "owner",
+  };
 }
 
-function getRoleLabel(
-  t: ReturnType<typeof useTranslations>,
-  doc: MaterialOut
-): string {
-  if (doc.role === "owner") {
-    return t("ownerLabel");
-  }
-  return t("sharedByLabel", { email: doc.shared_by_email || "—" });
+function DocumentRow({
+  doc,
+  displayData,
+}: {
+  doc: MaterialOut;
+  displayData: DocumentDisplayData;
+}) {
+  const t = useTranslations("materials");
+  const tCommon = useTranslations("common");
+
+  const { statusLabel, roleLabel, formattedDate, statusStyle, route, isOwner } =
+    displayData;
+
+  return (
+    <tr className={styles.row}>
+      <td className={styles.cell}>
+        <Link href={route} className={styles.titleLink}>
+          {doc.title}
+          {doc.role === "shared" && (
+            <span className={styles.sharedBadge} aria-label={t("sharedLabel")}>
+              {t("sharedLabel")}
+            </span>
+          )}
+        </Link>
+      </td>
+      <td className={styles.cell}>
+        <span className={styles.partsCount}>
+          {doc.parts_published}/{doc.parts_total}
+        </span>
+      </td>
+      <td className={styles.cell}>
+        <span className={`${styles.statusBadge} ${styles[statusStyle]}`}>
+          {statusLabel}
+        </span>
+      </td>
+      <td className={styles.cell}>
+        <span className={styles.roleBadge}>{roleLabel}</span>
+      </td>
+      <td className={styles.cell}>
+        <time dateTime={doc.updated_at}>{formattedDate}</time>
+      </td>
+      <td className={styles.cell}>
+        <div className={styles.actions}>
+          <Link
+            href={route}
+            className={styles.actionLink}
+            aria-label={`${t("actionsLabel")}: ${doc.title}`}
+          >
+            {tCommon("next")}
+          </Link>
+          {isOwner && (
+            <Link
+              href={`/share?document=${doc.document_id}`}
+              className={styles.actionLink}
+              aria-label={`${t("shareAction")}: ${doc.title}`}
+            >
+              {t("shareAction")}
+            </Link>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function DocumentCard({
+  doc,
+  displayData,
+}: {
+  doc: MaterialOut;
+  displayData: DocumentDisplayData;
+}) {
+  const t = useTranslations("materials");
+  const tCommon = useTranslations("common");
+
+  const { statusLabel, roleLabel, formattedDate, statusStyle, route, isOwner } =
+    displayData;
+
+  return (
+    <article className={styles.card}>
+      <header className={styles.cardHeader}>
+        <Link href={route} className={styles.cardTitle}>
+          {doc.title}
+          {doc.role === "shared" && (
+            <span className={styles.sharedBadge} aria-label={t("sharedLabel")}>
+              {t("sharedLabel")}
+            </span>
+          )}
+        </Link>
+      </header>
+      <div className={styles.cardBody}>
+        <dl className={styles.cardDetails}>
+          <div className={styles.cardDetailRow}>
+            <dt className={styles.cardDetailLabel}>{t("partsLabel")}</dt>
+            <dd className={styles.cardDetailValue}>
+              <span className={styles.partsCount}>
+                {doc.parts_published}/{doc.parts_total}
+              </span>
+            </dd>
+          </div>
+          <div className={styles.cardDetailRow}>
+            <dt className={styles.cardDetailLabel}>{t("statusLabel")}</dt>
+            <dd className={styles.cardDetailValue}>
+              <span className={`${styles.statusBadge} ${styles[statusStyle]}`}>
+                {statusLabel}
+              </span>
+            </dd>
+          </div>
+          <div className={styles.cardDetailRow}>
+            <dt className={styles.cardDetailLabel}>{t("roleLabel")}</dt>
+            <dd className={styles.cardDetailValue}>
+              <span className={styles.roleBadge}>{roleLabel}</span>
+            </dd>
+          </div>
+          <div className={styles.cardDetailRow}>
+            <dt className={styles.cardDetailLabel}>{t("createdAtLabel")}</dt>
+            <dd className={styles.cardDetailValue}>
+              <time dateTime={doc.updated_at}>{formattedDate}</time>
+            </dd>
+          </div>
+        </dl>
+      </div>
+      <footer className={styles.cardFooter}>
+        <div className={styles.cardActions}>
+          <Link
+            href={route}
+            className={styles.actionLink}
+            aria-label={`${t("actionsLabel")}: ${doc.title}`}
+          >
+            {tCommon("next")}
+          </Link>
+          {isOwner && (
+            <Link
+              href={`/share?document=${doc.document_id}`}
+              className={styles.actionLink}
+              aria-label={`${t("shareAction")}: ${doc.title}`}
+            >
+              {t("shareAction")}
+            </Link>
+          )}
+        </div>
+      </footer>
+    </article>
+  );
 }
 
 export function DocumentList({ scope = "mine" }: DocumentListProps) {
@@ -162,111 +332,65 @@ export function DocumentList({ scope = "mine" }: DocumentListProps) {
     );
   }
 
+  // Precompute display data for each document to avoid duplication
+  const documentsWithDisplayData = documents.map((doc) => ({
+    doc,
+    displayData: getDocumentDisplayData(t, format, doc),
+  }));
+
   return (
-    <div className={styles.tableWrapper}>
-      <table className={styles.table} role="grid">
-        <thead>
-          <tr>
-            <th scope="col" className={styles.headerCell}>
-              {t("titleLabel")}
-            </th>
-            <th scope="col" className={styles.headerCell}>
-              {t("partsLabel")}
-            </th>
-            <th scope="col" className={styles.headerCell}>
-              {t("statusLabel")}
-            </th>
-            <th scope="col" className={styles.headerCell}>
-              {t("roleLabel")}
-            </th>
-            <th scope="col" className={styles.headerCell}>
-              {t("createdAtLabel")}
-            </th>
-            <th scope="col" className={styles.headerCell}>
-              {t("actionsLabel")}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {documents.map((doc) => (
-            <DocumentRow key={doc.document_id} doc={doc} format={format} />
-          ))}
-        </tbody>
-      </table>
+    <div className={styles.container}>
+      {/* Desktop table */}
+      <div
+        className={styles.tableWrapper}
+        role="region"
+        aria-label={t("title")}
+      >
+        <table className={styles.table} role="grid">
+          <thead>
+            <tr>
+              <th scope="col" className={styles.headerCell}>
+                {t("titleLabel")}
+              </th>
+              <th scope="col" className={styles.headerCell}>
+                {t("partsLabel")}
+              </th>
+              <th scope="col" className={styles.headerCell}>
+                {t("statusLabel")}
+              </th>
+              <th scope="col" className={styles.headerCell}>
+                {t("roleLabel")}
+              </th>
+              <th scope="col" className={styles.headerCell}>
+                {t("createdAtLabel")}
+              </th>
+              <th scope="col" className={styles.headerCell}>
+                {t("actionsLabel")}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {documentsWithDisplayData.map(({ doc, displayData }) => (
+              <DocumentRow
+                key={doc.document_id}
+                doc={doc}
+                displayData={displayData}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile card list */}
+      <div className={styles.cardList} role="list" aria-label={t("title")}>
+        {documentsWithDisplayData.map(({ doc, displayData }) => (
+          <DocumentCard
+            key={doc.document_id}
+            doc={doc}
+            displayData={displayData}
+          />
+        ))}
+      </div>
     </div>
-  );
-}
-
-interface DocumentRowProps {
-  doc: MaterialOut;
-  format: ReturnType<typeof useFormatter>;
-}
-
-function DocumentRow({ doc, format }: DocumentRowProps) {
-  const t = useTranslations("materials");
-  const tCommon = useTranslations("common");
-
-  const statusStyle = STATUS_STYLES[doc.status];
-  const route = getMaterialRoute(doc);
-  const statusLabel = getStatusLabel(t, doc);
-  const roleLabel = getRoleLabel(t, doc);
-  const formattedDate = format.dateTime(new Date(doc.updated_at), {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  const isOwner = doc.role === "owner";
-
-  return (
-    <tr className={styles.row}>
-      <td className={styles.cell}>
-        <Link href={route} className={styles.titleLink}>
-          {doc.title}
-          {doc.role === "shared" && (
-            <span className={styles.sharedBadge} aria-label={t("sharedLabel")}>
-              {t("sharedLabel")}
-            </span>
-          )}
-        </Link>
-      </td>
-      <td className={styles.cell}>
-        <span className={styles.partsCount}>
-          {doc.parts_published}/{doc.parts_total}
-        </span>
-      </td>
-      <td className={styles.cell}>
-        <span className={`${styles.statusBadge} ${styles[statusStyle]}`}>
-          {statusLabel}
-        </span>
-      </td>
-      <td className={styles.cell}>
-        <span className={styles.roleBadge}>{roleLabel}</span>
-      </td>
-      <td className={styles.cell}>
-        <time dateTime={doc.updated_at}>{formattedDate}</time>
-      </td>
-      <td className={styles.cell}>
-        <div className={styles.actions}>
-          <Link
-            href={route}
-            className={styles.actionLink}
-            aria-label={`${t("actionsLabel")}: ${doc.title}`}
-          >
-            {tCommon("next")}
-          </Link>
-          {isOwner && (
-            <Link
-              href={`/share?document=${doc.document_id}`}
-              className={styles.actionLink}
-              aria-label={`${t("shareAction")}: ${doc.title}`}
-            >
-              {t("shareAction")}
-            </Link>
-          )}
-        </div>
-      </td>
-    </tr>
   );
 }
