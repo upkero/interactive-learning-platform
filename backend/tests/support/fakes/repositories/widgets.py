@@ -129,6 +129,44 @@ class FakeWidgetRepository(WidgetRepositoryProtocol):
         if row is not None:
             self._widgets[widget_id] = replace(row, status=status)
 
+    async def create_config(
+        self,
+        *,
+        primitive_id: str,
+        mode: str,
+        params: dict[str, Any],
+        version: int,
+        created_from_part_id: UUID,
+    ) -> UUID:
+        record = WidgetRecord(
+            id=uuid4(),
+            kind=WidgetKind.CONFIG,
+            primitive_id=primitive_id,
+            mode=mode,
+            params=params,
+            source_tsx=None,
+            compiled_js=None,
+            status=WidgetStatus.ACTIVE,
+            canonical_id=None,
+            version=version,
+            created_from_part_id=created_from_part_id,
+            created_at=now(),
+        )
+        self._widgets[record.id] = record
+        return record.id
+
+    async def list_active_configs(self, primitive_id: str, mode: str) -> list[WidgetRecord]:
+        return [
+            row
+            for row in self._widgets.values()
+            if (
+                row.kind is WidgetKind.CONFIG
+                and row.primitive_id == primitive_id
+                and row.mode == mode
+                and row.status is WidgetStatus.ACTIVE
+            )
+        ]
+
 
 class FakeWidgetDescriptionRepository(WidgetDescriptionRepositoryProtocol):
     """Dict-backed stub mirroring WidgetDescriptionRepository API."""
