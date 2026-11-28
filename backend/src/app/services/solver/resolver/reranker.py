@@ -3,9 +3,13 @@
 import logging
 from collections.abc import Sequence
 
+from src.app.contracts.llm.llm_message import LLMMessage
+from src.app.contracts.llm.llm_request import LLMRequest
+from src.app.contracts.llm.system_block import SystemBlock
 from src.app.contracts.solver.main_pass import MainPassDirective
 from src.app.contracts.solver.widget_candidate import WidgetCandidate
 from src.app.interfaces.llm.llm_client import LLMClient
+from src.app.llm.structured import call_structured
 from src.app.services.solver.resolver.llm_outputs import RerankVerdict
 from src.app.services.solver.resolver.prompts import (
     RERANK_SYSTEM_PROMPT,
@@ -32,11 +36,14 @@ class Reranker:
 
         prompt = render_rerank_prompt(request, list(candidates))
         try:
-            verdict = await self._llm.call_structured(
-                system_prompt=RERANK_SYSTEM_PROMPT,
-                user_prompt=prompt,
-                response_model=RerankVerdict,
-                purpose="rerank",
+            verdict = await call_structured(
+                self._llm,
+                LLMRequest(
+                    purpose="rerank",
+                    messages=(LLMMessage(role="user", content=prompt),),
+                    system=(SystemBlock(text=RERANK_SYSTEM_PROMPT, cache=True),),
+                ),
+                RerankVerdict,
             )
             return verdict
         except Exception as exc:

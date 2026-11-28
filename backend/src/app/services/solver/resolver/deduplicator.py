@@ -32,7 +32,7 @@ def params_equal(a: Any, b: Any) -> bool:
         return _canonical(a) == _canonical(b)
 
     # Everything else: exact equality
-    return a == b
+    return bool(a == b)
 
 
 def _canonical(value: Any) -> str:

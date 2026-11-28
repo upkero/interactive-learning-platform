@@ -8,6 +8,7 @@ from typing import Literal
 from uuid import UUID
 
 from src.app.contracts.solver.degradation import Degradation
+from src.app.contracts.solver.main_pass import MainPassDirective
 
 ResolveDecision = Literal["reused", "configured", "generated", "fallback"]
 
@@ -17,13 +18,7 @@ class ResolveRequest:
     """One widget directive with context needed for resolution."""
 
     part_id: UUID
-    directive_ref: str
-    intent: str
-    source_span: str
-    primitive_hint: str | None = None
-    mode_hint: str | None = None
-    params_hint: str | None = None
-    image_ids: dict[str, UUID] | None = None
+    directive: MainPassDirective
 
 
 @dataclass(frozen=True, slots=True)

@@ -5,6 +5,7 @@ from logging import getLogger
 import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from src.app.contracts.widgets import PrimitiveRecord
 from src.app.core.clock import SystemClock
 from src.app.core.settings.app import get_app_settings
 from src.app.core.settings.auth import AuthSettings, get_auth_settings
@@ -409,10 +410,12 @@ class ApplicationContainer:
             catalog=self.primitive_catalog,
         )
         # Inject primitive repo for schema lookups
-        assembler._get_primitive_record = lambda pid: self._get_primitive_record(pid)
+        assembler._get_primitive_record = self._get_primitive_record_impl  # type: ignore[method-assign]
         return assembler
 
-    async def _get_primitive_record(self, primitive_id: str):
+    async def _get_primitive_record_impl(self, primitive_id: str) -> PrimitiveRecord | None:
+        """Get primitive record from repository."""
+
         async with self.session_factory() as session:
             repo = PrimitiveRepository(session)
             return await repo.get(primitive_id)
@@ -454,9 +457,10 @@ class ApplicationContainer:
         )
 
     @cached_property
-    def decision_log(self):
+    def decision_log(self) -> DecisionLog:
         """Decision log for resolver observability (story 1.8)."""
         from src.app.observability.decision_log import DecisionLog
+
         return DecisionLog(metrics=self.metrics_collector)
 
     @cached_property

@@ -14,6 +14,7 @@ LLMPurpose = Literal[
     "main_pass",
     "rerank",
     "config_build",
+    "config_fix",
     "config_check",
     "describe",
     "codegen",

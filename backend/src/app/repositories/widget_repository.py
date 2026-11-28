@@ -169,9 +169,7 @@ class WidgetRepository(WidgetRepositoryProtocol):
         await self._session.flush()
         return row.id
 
-    async def list_active_configs(
-        self, primitive_id: str, mode: str
-    ) -> list[WidgetRecord]:
+    async def list_active_configs(self, primitive_id: str, mode: str) -> list[WidgetRecord]:
         """List active config widgets for a primitive+mode (for deduplication)."""
         stmt = select(Widget).where(
             Widget.kind == WidgetKind.CONFIG.value,

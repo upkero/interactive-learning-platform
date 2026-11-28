@@ -12,12 +12,8 @@ class RerankVerdict(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    choice: CandidateLabel | None = Field(
-        description="Best candidate label, or null if none fits."
-    )
-    fits_as_is: bool = Field(
-        description="True if the candidate already shows the data from the fragment."
-    )
+    choice: CandidateLabel | None = Field(description="Best candidate label, or null if none fits.")
+    fits_as_is: bool = Field(description="True if the candidate already shows the data from the fragment.")
     reason: str = Field(max_length=300)
 
 
@@ -26,9 +22,7 @@ class ConfigDraft(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    primitive_id: str | None = Field(
-        description="Primitive id from the catalog, or null if no primitive fits."
-    )
+    primitive_id: str | None = Field(description="Primitive id from the catalog, or null if no primitive fits.")
     mode: str | None = None
     params_json: str = Field(description="Params as a JSON object that matches the primitive params schema.")
     reason: str = Field(max_length=300)

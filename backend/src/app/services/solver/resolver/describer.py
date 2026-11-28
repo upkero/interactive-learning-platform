@@ -3,9 +3,13 @@
 import logging
 from uuid import UUID
 
+from src.app.contracts.llm.llm_message import LLMMessage
+from src.app.contracts.llm.llm_request import LLMRequest
+from src.app.contracts.llm.system_block import SystemBlock
 from src.app.contracts.solver.valid_config import ValidConfig
 from src.app.contracts.widgets import PrimitiveRecord
 from src.app.interfaces.llm.llm_client import LLMClient
+from src.app.llm.structured import call_structured
 from src.app.services.solver.resolver.llm_outputs import WidgetDescriptionDraft
 from src.app.services.solver.resolver.prompts import (
     DESCRIBE_CODE_SYSTEM_PROMPT,
@@ -37,11 +41,14 @@ class Describer:
         )
 
         try:
-            draft = await self._llm.call_structured(
-                system_prompt=DESCRIBE_CONFIG_SYSTEM_PROMPT,
-                user_prompt=prompt,
-                response_model=WidgetDescriptionDraft,
-                purpose="describe",
+            draft = await call_structured(
+                self._llm,
+                LLMRequest(
+                    purpose="describe",
+                    messages=(LLMMessage(role="user", content=prompt),),
+                    system=(SystemBlock(text=DESCRIBE_CONFIG_SYSTEM_PROMPT, cache=True),),
+                ),
+                WidgetDescriptionDraft,
             )
             return draft
         except Exception as exc:
@@ -58,11 +65,14 @@ class Describer:
         prompt = render_describe_code_prompt(source_tsx, screenshot_base64)
 
         try:
-            draft = await self._llm.call_structured(
-                system_prompt=DESCRIBE_CODE_SYSTEM_PROMPT,
-                user_prompt=prompt,
-                response_model=WidgetDescriptionDraft,
-                purpose="describe",
+            draft = await call_structured(
+                self._llm,
+                LLMRequest(
+                    purpose="describe",
+                    messages=(LLMMessage(role="user", content=prompt),),
+                    system=(SystemBlock(text=DESCRIBE_CODE_SYSTEM_PROMPT, cache=True),),
+                ),
+                WidgetDescriptionDraft,
             )
             return draft
         except Exception as exc:

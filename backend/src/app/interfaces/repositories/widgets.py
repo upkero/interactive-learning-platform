@@ -79,9 +79,7 @@ class WidgetRepositoryProtocol(Protocol):
         widget_ids: Sequence[UUID],
     ) -> dict[UUID, WidgetWithDescription]: ...
 
-    async def list_active_configs(
-        self, primitive_id: str, mode: str
-    ) -> list[WidgetRecord]: ...
+    async def list_active_configs(self, primitive_id: str, mode: str) -> list[WidgetRecord]: ...
 
 
 class WidgetDescriptionRepositoryProtocol(Protocol):

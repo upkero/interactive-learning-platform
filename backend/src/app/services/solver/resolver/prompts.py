@@ -1,5 +1,7 @@
 """Prompt templates for resolver LLM calls (story 2.4)."""
 
+from typing import Any
+
 from src.app.contracts.solver.main_pass import MainPassDirective
 from src.app.contracts.solver.valid_config import ValidConfig
 from src.app.contracts.solver.widget_candidate import WidgetCandidate
@@ -112,7 +114,7 @@ def render_rerank_prompt(
 
 def render_config_build_prompt(
     directive: MainPassDirective,
-    primitive_schemas: dict[str, dict],
+    primitive_schemas: dict[str, dict[str, Any]],
     primitive_descriptions: dict[str, str],
     primitive_modes: dict[str, list[str]],
     params_hint: str | None = None,
@@ -191,7 +193,7 @@ params={config.params}
 def render_describe_config_prompt(
     primitive_description: str,
     mode: str,
-    params: dict,
+    params: dict[str, Any],
 ) -> str:
     """Render the describe_config user prompt."""
     return f"""\
@@ -223,6 +225,7 @@ def render_describe_code_prompt(
 {screenshot_base64}
 </screenshot_base64>
 """
+
 
 __all__ = [
     "CONFIG_BUILD_SYSTEM_PROMPT",

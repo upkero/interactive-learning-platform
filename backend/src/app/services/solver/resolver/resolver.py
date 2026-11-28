@@ -4,8 +4,9 @@ Turns a widget directive into a WidgetUsage via a cascade of stages:
 search → rerank → reuse/configure → synthesize → fallback.
 """
 
+import json
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any, TypeVar
 from uuid import UUID
 
@@ -19,6 +20,7 @@ from src.app.services.solver.resolver.config_assembler import ConfigAssembler
 from src.app.services.solver.resolver.config_validator import ConfigValidator
 from src.app.services.solver.resolver.describer import Describer
 from src.app.services.solver.resolver.fallback import fallback_outcome
+from src.app.services.solver.resolver.llm_outputs import ConfigDraft
 from src.app.services.solver.resolver.reranker import Reranker
 from src.app.services.solver.search.widget_search import WidgetSearch
 
@@ -86,8 +88,10 @@ class Resolver:
         if directive.primitive_hint in self._assembler._catalog:
             primitive_hint = directive.primitive_hint
 
-        candidates = await self._stage(
-            trail, "search", "configure",
+        candidates: list[WidgetCandidate] = await self._stage(
+            trail,
+            "search",
+            "configure",
             default=[],
             action=lambda: self._search.search(
                 directive.intent,
@@ -97,11 +101,13 @@ class Resolver:
         )
 
         if not candidates:
-            return fallback_outcome(request)
+            return fallback_outcome(directive)
 
         # Stage 2: Rerank
         verdict = await self._stage(
-            trail, "rerank", "configure",
+            trail,
+            "rerank",
+            "configure",
             default=None,
             action=lambda: self._reranker.choose(directive, candidates),
         )
@@ -111,7 +117,9 @@ class Resolver:
             if verdict.fits_as_is:
                 # Stage 3a: Reuse as-is
                 reused = await self._stage(
-                    trail, "reuse", "configure",
+                    trail,
+                    "reuse",
+                    "configure",
                     default=None,
                     action=lambda: self._reuse(request, chosen),
                 )
@@ -120,7 +128,9 @@ class Resolver:
 
         # Stage 4: Configure (build or adapt)
         configured = await self._stage(
-            trail, "configure", "synthesize",
+            trail,
+            "configure",
+            "synthesize",
             default=None,
             action=lambda: self._configure(request, trail),
         )
@@ -130,7 +140,9 @@ class Resolver:
         # Stage 5: Synthesize (story 2.5)
         if self._code_generator is not None:
             generated = await self._stage(
-                trail, "synthesize", "fallback",
+                trail,
+                "synthesize",
+                "fallback",
                 default=None,
                 action=lambda: self._synthesize(request, trail),
             )
@@ -138,16 +150,16 @@ class Resolver:
                 return generated
 
         # Stage 6: Fallback
-        return fallback_outcome(request)
+        return fallback_outcome(directive)
 
     async def _stage(
         self,
-        trail: list["Degradation"],
+        trail: list[Degradation],
         stage: str,
         fallback: str,
         *,
         default: T,
-        action: Callable[[], Any],
+        action: Callable[[], Awaitable[T]],
     ) -> T:
         """Execute a stage; in strict mode, let exceptions propagate."""
         return await action()
@@ -161,7 +173,7 @@ class Resolver:
         if candidate.kind.name == "CODE":
             # For code widgets, check shape compatibility
             return ResolveOutcome(
-                directive_ref=request.directive_ref,
+                directive_ref=request.directive.ref,
                 decision="reused",
                 status="ready",
                 widget_id=candidate.widget_id,
@@ -179,7 +191,7 @@ class Resolver:
 
         widget_id, _ = await self._library.save_config(config, part_id=request.part_id)
         return ResolveOutcome(
-            directive_ref=request.directive_ref,
+            directive_ref=request.directive.ref,
             decision="configured",
             status="ready",
             widget_id=widget_id,
@@ -189,7 +201,7 @@ class Resolver:
     async def _configure(
         self,
         request: ResolveRequest,
-        trail: list["Degradation"],
+        trail: list[Degradation],
     ) -> ResolveOutcome | None:
         """Build and validate a new configuration."""
         config = await self._assembler.build(request.directive)
@@ -198,8 +210,14 @@ class Resolver:
 
         check = await self._validator.check(request.directive, config)
         if not check.ok:
-            # One fix attempt
-            fixed = await self._assembler.fix(request.directive, config, check.issues)
+            # One fix attempt - need to convert ValidConfig to ConfigDraft
+            draft = ConfigDraft(
+                primitive_id=config.primitive_id,
+                mode=config.mode,
+                params_json=json.dumps(config.params),
+                reason="auto-generated for fix attempt",
+            )
+            fixed = await self._assembler.fix(request.directive, draft, check.issues)
             if fixed is None:
                 return None
             check = await self._validator.check(request.directive, fixed)
@@ -212,13 +230,15 @@ class Resolver:
         if created:
             # Generate descriptions
             await self._stage(
-                trail, "describe", "unindexed_widget",
+                trail,
+                "describe",
+                "unindexed_widget",
                 default=None,
                 action=lambda: self._describe_new_widget(widget_id, config),
             )
 
         return ResolveOutcome(
-            directive_ref=request.directive_ref,
+            directive_ref=request.directive.ref,
             decision="configured",
             status="ready",
             widget_id=widget_id,
@@ -257,7 +277,7 @@ class DegradingResolver(Resolver):
         fallback: str,
         *,
         default: T,
-        action: Callable[[], Any],
+        action: Callable[[], Awaitable[T]],
     ) -> T:
         try:
             return await action()
@@ -308,7 +328,7 @@ class InstrumentedResolver(Resolver):
         if self._decision_log:
             await self._decision_log.log_resolver_decision(
                 part_id=request.part_id,
-                directive_ref=request.directive_ref,
+                directive_ref=request.directive.ref,
                 decision=outcome.decision,
                 widget_id=outcome.widget_id,
                 candidates=[],  # Would need to pass candidates

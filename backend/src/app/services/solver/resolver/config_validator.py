@@ -3,9 +3,13 @@
 import logging
 from dataclasses import dataclass
 
+from src.app.contracts.llm.llm_message import LLMMessage
+from src.app.contracts.llm.llm_request import LLMRequest
+from src.app.contracts.llm.system_block import SystemBlock
 from src.app.contracts.solver.main_pass import MainPassDirective
 from src.app.contracts.solver.valid_config import ValidConfig
 from src.app.interfaces.llm.llm_client import LLMClient
+from src.app.llm.structured import call_structured
 from src.app.services.solver.resolver.llm_outputs import IntentCheck
 from src.app.services.solver.resolver.prompts import (
     INTENT_CHECK_SYSTEM_PROMPT,
@@ -39,11 +43,14 @@ class ConfigValidator:
         # Here we only do the intent check with the cheap model
 
         try:
-            verdict = await self._llm.call_structured(
-                system_prompt=INTENT_CHECK_SYSTEM_PROMPT,
-                user_prompt=render_intent_check_prompt(request, config),
-                response_model=IntentCheck,
-                purpose="config_check",
+            verdict = await call_structured(
+                self._llm,
+                LLMRequest(
+                    purpose="config_check",
+                    messages=(LLMMessage(role="user", content=render_intent_check_prompt(request, config)),),
+                    system=(SystemBlock(text=INTENT_CHECK_SYSTEM_PROMPT, cache=True),),
+                ),
+                IntentCheck,
             )
         except Exception as exc:
             logger.warning("ConfigValidator.check call failed: %s", exc)
