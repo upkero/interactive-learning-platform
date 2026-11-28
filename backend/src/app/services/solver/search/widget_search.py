@@ -24,9 +24,6 @@ from src.app.interfaces.embeddings.embedding_service import EmbeddingServiceInte
 from src.app.interfaces.observability.metrics_collector import MetricsCollector
 from src.app.interfaces.repositories.widget_search import WidgetSearchRepositoryProtocol
 from src.app.interfaces.repositories.widgets import PrimitiveRepositoryProtocol, WidgetRepositoryProtocol
-from src.app.repositories.primitive_repository import PrimitiveRepository
-from src.app.repositories.widget_repository import WidgetRepository
-from src.app.repositories.widget_search_repository import WidgetSearchRepository
 from src.app.services.solver.library.primitive_catalog import PrimitiveCatalog
 
 _SEARCH_DURATION = "widget_search.duration_seconds"
@@ -41,9 +38,9 @@ class WidgetSearch:
         catalog: PrimitiveCatalog | None = None,
         settings: SolverSettings,
         metrics: MetricsCollector,
-        search_repo: Callable[[AsyncSession], WidgetSearchRepositoryProtocol] = WidgetSearchRepository,
-        widget_repo: Callable[[AsyncSession], WidgetRepositoryProtocol] = WidgetRepository,
-        primitive_repo: Callable[[AsyncSession], PrimitiveRepositoryProtocol] = PrimitiveRepository,
+        search_repo: Callable[[AsyncSession], WidgetSearchRepositoryProtocol],
+        widget_repo: Callable[[AsyncSession], WidgetRepositoryProtocol],
+        primitive_repo: Callable[[AsyncSession], PrimitiveRepositoryProtocol],
     ) -> None:
         self._session_factory = session_factory
         self._embeddings = embeddings

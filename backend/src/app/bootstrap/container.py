@@ -47,11 +47,13 @@ from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
 from src.app.repositories.generation_ledger_repository import GenerationLedgerRepository
 from src.app.repositories.image_repository import ImageRepository
+from src.app.repositories.primitive_repository import PrimitiveRepository
 from src.app.repositories.quiz_attempt_repository import QuizAttemptRepository
 from src.app.repositories.report_repository import ReportRepository
 from src.app.repositories.user_material_repository import UserMaterialRepository
 from src.app.repositories.user_repository import UserRepository
 from src.app.repositories.widget_repository import WidgetRepository
+from src.app.repositories.widget_search_repository import WidgetSearchRepository
 from src.app.repositories.widget_usage_repository import WidgetUsageRepository
 from src.app.services.auth.auth_service import AuthService
 from src.app.services.documents.document_ingest_runner import DocumentIngestRunner
@@ -372,6 +374,9 @@ class ApplicationContainer:
             embeddings=self.embedding_service,
             settings=self.solver_settings,
             metrics=self.metrics_collector,
+            search_repo=WidgetSearchRepository,
+            widget_repo=WidgetRepository,
+            primitive_repo=PrimitiveRepository,
         )
 
     @cached_property

@@ -1,5 +1,6 @@
 """Unit tests of widget search by intent (story 2.3)."""
 
+import inspect
 from collections.abc import Sequence
 from typing import cast
 from uuid import UUID, uuid4
@@ -7,16 +8,20 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.solver.widget_candidate import WidgetMatch
 from src.app.contracts.widgets import WidgetKind, WidgetRecord
 from src.app.core.settings.solver import SolverSettings
 from src.app.exceptions.embeddings import EmbeddingResultMismatchError
 from src.app.interfaces.embeddings.embedding_service import EmbeddingServiceInterface
 from src.app.interfaces.repositories.widget_search import WidgetSearchRepositoryProtocol
+from src.app.repositories.primitive_repository import PrimitiveRepository
+from src.app.repositories.widget_repository import WidgetRepository
+from src.app.repositories.widget_search_repository import WidgetSearchRepository
 from src.app.services.solver.library.primitive_catalog import PrimitiveCatalog
 from src.app.services.solver.search.widget_search import WidgetSearch
 from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
-from tests.support.fakes.repositories.widgets import FakeWidgetRepository
+from tests.support.fakes.repositories.widgets import FakePrimitiveRepository, FakeWidgetRepository
 
 
 class FakeSession:
@@ -77,6 +82,7 @@ def _search(
     metrics: RecordingMetricsCollector | None = None,
 ) -> tuple[WidgetSearch, ScriptedSearchRepository, RecordingMetricsCollector]:
     repository = ScriptedSearchRepository(responses)
+    primitives = FakePrimitiveRepository()
     collector = metrics or RecordingMetricsCollector()
     session_factory = cast(async_sessionmaker[AsyncSession], lambda: FakeSession())
     search = WidgetSearch(
@@ -87,6 +93,7 @@ def _search(
         metrics=collector,
         search_repo=lambda _session: repository,
         widget_repo=lambda _session: widgets,
+        primitive_repo=lambda _session: primitives,
     )
     return search, repository, collector
 
@@ -358,3 +365,18 @@ async def test_widget_record_ids_are_preserved() -> None:
 
     assert isinstance(candidate.widget_id, UUID)
     assert candidate.widget_id == widget.id
+
+
+def test_repository_factories_are_explicit_required_dependencies() -> None:
+    parameters = inspect.signature(WidgetSearch).parameters
+
+    for name in ("search_repo", "widget_repo", "primitive_repo"):
+        assert parameters[name].default is inspect.Parameter.empty
+
+
+def test_application_container_wires_concrete_repository_factories() -> None:
+    search = ApplicationContainer().widget_search
+
+    assert search._search_repo is WidgetSearchRepository
+    assert search._widget_repo is WidgetRepository
+    assert search._primitive_repo is PrimitiveRepository

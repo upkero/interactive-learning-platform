@@ -161,6 +161,9 @@ async def test_inactive_widget_is_never_returned(db: AsyncEngine, session_factor
                 search_max_distance=PRODUCTION_SEARCH_MAX_DISTANCE,
             ),
             metrics=RecordingMetricsCollector(),
+            search_repo=WidgetSearchRepository,
+            widget_repo=WidgetRepository,
+            primitive_repo=PrimitiveRepository,
         )
         candidates = await search.search("intent", k=1)
         await connection.rollback()
@@ -378,6 +381,9 @@ async def test_explain_of_search_uses_hnsw_index(db: AsyncEngine, session_factor
             search_max_distance=PRODUCTION_SEARCH_MAX_DISTANCE,
         ),
         metrics=RecordingMetricsCollector(),
+        search_repo=WidgetSearchRepository,
+        widget_repo=WidgetRepository,
+        primitive_repo=PrimitiveRepository,
     )
     try:
         measurements: list[tuple[str | None, list[float], float]] = []
