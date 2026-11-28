@@ -11,6 +11,10 @@ One statement with three steps:
 set in the same transaction as the SELECT (no commit between them). The
 filter by status and primitive runs before the HNSW result is trimmed, which
 is why the overfetch exists.
+
+The candidate window is sized for the documented invariant of 4-6
+descriptions per widget. If one widget has more descriptions than the window
+can cover, top-k may return fewer than k distinct widgets.
 """
 
 from collections.abc import Sequence

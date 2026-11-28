@@ -130,6 +130,46 @@ async def test_widget_with_several_close_descriptions_is_returned_once(session_f
     assert [match.distance for match in matches] == sorted(match.distance for match in matches)
 
 
+async def test_top_k_returns_distinct_widgets_within_description_count_invariant(
+    session_factory: SessionFactory,
+) -> None:
+    """Top-k stays distinct for the documented 4-6 descriptions per widget."""
+    await _primitive(session_factory, "three-frame")
+    widget_ids: list[UUID] = []
+
+    for widget_index in range(7):
+        descriptions: list[tuple[str, list[float]]] = []
+        for description_index in range(6):
+            target_distance = widget_index * 0.006 + description_index * 0.001
+            vector = _unit(
+                1.0 - target_distance,
+                math.sqrt(target_distance * (2.0 - target_distance)),
+            )
+            descriptions.append((f"widget {widget_index} description {description_index}", vector))
+        widget_ids.append(
+            await _config_widget(
+                session_factory,
+                primitive_id="three-frame",
+                descriptions=descriptions,
+            )
+        )
+
+    async with session_factory() as session:
+        matches = await WidgetSearchRepository(session).find_nearest_widgets(
+            query_vector=_unit(),
+            k=5,
+            overfetch=40,
+        )
+
+    ids = [match.widget_id for match in matches]
+    distances = [match.distance for match in matches]
+    assert len(matches) == 5
+    assert len(set(ids)) == 5
+    assert ids == widget_ids[:5]
+    assert all(distances[index] <= distances[index + 1] + 1e-9 for index in range(len(distances) - 1))
+    assert ids.count(widget_ids[0]) == 1
+
+
 @pytest.mark.parametrize("status", ["excluded", "merged"])
 async def test_inactive_widget_is_never_returned(db: AsyncEngine, session_factory: SessionFactory, status: str) -> None:
     await _primitive(session_factory, "three-frame")
