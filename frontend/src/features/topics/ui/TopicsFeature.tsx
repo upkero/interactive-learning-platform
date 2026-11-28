@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "@/shared/i18n/navigation-client";
 import { useTranslations } from "next-intl";
 import { useDebouncedValue } from "@/shared/lib/use-debounced-value";
@@ -13,6 +13,11 @@ import { ActionLink } from "@/shared/ui/action-link/ActionLink";
 import { PageShell } from "@/shared/ui/page-shell/PageShell";
 import { Surface } from "@/shared/ui/surface/Surface";
 import type { TopicNodeOut } from "@/entities/document";
+import {
+  parseTopicsParam,
+  filterValidTopicIds,
+  serializeTopicsParam,
+} from "@/shared/lib/urlParams";
 import styles from "./TopicsFeature.module.css";
 
 type TopicNode = TopicNodeOut;
@@ -26,6 +31,7 @@ export function TopicsFeature({ documentId }: { documentId: string }) {
   const searchParams = useSearchParams();
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [initializedFromUrl, setInitializedFromUrl] = useState(false);
 
   const topicsQuery = useTopics(documentId);
   const debouncedSelectedIds = useDebouncedValue<string[]>(
@@ -53,6 +59,22 @@ export function TopicsFeature({ documentId }: { documentId: string }) {
     [topicsQuery.data]
   );
 
+  // Initialize selectedIds from URL once when topics are loaded
+  useEffect(() => {
+    if (
+      !initializedFromUrl &&
+      topicsQuery.data &&
+      topicsQuery.data.length > 0
+    ) {
+      const urlTopicIds = parseTopicsParam(searchParams);
+      if (urlTopicIds.length > 0) {
+        const validIds = filterValidTopicIds(urlTopicIds, topicsQuery.data);
+        setSelectedIds(new Set(validIds));
+      }
+      setInitializedFromUrl(true);
+    }
+  }, [initializedFromUrl, topicsQuery.data, searchParams]);
+
   // Derive selected count from plan (server-authoritative)
   const selectedCount = planQuery.data?.cost ?? 0;
   const isOverQuota = planQuery.data
@@ -70,7 +92,7 @@ export function TopicsFeature({ documentId }: { documentId: string }) {
     if (!canProceed) return;
 
     const selectedTopicIds = Array.from(selectedIds);
-    const encodedTopics = encodeURIComponent(selectedTopicIds.join(","));
+    const encodedTopics = serializeTopicsParam(selectedTopicIds);
     router.push(`/documents/${documentId}/questions?topics=${encodedTopics}`);
   }, [canProceed, documentId, router, selectedIds]);
 
@@ -204,7 +226,7 @@ export function TopicsFeature({ documentId }: { documentId: string }) {
       title={t("title")}
       actions={
         <ActionLink
-          href={`/documents/${documentId}/questions?topics=${encodeURIComponent(Array.from(selectedIds).join(","))}`}
+          href={`/documents/${documentId}/questions?topics=${serializeTopicsParam(Array.from(selectedIds))}`}
           variant="primary"
           onClick={handleNext}
           disabled={!canProceed || planQuery.isLoading}

@@ -9,6 +9,7 @@ import {
   cleanup,
 } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { QuestionsFeature } from "../QuestionsFeature";
 import { useStartGeneration, usePlan } from "@/features/questions/api";
 import { useMe, useQuota } from "@/entities/user";
@@ -98,6 +99,8 @@ const messages = {
       "Not enough available generations to complete this operation.",
     processing_limit_reached: "Processing limit reached. Try again later.",
     internal_server_error: "An unexpected error occurred.",
+    document_not_ready:
+      "The document is not ready yet. Wait for parsing to complete.",
   },
   common: {
     cancel: "Cancel",
@@ -133,12 +136,21 @@ const mockPlan = {
   ],
 };
 
-function renderWithIntl(ui: React.ReactElement) {
-  return render(
-    <NextIntlClientProvider locale="en" messages={messages}>
-      {ui}
-    </NextIntlClientProvider>
+function createWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={queryClient}>
+      <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+        {children}
+      </NextIntlClientProvider>
+    </QueryClientProvider>
   );
+}
+
+function renderWithIntl(ui: React.ReactElement) {
+  return render(ui, { wrapper: createWrapper() });
 }
 
 describe("QuestionsFeature", () => {
@@ -275,7 +287,7 @@ describe("QuestionsFeature", () => {
   });
 
   describe("Error handling", () => {
-    it("should redirect to topics with error flag on 402 quota_exceeded", async () => {
+    it("should show quota_exceeded error with back to topics link on 402", async () => {
       const error = new ApiError(402, "quota_exceeded", "Quota exceeded");
       (useStartGeneration as vi.Mock).mockReturnValue({
         mutateAsync: vi.fn().mockRejectedValue(error),
@@ -293,11 +305,70 @@ describe("QuestionsFeature", () => {
         fireEvent.click(startButton);
       });
 
+      // Should show error on page with back to topics link
       await waitFor(() => {
-        expect(mockRouter.replace).toHaveBeenCalledWith(
-          "/documents/doc-123/topics?error=quota_exceeded"
+        expect(
+          screen.getByText(
+            "Not enough available generations to complete this operation."
+          )
+        ).toBeInTheDocument();
+        const backToTopicsLink = screen.getByRole("link", {
+          name: /back to topics/i,
+        });
+        expect(backToTopicsLink).toHaveAttribute(
+          "href",
+          "/en/documents/doc-123/topics?topics=topic-1,topic-2"
         );
       });
+
+      // Should not redirect to topics with error flag
+      expect(mockRouter.replace).not.toHaveBeenCalledWith(
+        "/documents/doc-123/topics?error=quota_exceeded"
+      );
+    });
+
+    it("should show document_not_ready error with back to topics link on 409", async () => {
+      const error = new ApiError(
+        409,
+        "document_not_ready",
+        "Document not ready"
+      );
+      (useStartGeneration as vi.Mock).mockReturnValue({
+        mutateAsync: vi.fn().mockRejectedValue(error),
+        isPending: false,
+        isError: true,
+        error: error,
+      });
+
+      renderComponent();
+
+      await waitFor(() => {
+        const startButton = screen.getByRole("button", {
+          name: /start generation/i,
+        });
+        fireEvent.click(startButton);
+      });
+
+      // Should show error on page with back to topics link
+      await waitFor(() => {
+        expect(
+          screen.getByText(
+            "The document is not ready yet. Wait for parsing to complete."
+          )
+        ).toBeInTheDocument();
+        const backToTopicsLink = screen.getByRole("link", {
+          name: /back to topics/i,
+        });
+        expect(backToTopicsLink).toHaveAttribute(
+          "href",
+          "/en/documents/doc-123/topics?topics=topic-1,topic-2"
+        );
+      });
+
+      // Should not redirect
+      expect(mockRouter.replace).not.toHaveBeenCalledWith(
+        "/documents/doc-123/progress"
+      );
     });
 
     it("should show error and stay on page for processing_limit_reached", async () => {
@@ -464,7 +535,7 @@ describe("QuestionsFeature", () => {
   });
 
   describe("Navigation", () => {
-    it("should redirect to topics on Back click", async () => {
+    it("should redirect to topics with preserved topics param on Back click", async () => {
       renderComponent();
 
       await waitFor(() => {
@@ -473,7 +544,9 @@ describe("QuestionsFeature", () => {
         fireEvent.click(backButton);
       });
 
-      expect(mockRouter.push).toHaveBeenCalledWith("/documents/doc-123/topics");
+      expect(mockRouter.push).toHaveBeenCalledWith(
+        "/documents/doc-123/topics?topics=topic-1,topic-2"
+      );
     });
   });
 

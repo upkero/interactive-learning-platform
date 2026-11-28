@@ -74,8 +74,9 @@ export function formatCorrectAnswer(
     }
     case "multiple_choice": {
       if (!Array.isArray(correctAnswer)) return String(correctAnswer);
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-      const answers = correctAnswer as string[];
+      const answers = Array.isArray(correctAnswer)
+        ? correctAnswer
+        : [String(correctAnswer)];
       return answers
         .map((id) => {
           const option = quiz.options.find((o) => o.id === id);
@@ -85,21 +86,20 @@ export function formatCorrectAnswer(
     }
     case "ordering": {
       if (!Array.isArray(correctAnswer)) return String(correctAnswer);
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-      const answers = correctAnswer as string[];
+      const answers = Array.isArray(correctAnswer)
+        ? correctAnswer
+        : [String(correctAnswer)];
       return answers
         .map((id, idx) => {
           const option = quiz.items.find((o) => o.id === id);
-          // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-          return `${idx + 1}. ${option?.text ?? id}`;
+          return String(idx + 1) + `. ${option?.text ?? id}`;
         })
         .join(" → ");
     }
     case "numeric": {
       const num = Number(correctAnswer);
       const unit = quiz.unit ? ` ${quiz.unit}` : "";
-      // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-      return Number.isNaN(num) ? String(correctAnswer) : `${num}${unit}`;
+      return Number.isNaN(num) ? String(correctAnswer) : String(num) + unit;
     }
     default: {
       const _exhaustive: never = quiz;

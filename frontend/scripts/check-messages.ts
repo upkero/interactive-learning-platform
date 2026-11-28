@@ -45,21 +45,35 @@ function getNamespaces(obj: Record<string, unknown>): Set<string> {
   return new Set(Object.keys(obj));
 }
 
-function extractErrorCodesFromSchema(): string[] {
+function extractErrorCodesFromSchema(): {
+  errorCodes: string[];
+  documentErrorCodes: string[];
+} {
   const content = fs.readFileSync(schemaPath, "utf-8");
-  // Find the ErrorCode enum (not DocumentErrorCode) - it's the one with "ErrorCode:" followed by the list
-  const errorCodeMatch = content.match(
-    /\/\*\* @enum \{string\} \*\/\s+ErrorCode:\s*([\s\S]*?);/
-  );
+
+  // Find the ErrorCode enum (must be standalone "ErrorCode:", not "DocumentErrorCode:")
+  const errorCodeMatch = content.match(/(?<!Document)ErrorCode:\s*([^;]+);/);
   if (!errorCodeMatch) {
     throw new Error("Could not find ErrorCode enum in schema.d.ts");
   }
-  const enumContent = errorCodeMatch[1];
-  const codes = enumContent
+  const errorCodeContent = errorCodeMatch[1];
+  const errorCodes = errorCodeContent
     .split("|")
     .map((s) => s.trim().replace(/['"]/g, ""))
     .filter((s) => s.length > 0 && !s.startsWith("/"));
-  return codes;
+
+  // Find the DocumentErrorCode enum
+  const documentErrorCodeMatch = content.match(/DocumentErrorCode:\s*([^;]+);/);
+  if (!documentErrorCodeMatch) {
+    throw new Error("Could not find DocumentErrorCode enum in schema.d.ts");
+  }
+  const documentErrorCodeContent = documentErrorCodeMatch[1];
+  const documentErrorCodes = documentErrorCodeContent
+    .split("|")
+    .map((s) => s.trim().replace(/['"]/g, ""))
+    .filter((s) => s.length > 0 && !s.startsWith("/"));
+
+  return { errorCodes, documentErrorCodes };
 }
 
 function findTranslationCalls(dir: string): {
@@ -222,9 +236,15 @@ for (const [file, keys] of tCommonCalls) {
   }
 }
 
-// Validate errors.* completeness against ClientErrorCode
-const errorCodes = extractErrorCodesFromSchema();
-const clientErrorCodes = [...errorCodes, "network_error", "unknown_error"];
+// Validate errors.* completeness against ClientErrorCode (ErrorCode + DocumentErrorCode + client-only)
+const { errorCodes, documentErrorCodes } = extractErrorCodesFromSchema();
+const clientOnlyErrorCodes = ["network_error", "unknown_error"];
+const clientErrorCodes = [
+  ...errorCodes,
+  ...documentErrorCodes,
+  ...clientOnlyErrorCodes,
+];
+
 const errorKeysInRu = [...ruKeys]
   .filter((k) => k.startsWith("errors."))
   .map((k) => k.replace("errors.", ""));
@@ -262,7 +282,9 @@ if (missingErrorKeysInEn.length > 0) {
 }
 
 if (extraErrorKeysInRu.length > 0) {
-  console.error("❌ Extra error codes in ru.json not in ClientErrorCode:");
+  console.error(
+    "❌ Extra error codes in ru.json not in ClientErrorCode (ErrorCode + DocumentErrorCode + client-only):"
+  );
   for (const code of extraErrorKeysInRu) {
     console.error(`  - errors.${code}`);
   }
@@ -270,7 +292,9 @@ if (extraErrorKeysInRu.length > 0) {
 }
 
 if (extraErrorKeysInEn.length > 0) {
-  console.error("❌ Extra error codes in en.json not in ClientErrorCode:");
+  console.error(
+    "❌ Extra error codes in en.json not in ClientErrorCode (ErrorCode + DocumentErrorCode + client-only):"
+  );
   for (const code of extraErrorKeysInEn) {
     console.error(`  - errors.${code}`);
   }
@@ -281,7 +305,9 @@ if (!hasErrors) {
   console.log(
     "✅ All translation keys are synchronized between ru.json and en.json"
   );
-  console.log("✅ All ClientErrorCode values are covered in errors.*");
+  console.log(
+    "✅ All ClientErrorCode values (ErrorCode + DocumentErrorCode + client-only) are covered in errors.*"
+  );
   console.log(
     "✅ All useTranslations namespaces and tErrors/tCommon literal keys are valid"
   );
