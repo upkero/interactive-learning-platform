@@ -13,7 +13,7 @@ from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.widgets import WidgetKind
 from src.app.core.settings.embeddings import EmbeddingsSettings
 from src.app.embeddings import factory
-from src.app.embeddings.bge_m3 import BGE_M3_MODEL
+from src.app.embeddings.bge_m3 import BGE_M3_MODEL, BGE_M3_REVISION
 from src.app.exceptions.embeddings import EmbeddingGenerationError
 from src.app.models.widget_description import EMBEDDING_DIM, WidgetDescription
 from src.app.repositories.widget_description_repository import WidgetDescriptionRepository
@@ -50,8 +50,9 @@ async def test_failed_late_batch_rolls_back_and_retry_normalizes_all_rows(
     should_fail = True
 
     class RecordingBge:
-        def __init__(self, *, device: str) -> None:
+        def __init__(self, *, device: str = "cpu", revision: str = BGE_M3_REVISION) -> None:
             assert device == "cpu"
+            assert revision == BGE_M3_REVISION
 
         def embed(self, texts: Sequence[str]) -> list[list[float]]:
             calls.append(list(texts))
@@ -102,8 +103,9 @@ async def test_readers_see_the_old_vector_set_until_reembed_commits(
         session.add(WidgetDescription(id=UUID(int=1), widget_id=widget.id, text="atomic text", embedding=original))
 
     class RecordingBge:
-        def __init__(self, *, device: str) -> None:
+        def __init__(self, *, device: str = "cpu", revision: str = BGE_M3_REVISION) -> None:
             assert device == "cpu"
+            assert revision == BGE_M3_REVISION
 
         def embed(self, texts: Sequence[str]) -> list[list[float]]:
             return [replacement for _ in texts]
@@ -164,8 +166,9 @@ async def test_concurrent_reembed_commands_are_serialized_and_share_the_cache(
     state_lock = Lock()
 
     class RecordingBge:
-        def __init__(self, *, device: str) -> None:
+        def __init__(self, *, device: str = "cpu", revision: str = BGE_M3_REVISION) -> None:
             assert device == "cpu"
+            assert revision == BGE_M3_REVISION
 
         def embed(self, texts: Sequence[str]) -> list[list[float]]:
             nonlocal calls, active_calls, max_active_calls
