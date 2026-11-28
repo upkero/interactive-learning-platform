@@ -9,6 +9,9 @@ from pydantic import ValidationError
 
 from src import cli
 from src.app.core.settings.app import get_app_settings
+from src.app.core.settings.embeddings import EmbeddingsSettings
+from src.app.core.settings.rate_limit import RateLimitSettings
+from src.app.exceptions.redis import RedisIsolationConfigurationError
 
 pytestmark = pytest.mark.unit
 
@@ -111,3 +114,25 @@ def test_reembed_descriptions_command_is_registered() -> None:
     args = cli.build_parser().parse_args(["reembed-descriptions"])
 
     assert args.command == "reembed-descriptions"
+
+
+async def test_reembed_descriptions_rejects_shared_redis_database_before_opening_database(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def forbidden(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("build_engine must not be called for unsafe Redis isolation")
+
+    monkeypatch.setattr(cli, "build_engine", forbidden)
+    monkeypatch.setattr(
+        cli,
+        "get_embeddings_settings",
+        lambda: EmbeddingsSettings(cache_redis_url="redis://localhost:6379/3", _env_file=None),
+    )
+    monkeypatch.setattr(
+        cli,
+        "get_rate_limit_settings",
+        lambda: RateLimitSettings(storage_uri="redis://localhost:6379/3"),
+    )
+
+    with pytest.raises(RedisIsolationConfigurationError, match="same Redis logical database"):
+        await cli._run_reembed_descriptions()

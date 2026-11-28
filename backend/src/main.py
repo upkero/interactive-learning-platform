@@ -14,8 +14,11 @@ from src.app.bootstrap.container import ApplicationContainer
 from src.app.core.logging import setup_logging
 from src.app.core.settings.app import get_app_settings
 from src.app.core.settings.auth import get_auth_settings
+from src.app.core.settings.embeddings import get_embeddings_settings
 from src.app.core.settings.ingest import get_ingest_settings
 from src.app.core.settings.logging import get_logging_settings
+from src.app.core.settings.rate_limit import get_rate_limit_settings
+from src.app.core.settings.redis_isolation import validate_redis_isolation
 from src.app.core.settings.smtp import get_smtp_settings, validate_smtp_config
 
 
@@ -33,8 +36,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 def create_app() -> FastAPI:
     setup_logging(get_logging_settings())
 
-    # Validate required secrets at startup (DoD 1.1.4)
+    # Validate required secrets and Redis role isolation at startup (DoD 1.1.4).
     get_auth_settings()
+    validate_redis_isolation(
+        embeddings_cache_redis_url=get_embeddings_settings().cache_redis_url,
+        rate_limit_storage_uri=get_rate_limit_settings().storage_uri,
+    )
     validate_smtp_config(get_app_settings().environment, get_smtp_settings())
 
     app = FastAPI(

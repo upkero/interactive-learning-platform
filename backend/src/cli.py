@@ -18,8 +18,12 @@ from uuid import UUID
 
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.core.settings.app import get_app_settings
+from src.app.core.settings.embeddings import get_embeddings_settings
+from src.app.core.settings.rate_limit import get_rate_limit_settings
+from src.app.core.settings.redis_isolation import validate_redis_isolation
 from src.app.core.settings.seed import get_seed_settings
 from src.app.db.session import build_engine, build_session_factory
+from src.app.interfaces.repositories.widgets import WidgetDescriptionRepositoryProtocol
 from src.app.repositories.widget_description_repository import WidgetDescriptionRepository
 from src.app.seed.dev_seed import seed_dev
 from src.app.seed.primitives_seed import load_catalog, resolve_catalog_path, seed_primitives
@@ -54,6 +58,10 @@ async def _run_reembed_descriptions() -> int:
     of vectors before or after the model change. Readers may continue during
     the command while writes to widget descriptions wait for the transaction.
     """
+    validate_redis_isolation(
+        embeddings_cache_redis_url=get_embeddings_settings().cache_redis_url,
+        rate_limit_storage_uri=get_rate_limit_settings().storage_uri,
+    )
     app_settings = get_app_settings()
     engine = build_engine(str(app_settings.db_url), null_pool=True)
     container = ApplicationContainer()
@@ -62,7 +70,7 @@ async def _run_reembed_descriptions() -> int:
     try:
         session_factory = build_session_factory(engine)
         async with session_factory() as session, session.begin():
-            repository = WidgetDescriptionRepository(session)
+            repository: WidgetDescriptionRepositoryProtocol = WidgetDescriptionRepository(session)
             await repository.lock_for_reembedding()
             while True:
                 batch = await repository.list_batch(

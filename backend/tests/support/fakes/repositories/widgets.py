@@ -164,6 +164,9 @@ class FakeWidgetDescriptionRepository(WidgetDescriptionRepositoryProtocol):
             ordered = [description for description in ordered if description.id > after_id]
         return ordered[:limit]
 
+    async def lock_for_reembedding(self) -> None:
+        """The in-memory fake has no transaction lock to acquire."""
+
     async def set_embedding(self, description_id: UUID, embedding: list[float]) -> None:
         row = self._descriptions.get(description_id)
         if row is not None:

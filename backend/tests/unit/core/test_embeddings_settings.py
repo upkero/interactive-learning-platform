@@ -1,5 +1,9 @@
 """Unit tests of embedding settings (story 2.3)."""
 
+import os
+import subprocess
+import sys
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
@@ -12,6 +16,8 @@ from src.app.core.settings.celery import CelerySettings
 from src.app.core.settings.embeddings import EmbeddingsSettings
 from src.app.core.settings.progress import ProgressSettings
 from src.app.core.settings.rate_limit import RateLimitSettings
+from src.app.core.settings.redis_isolation import validate_redis_isolation
+from src.app.exceptions.redis import RedisIsolationConfigurationError
 
 
 @pytest.fixture(autouse=True)
@@ -64,6 +70,85 @@ def test_redis_roles_use_distinct_logical_databases() -> None:
 
     assert databases == [0, 1, 2, 3]
     assert len(set(databases)) == len(databases)
+
+
+def test_same_redis_database_is_rejected() -> None:
+    with pytest.raises(RedisIsolationConfigurationError, match="same Redis logical database"):
+        validate_redis_isolation(
+            embeddings_cache_redis_url="redis://localhost:6379/3",
+            rate_limit_storage_uri="redis://localhost:6379/3",
+        )
+
+
+def test_redis_url_variants_are_normalized_before_comparison() -> None:
+    with pytest.raises(RedisIsolationConfigurationError, match="same Redis logical database"):
+        validate_redis_isolation(
+            embeddings_cache_redis_url="redis://LOCALHOST:6379/03",
+            rate_limit_storage_uri="redis+asyncio://localhost:6379/3",
+        )
+
+
+def test_different_redis_database_is_allowed() -> None:
+    validate_redis_isolation(
+        embeddings_cache_redis_url="redis://localhost:6379/3",
+        rate_limit_storage_uri="redis://localhost:6379/2",
+    )
+
+
+def test_memory_rate_limit_is_allowed() -> None:
+    validate_redis_isolation(
+        embeddings_cache_redis_url="redis://localhost:6379/3",
+        rate_limit_storage_uri="memory://",
+    )
+
+
+@pytest.mark.parametrize(
+    "rate_limit_storage_uri",
+    [
+        "redis://cache.example:6379/3",
+        "redis://localhost:6380/3",
+    ],
+)
+def test_different_redis_host_or_port_is_allowed(rate_limit_storage_uri: str) -> None:
+    validate_redis_isolation(
+        embeddings_cache_redis_url="redis://localhost:6379/3",
+        rate_limit_storage_uri=rate_limit_storage_uri,
+    )
+
+
+@pytest.mark.parametrize(
+    "rate_limit_storage_uri",
+    [
+        "redis://localhost:6379/2",
+        "redis+asyncio://localhost:6379/2",
+    ],
+)
+def test_redis_url_variants_with_different_database_are_allowed(rate_limit_storage_uri: str) -> None:
+    validate_redis_isolation(
+        embeddings_cache_redis_url="redis://localhost:6379/3",
+        rate_limit_storage_uri=rate_limit_storage_uri,
+    )
+
+
+def test_application_startup_rejects_shared_embedding_and_rate_limit_redis_database(tmp_path: Path) -> None:
+    env = os.environ.copy()
+    env["EMBEDDINGS_CACHE_REDIS_URL"] = "redis://localhost:6379/3"
+    env["RATE_LIMIT_STORAGE_URI"] = "redis://localhost:6379/3"
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[3])
+
+    result = subprocess.run(
+        [sys.executable, "-c", "import src.main"],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "RATE_LIMIT_STORAGE_URI" in result.stderr
+    assert "EMBEDDINGS_CACHE_REDIS_URL" in result.stderr
+    assert "same Redis logical database" in result.stderr
 
 
 def test_container_builds_embedding_cache_client_from_dedicated_settings(
