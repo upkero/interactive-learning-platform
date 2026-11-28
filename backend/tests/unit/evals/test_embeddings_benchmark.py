@@ -1,5 +1,6 @@
 import json
 from collections import Counter
+from collections.abc import Iterator
 from pathlib import Path
 from uuid import UUID
 
@@ -7,10 +8,24 @@ import pytest
 
 from evals import embeddings_benchmark as benchmark
 from src.app.contracts.solver.widget_candidate import WidgetMatch
-from src.app.core.settings.embeddings import get_embeddings_settings
-from src.app.embeddings.bge_m3 import BGE_M3_REVISION
+from src.app.core.settings.embeddings import (
+    BGE_M3_REVISION,
+    get_embeddings_plan_settings,
+    get_embeddings_settings,
+)
 
 pytestmark = pytest.mark.unit
+
+
+@pytest.fixture(autouse=True)
+def _isolate_embedding_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    for name in ("EMBEDDINGS_PROVIDER", "EMBEDDINGS_REVISION", "VOYAGE_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    get_embeddings_plan_settings.cache_clear()
+    get_embeddings_settings.cache_clear()
+    yield
+    get_embeddings_plan_settings.cache_clear()
+    get_embeddings_settings.cache_clear()
 
 
 def test_committed_corpus_has_labels_and_no_split_leakage() -> None:
@@ -63,13 +78,80 @@ def test_plan_cli_includes_the_configured_revision(
     revision = "0123456789abcdef0123456789abcdef01234567"
     monkeypatch.setenv("EMBEDDINGS_PROVIDER", "bge_m3")
     monkeypatch.setenv("EMBEDDINGS_REVISION", revision)
-    get_embeddings_settings.cache_clear()
 
     assert benchmark.main(["--plan"]) == 0
 
     plan = json.loads(capsys.readouterr().out)
     assert plan["revision"] == revision
-    get_embeddings_settings.cache_clear()
+
+
+@pytest.mark.parametrize(
+    ("provider", "voyage_api_key"),
+    [
+        pytest.param(None, None, id="default-bge-m3"),
+        pytest.param("voyage", None, id="voyage-without-key"),
+        pytest.param("voyage", "dummy-key", id="voyage-with-key"),
+    ],
+)
+def test_plan_cli_does_not_require_a_voyage_key(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    provider: str | None,
+    voyage_api_key: str | None,
+) -> None:
+    if provider is not None:
+        monkeypatch.setenv("EMBEDDINGS_PROVIDER", provider)
+    if voyage_api_key is not None:
+        monkeypatch.setenv("VOYAGE_API_KEY", voyage_api_key)
+
+    assert benchmark.main(["--plan"]) == 0
+
+    plan = json.loads(capsys.readouterr().out)
+    assert plan["revision"] == BGE_M3_REVISION
+    assert plan["voyage_usd_estimate_at_one_token_per_input_byte_plus_two_per_text"] > 0
+
+
+def test_voyage_run_without_a_key_fails_before_api_calls(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("EMBEDDINGS_PROVIDER", "voyage")
+
+    with pytest.raises(SystemExit) as error:
+        benchmark.main(["--db-url", "postgresql+asyncpg://invalid:invalid@127.0.0.1:1/invalid"])
+
+    assert error.value.code == 2
+    assert "VOYAGE_API_KEY is required" in capsys.readouterr().err
+
+
+def test_voyage_run_requires_explicit_paid_call_permission(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("EMBEDDINGS_PROVIDER", "voyage")
+    monkeypatch.setenv("VOYAGE_API_KEY", "dummy-key")
+
+    with pytest.raises(SystemExit) as error:
+        benchmark.main(["--db-url", "postgresql+asyncpg://invalid:invalid@127.0.0.1:1/invalid"])
+
+    assert error.value.code == 2
+    assert "--allow-voyage" in capsys.readouterr().err
+
+
+def test_allow_voyage_does_not_replace_the_required_key(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("EMBEDDINGS_PROVIDER", "voyage")
+
+    with pytest.raises(SystemExit) as error:
+        benchmark.main(
+            [
+                "--db-url",
+                "postgresql+asyncpg://invalid:invalid@127.0.0.1:1/invalid",
+                "--allow-voyage",
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "VOYAGE_API_KEY is required" in capsys.readouterr().err
 
 
 def test_threshold_keeps_calibration_hits_and_scores_negatives() -> None:

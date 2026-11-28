@@ -10,7 +10,7 @@ from redis.backoff import NoBackoff
 from redis.exceptions import RedisError
 from redis.retry import Retry
 
-from src.app.embeddings.bge_m3 import BGE_M3_REVISION
+from src.app.core.settings.embeddings import BGE_M3_REVISION
 
 pytestmark = pytest.mark.integration
 

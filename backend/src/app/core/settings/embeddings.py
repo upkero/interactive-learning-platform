@@ -17,22 +17,30 @@ from typing import Literal, Self
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from src.app.embeddings.bge_m3 import BGE_M3_REVISION
-
 EmbeddingsProvider = Literal["bge_m3", "voyage"]
+BGE_M3_REVISION = "5617a9f61b028005a4858fdac845db406aefb181"
 
 
-class EmbeddingsSettings(BaseSettings):
+class EmbeddingsModelSettings(BaseSettings):
     provider: EmbeddingsProvider = Field(
         default="bge_m3",
         description="Embedding model: bge_m3 (local, CPU) or voyage (API).",
     )
-    device: str = Field(default="cpu", description="Torch device for the local model.")
     revision: str = Field(
         default=BGE_M3_REVISION,
         min_length=1,
         description="Pinned model revision used for BGE-M3 weights and embedding cache isolation.",
     )
+
+    model_config = SettingsConfigDict(env_prefix="EMBEDDINGS_", env_file=".env", extra="ignore")
+
+
+class EmbeddingsPlanSettings(EmbeddingsModelSettings):
+    """Embedding configuration that is safe to load without paid-provider credentials."""
+
+
+class EmbeddingsSettings(EmbeddingsModelSettings):
+    device: str = Field(default="cpu", description="Torch device for the local model.")
     batch_size: int = Field(default=32, ge=1, description="Texts per embedder call.")
     cache_ttl_days: int = Field(default=30, ge=1, description="Lifetime of one cached vector.")
     cache_redis_url: str = Field(
@@ -56,6 +64,11 @@ class EmbeddingsSettings(BaseSettings):
         return self
 
     model_config = SettingsConfigDict(env_prefix="EMBEDDINGS_", env_file=".env", extra="ignore")
+
+
+@lru_cache(maxsize=1)
+def get_embeddings_plan_settings() -> EmbeddingsPlanSettings:
+    return EmbeddingsPlanSettings()
 
 
 @lru_cache(maxsize=1)

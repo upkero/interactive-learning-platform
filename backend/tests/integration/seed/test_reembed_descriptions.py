@@ -11,9 +11,9 @@ from sqlalchemy import select
 from src import cli
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.contracts.widgets import WidgetKind
-from src.app.core.settings.embeddings import EmbeddingsSettings
+from src.app.core.settings.embeddings import BGE_M3_REVISION, EmbeddingsSettings
 from src.app.embeddings import factory
-from src.app.embeddings.bge_m3 import BGE_M3_MODEL, BGE_M3_REVISION
+from src.app.embeddings.bge_m3 import BGE_M3_MODEL
 from src.app.exceptions.embeddings import EmbeddingGenerationError
 from src.app.models.widget_description import EMBEDDING_DIM, WidgetDescription
 from src.app.repositories.widget_description_repository import WidgetDescriptionRepository

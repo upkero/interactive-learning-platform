@@ -15,7 +15,12 @@ from redis.connection import Connection as RedisConnection
 from src.app.bootstrap import container as container_module
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.core.settings.celery import CelerySettings
-from src.app.core.settings.embeddings import EmbeddingsSettings
+from src.app.core.settings.embeddings import (
+    BGE_M3_REVISION,
+    EmbeddingsPlanSettings,
+    EmbeddingsSettings,
+    get_embeddings_plan_settings,
+)
 from src.app.core.settings.progress import ProgressSettings
 from src.app.core.settings.rate_limit import RateLimitSettings
 from src.app.core.settings.redis_isolation import validate_redis_isolation
@@ -48,7 +53,7 @@ def test_defaults_select_the_local_model_and_dedicated_cache_database() -> None:
 
     assert settings.provider == "bge_m3"
     assert settings.device == "cpu"
-    assert settings.revision == "5617a9f61b028005a4858fdac845db406aefb181"
+    assert settings.revision == BGE_M3_REVISION
     assert settings.batch_size == 32
     assert settings.cache_ttl_days == 30
     assert settings.cache_ttl_seconds == 30 * 24 * 3600
@@ -370,6 +375,26 @@ def test_environment_overrides_model_revision(monkeypatch: pytest.MonkeyPatch) -
     settings = _settings()
 
     assert settings.revision == revision
+
+
+def test_plan_settings_do_not_require_a_voyage_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("EMBEDDINGS_PROVIDER", "voyage")
+    get_embeddings_plan_settings.cache_clear()
+
+    settings = get_embeddings_plan_settings()
+
+    assert settings.provider == "voyage"
+    assert settings.revision == BGE_M3_REVISION
+    get_embeddings_plan_settings.cache_clear()
+
+
+def test_plan_settings_can_be_constructed_without_runtime_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("EMBEDDINGS_PROVIDER", "voyage")
+
+    settings = EmbeddingsPlanSettings(_env_file=None)
+
+    assert settings.provider == "voyage"
+    assert settings.revision == BGE_M3_REVISION
 
 
 def test_voyage_requires_a_key(monkeypatch: pytest.MonkeyPatch) -> None:

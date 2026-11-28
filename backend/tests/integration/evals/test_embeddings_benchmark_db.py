@@ -5,8 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from evals import embeddings_benchmark as benchmark
-from src.app.core.settings.embeddings import get_embeddings_settings
-from src.app.embeddings.bge_m3 import BGE_M3_REVISION
+from src.app.core.settings.embeddings import BGE_M3_REVISION, get_embeddings_settings
 
 
 @pytest.mark.integration

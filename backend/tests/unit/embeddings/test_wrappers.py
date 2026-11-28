@@ -12,9 +12,15 @@ from typing import Any, ClassVar
 import pytest
 from pydantic import SecretStr
 
-from src.app.embeddings.bge_m3 import BGE_M3_MODEL, BGE_M3_REVISION, BgeM3Embedder
+from src.app.core.settings.embeddings import BGE_M3_REVISION
+from src.app.embeddings import bge_m3
+from src.app.embeddings.bge_m3 import BGE_M3_MODEL, BgeM3Embedder
 from src.app.embeddings.voyage import VOYAGE_DIMENSION, VOYAGE_MODEL, VoyageEmbedder
 from src.app.exceptions.embeddings import EmbeddingConfigurationError
+
+
+def test_bge_m3_reexports_the_canonical_revision() -> None:
+    assert bge_m3.BGE_M3_REVISION == BGE_M3_REVISION
 
 
 def test_bge_m3_wraps_sentence_transformer(monkeypatch: pytest.MonkeyPatch) -> None:

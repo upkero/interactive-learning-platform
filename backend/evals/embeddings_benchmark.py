@@ -23,10 +23,9 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
 from src.app.contracts.solver.widget_candidate import WidgetMatch
-from src.app.core.settings.embeddings import get_embeddings_settings
+from src.app.core.settings.embeddings import BGE_M3_REVISION, get_embeddings_plan_settings, get_embeddings_settings
 from src.app.db.session import build_engine
 from src.app.embeddings.base import Embedder
-from src.app.embeddings.bge_m3 import BGE_M3_REVISION
 from src.app.embeddings.factory import create_embedder
 from src.app.embeddings.voyage import VoyageEmbedder
 from src.app.models.widget_description import EMBEDDING_DIM
@@ -365,7 +364,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             corpus = load_corpus(args.library, args.intents)
             if args.plan:
-                result = _plan(corpus, get_embeddings_settings().revision)
+                result = _plan(corpus, get_embeddings_plan_settings().revision)
             elif args.db_url:
                 result = asyncio.run(_run(corpus, args.db_url, args.allow_voyage))
             else:

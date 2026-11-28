@@ -9,9 +9,9 @@ import pytest
 from pydantic import SecretStr
 
 from src.app.bootstrap.container import ApplicationContainer
-from src.app.core.settings.embeddings import EmbeddingsSettings
+from src.app.core.settings.embeddings import BGE_M3_REVISION, EmbeddingsSettings
 from src.app.embeddings import factory
-from src.app.embeddings.bge_m3 import BGE_M3_DIMENSION, BGE_M3_MODEL, BGE_M3_REVISION
+from src.app.embeddings.bge_m3 import BGE_M3_DIMENSION, BGE_M3_MODEL
 from src.app.embeddings.voyage import VOYAGE_DIMENSION, VOYAGE_MODEL
 from src.app.exceptions.embeddings import EmbeddingConfigurationError
 from tests.support.fakes.cache.redis import FakeRedis

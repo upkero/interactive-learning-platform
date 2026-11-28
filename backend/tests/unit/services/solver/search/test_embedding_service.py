@@ -7,6 +7,7 @@ from collections.abc import Sequence
 
 import pytest
 
+from src.app.core.settings.embeddings import BGE_M3_REVISION
 from src.app.embeddings.base import Embedder
 from src.app.exceptions.embeddings import (
     EmbeddingGenerationError,
@@ -17,7 +18,7 @@ from src.app.services.solver.search.embedding_service import EmbeddingService
 from tests.support.fakes.cache.redis import FakeRedis
 from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
 
-REVISION = "5617a9f61b028005a4858fdac845db406aefb181"
+REVISION = BGE_M3_REVISION
 
 
 class FakeEmbedder(Embedder):

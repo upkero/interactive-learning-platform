@@ -8,10 +8,10 @@ normalised, so cosine distance and dot product agree.
 
 from collections.abc import Sequence
 
+from src.app.core.settings.embeddings import BGE_M3_REVISION
 from src.app.exceptions.embeddings import EmbeddingConfigurationError
 
 BGE_M3_MODEL = "BAAI/bge-m3"
-BGE_M3_REVISION = "5617a9f61b028005a4858fdac845db406aefb181"
 BGE_M3_DIMENSION = 1024
 
 
