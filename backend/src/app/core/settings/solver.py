@@ -45,6 +45,17 @@ class SolverSettings(BaseSettings):
         le=MAX_KEY_TERMS,
         description="Upper bound of key terms per part; rendered into the prompt (story 2.2).",
     )
+    search_overfetch: int = Field(
+        default=40,
+        ge=1,
+        description="Descriptions taken from HNSW before DISTINCT ON (story 2.3).",
+    )
+    search_max_distance: float = Field(
+        default=0.4449,
+        ge=0.0,
+        le=2.0,
+        description="Cosine-distance cutoff calibrated for BGE-M3 (2.3.1). Override for a different model.",
+    )
 
     model_config = SettingsConfigDict(env_prefix="SOLVER_", env_file=".env", extra="ignore")
 

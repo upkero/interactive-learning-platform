@@ -8,7 +8,11 @@ from kombu import Exchange, Queue
 from src.app.core.logging import setup_logging
 from src.app.core.settings.app import get_app_settings
 from src.app.core.settings.celery import get_celery_settings
+from src.app.core.settings.embeddings import get_embeddings_settings
 from src.app.core.settings.logging import get_logging_settings
+from src.app.core.settings.progress import get_progress_settings
+from src.app.core.settings.rate_limit import get_rate_limit_settings
+from src.app.core.settings.redis_isolation import validate_redis_isolation
 from src.app.core.settings.smtp import get_smtp_settings, validate_smtp_config
 from src.app.core.settings.solver import get_solver_settings
 from src.app.observability import worker_metrics  # noqa: F401
@@ -31,6 +35,12 @@ def configure_worker_logging(**kwargs: object) -> None:
 
 get_solver_settings()  # Validate before a worker can consume any messages.
 validate_smtp_config(get_app_settings().environment, get_smtp_settings())
+validate_redis_isolation(
+    embeddings_cache_redis_url=get_embeddings_settings().cache_redis_url,
+    celery_broker_url=get_celery_settings().broker_url,
+    progress_redis_url=str(get_progress_settings().url),
+    rate_limit_storage_uri=get_rate_limit_settings().storage_uri,
+)
 celery_app = Celery(
     "grasp",
     broker=get_celery_settings().broker_url,

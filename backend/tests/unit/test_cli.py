@@ -5,10 +5,15 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
+from pydantic import RedisDsn, ValidationError
 
 from src import cli
 from src.app.core.settings.app import get_app_settings
+from src.app.core.settings.celery import CelerySettings
+from src.app.core.settings.embeddings import EmbeddingsSettings
+from src.app.core.settings.progress import ProgressSettings
+from src.app.core.settings.rate_limit import RateLimitSettings
+from src.app.exceptions.redis import RedisIsolationConfigurationError
 
 pytestmark = pytest.mark.unit
 
@@ -104,3 +109,65 @@ def test_settings_errors_are_not_reported_as_catalog_errors(monkeypatch: pytest.
 
     with pytest.raises(ValidationError, match="db_pool_size"):
         cli.main(["seed-primitives", "--catalog", str(VALID_CATALOG)])
+
+
+def test_reembed_descriptions_command_is_registered() -> None:
+    """The re-embedding command is parsed without touching the database."""
+    args = cli.build_parser().parse_args(["reembed-descriptions"])
+
+    assert args.command == "reembed-descriptions"
+
+
+@pytest.mark.parametrize(
+    ("colliding_role", "expected_setting"),
+    [
+        ("broker", "CELERY_BROKER_URL"),
+        ("progress", "REDIS_PROGRESS_URL"),
+        ("rate", "RATE_LIMIT_STORAGE_URI"),
+    ],
+)
+async def test_reembed_descriptions_rejects_shared_redis_database_before_opening_database(
+    colliding_role: str,
+    expected_setting: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def forbidden(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("build_engine must not be called for unsafe Redis isolation")
+
+    broker_url = "redis://localhost:6379/0"
+    progress_url = "redis://localhost:6379/1"
+    rate_limit_uri = "redis://localhost:6379/2"
+    if colliding_role == "broker":
+        broker_url = "redis://localhost:6379/3"
+    elif colliding_role == "progress":
+        progress_url = "redis://localhost:6379/3"
+    else:
+        assert colliding_role == "rate"
+        rate_limit_uri = "redis://localhost:6379/3"
+
+    monkeypatch.setattr(cli, "build_engine", forbidden)
+    monkeypatch.setattr(
+        cli,
+        "get_embeddings_settings",
+        lambda: EmbeddingsSettings(cache_redis_url="redis://localhost:6379/3", _env_file=None),
+    )
+    monkeypatch.setattr(
+        cli,
+        "get_celery_settings",
+        lambda: CelerySettings(broker_url=broker_url, _env_file=None),
+    )
+    monkeypatch.setattr(
+        cli,
+        "get_progress_settings",
+        lambda: ProgressSettings(url=RedisDsn(progress_url), _env_file=None),
+    )
+    monkeypatch.setattr(
+        cli,
+        "get_rate_limit_settings",
+        lambda: RateLimitSettings(storage_uri=rate_limit_uri, _env_file=None),
+    )
+
+    with pytest.raises(RedisIsolationConfigurationError, match="same Redis logical database") as error:
+        await cli._run_reembed_descriptions()
+
+    assert expected_setting in str(error.value)

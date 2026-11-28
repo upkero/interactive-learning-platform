@@ -5,6 +5,7 @@ from dataclasses import replace
 from typing import Any
 from uuid import UUID, uuid4
 
+from src.app.contracts.solver.widget_candidate import WidgetWithDescription
 from src.app.contracts.widgets import (
     PrimitiveRecord,
     ReportReason,
@@ -85,6 +86,16 @@ class FakeWidgetRepository(WidgetRepositoryProtocol):
     async def search_active(self, embedding: list[float], limit: int) -> list[WidgetRecord]:
         return [row for row in self._widgets.values() if row.status is WidgetStatus.ACTIVE][:limit]
 
+    async def get_many_with_main_description(
+        self,
+        widget_ids: Sequence[UUID],
+    ) -> dict[UUID, WidgetWithDescription]:
+        return {
+            widget_id: WidgetWithDescription(widget=row, description=f"Main description of {widget_id}")
+            for widget_id in dict.fromkeys(widget_ids)
+            if (row := self._widgets.get(widget_id)) is not None and row.status is WidgetStatus.ACTIVE
+        }
+
     async def create(
         self,
         *,
@@ -146,6 +157,20 @@ class FakeWidgetDescriptionRepository(WidgetDescriptionRepositoryProtocol):
 
     async def list_by_widget(self, widget_id: UUID) -> list[WidgetDescriptionRecord]:
         return [d for d in self._descriptions.values() if d.widget_id == widget_id]
+
+    async def list_batch(self, *, after_id: UUID | None, limit: int) -> list[WidgetDescriptionRecord]:
+        ordered = sorted(self._descriptions.values(), key=lambda description: description.id)
+        if after_id is not None:
+            ordered = [description for description in ordered if description.id > after_id]
+        return ordered[:limit]
+
+    async def lock_for_reembedding(self) -> None:
+        """The in-memory fake has no transaction lock to acquire."""
+
+    async def set_embedding(self, description_id: UUID, embedding: list[float]) -> None:
+        row = self._descriptions.get(description_id)
+        if row is not None:
+            self._descriptions[description_id] = replace(row, embedding=embedding)
 
 
 class FakeWidgetUsageRepository(WidgetUsageRepositoryProtocol):

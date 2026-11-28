@@ -5,7 +5,7 @@ from datetime import timedelta
 from uuid import UUID
 
 from pydantic import JsonValue
-from sqlalchemy import exists, func, select, update
+from sqlalchemy import exists, func, inspect, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,7 +49,13 @@ class DocumentPartRepository(DocumentPartRepositoryProtocol):
 
     async def get(self, part_id: UUID) -> PartRecord | None:
         row = await self._session.get(DocumentPart, part_id)
-        return self._to_record(row) if row is not None else None
+        if row is None:
+            return None
+        # A SQL expression in an UPDATE can expire fields on a cached ORM row.
+        expired = inspect(row).expired_attributes
+        if expired:
+            await self._session.refresh(row, attribute_names=sorted(expired))
+        return self._to_record(row)
 
     async def lock(self, part_id: UUID) -> PartRecord | None:
         stmt = select(DocumentPart).where(DocumentPart.id == part_id).with_for_update()
