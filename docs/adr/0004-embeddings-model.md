@@ -160,7 +160,7 @@ Synthetic seed `Random(7)`: 200 виджетов, 1000 описаний, 180 а�
 `test_widget_search_repository.py` прошли с `-W error`; HNSW Index Scan
 подтверждён. Отдельно покрыт случай `hnsw.ef_search=150`.
 
-Окружение — локальный CI/Docker proxy на Windows 11 (Docker Engine 28.4.0),
+Окружение — локальный Docker proxy на Windows 11 (Docker Engine 28.4.0),
 PostgreSQL 17.9 с pgvector 0.8.2, Redis 7.4.12, SQLAlchemy 2.1.5 и Python
 3.12.16. Измерен только service-level путь PostgreSQL/HNSW с fake embedding;
 latency реального embedding, HTTP и Redis в него не входят. Это не
