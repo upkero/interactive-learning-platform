@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from typing import Any, Protocol
 from uuid import UUID
 
+from src.app.contracts.solver.widget_candidate import WidgetWithDescription
 from src.app.contracts.widgets import (
     PrimitiveRecord,
     ReportReason,
@@ -55,6 +56,16 @@ class WidgetRepositoryProtocol(Protocol):
         created_from_part_id: UUID | None = None,
     ) -> WidgetRecord: ...
 
+    async def create_config(
+        self,
+        *,
+        primitive_id: str,
+        mode: str,
+        params: dict[str, Any],
+        version: int,
+        created_from_part_id: UUID,
+    ) -> UUID: ...
+
     async def set_status(self, widget_id: UUID, status: WidgetStatus) -> None: ...
 
     async def lock_for_update(self, widget_id: UUID) -> WidgetRecord | None: ...
@@ -62,6 +73,13 @@ class WidgetRepositoryProtocol(Protocol):
     async def exclude_if_active(self, widget_id: UUID) -> bool: ...
 
     async def search_active(self, embedding: list[float], limit: int) -> list[WidgetRecord]: ...
+
+    async def get_many_with_main_description(
+        self,
+        widget_ids: Sequence[UUID],
+    ) -> dict[UUID, WidgetWithDescription]: ...
+
+    async def list_active_configs(self, primitive_id: str, mode: str) -> list[WidgetRecord]: ...
 
 
 class WidgetDescriptionRepositoryProtocol(Protocol):
@@ -77,6 +95,12 @@ class WidgetDescriptionRepositoryProtocol(Protocol):
     ) -> WidgetDescriptionRecord: ...
 
     async def list_by_widget(self, widget_id: UUID) -> list[WidgetDescriptionRecord]: ...
+
+    async def list_batch(self, *, after_id: UUID | None, limit: int) -> list[WidgetDescriptionRecord]: ...
+
+    async def lock_for_reembedding(self) -> None: ...
+
+    async def set_embedding(self, description_id: UUID, embedding: list[float]) -> None: ...
 
 
 class WidgetUsageRepositoryProtocol(Protocol):

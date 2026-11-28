@@ -2,7 +2,8 @@
 
 Commands:
 - ``seed-dev``  — fill the database with demo users/documents/widgets;
-- ``seed-primitives`` — sync the primitives catalog from @grasp/primitives.
+- ``seed-primitives`` — sync the primitives catalog from @grasp/primitives;
+- ``reembed-descriptions`` — recompute widget-description vectors (2.3).
 
 Usage: ``python -m src.cli <command> <flags>``
 """
@@ -13,11 +14,19 @@ import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from uuid import UUID
 
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.core.settings.app import get_app_settings
+from src.app.core.settings.celery import get_celery_settings
+from src.app.core.settings.embeddings import get_embeddings_settings
+from src.app.core.settings.progress import get_progress_settings
+from src.app.core.settings.rate_limit import get_rate_limit_settings
+from src.app.core.settings.redis_isolation import validate_redis_isolation
 from src.app.core.settings.seed import get_seed_settings
 from src.app.db.session import build_engine, build_session_factory
+from src.app.interfaces.repositories.widgets import WidgetDescriptionRepositoryProtocol
+from src.app.repositories.widget_description_repository import WidgetDescriptionRepository
 from src.app.seed.dev_seed import seed_dev
 from src.app.seed.primitives_seed import load_catalog, resolve_catalog_path, seed_primitives
 
@@ -38,6 +47,48 @@ async def _run_seed_dev(fake_embeddings: bool) -> int:
             fake_embeddings=fake_embeddings,
         )
         print(f"seed-dev: {outcome}")
+    finally:
+        await container.close()
+        await engine.dispose()
+    return 0
+
+
+async def _run_reembed_descriptions() -> int:
+    """Recompute every widget description with the configured model.
+
+    Process bounded pages in one transaction so search sees a complete set
+    of vectors before or after the model change. Readers may continue during
+    the command while writes to widget descriptions wait for the transaction.
+    """
+    validate_redis_isolation(
+        embeddings_cache_redis_url=get_embeddings_settings().cache_redis_url,
+        celery_broker_url=get_celery_settings().broker_url,
+        progress_redis_url=str(get_progress_settings().url),
+        rate_limit_storage_uri=get_rate_limit_settings().storage_uri,
+    )
+    app_settings = get_app_settings()
+    engine = build_engine(str(app_settings.db_url), null_pool=True)
+    container = ApplicationContainer()
+    updated = 0
+    after: UUID | None = None
+    try:
+        session_factory = build_session_factory(engine)
+        async with session_factory() as session, session.begin():
+            repository: WidgetDescriptionRepositoryProtocol = WidgetDescriptionRepository(session)
+            await repository.lock_for_reembedding()
+            while True:
+                batch = await repository.list_batch(
+                    after_id=after,
+                    limit=container.embeddings_settings.batch_size,
+                )
+                if not batch:
+                    break
+                vectors = await container.embedding_service.embed([row.text for row in batch])
+                for row, vector in zip(batch, vectors, strict=True):
+                    await repository.set_embedding(row.id, vector)
+                updated += len(batch)
+                after = batch[-1].id
+        print(f"reembed-descriptions: updated {updated} rows with {container.embedder.model_name}")
     finally:
         await container.close()
         await engine.dispose()
@@ -97,6 +148,10 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Path to catalog.json (default: backend resources).",
     )
+    subcommands.add_parser(
+        "reembed-descriptions",
+        help="Recompute widget-description embeddings with the configured model.",
+    )
     subcommands.add_parser("export-openapi", help="Export the API schema to backend/openapi.json.")
     return parser
 
@@ -109,6 +164,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return asyncio.run(_run_seed_dev(fake_embeddings=args.fake_embeddings))
     if args.command == "seed-primitives":
         return asyncio.run(_run_seed_primitives(catalog=args.catalog))
+    if args.command == "reembed-descriptions":
+        return asyncio.run(_run_reembed_descriptions())
     if args.command == "export-openapi":
         from src.main import app
 

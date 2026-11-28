@@ -5,9 +5,11 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.app.contracts.solver.widget_candidate import WidgetWithDescription
 from src.app.contracts.widgets import WidgetKind, WidgetRecord, WidgetStatus
 from src.app.exceptions.widgets import WidgetConstraintError, WidgetsIntegrityError
 from src.app.interfaces.repositories.widgets import WidgetRepositoryProtocol
@@ -78,6 +80,38 @@ class WidgetRepository(WidgetRepositoryProtocol):
         rows = (await self._session.scalars(stmt)).all()
         return [self._to_record(row) for row in rows]
 
+    async def get_many_with_main_description(
+        self,
+        widget_ids: Sequence[UUID],
+    ) -> dict[UUID, WidgetWithDescription]:
+        """Active widgets with their main description in one statement.
+
+        Select one description per widget before loading the widget row.
+        Prefer the main description and retain the earliest paraphrase for data
+        without a main description.
+        """
+        if not widget_ids:
+            return {}
+        description = (
+            select(WidgetDescription.widget_id, WidgetDescription.text)
+            .where(WidgetDescription.widget_id.in_(widget_ids))
+            .ext(distinct_on(WidgetDescription.widget_id))
+            .order_by(
+                WidgetDescription.widget_id,
+                WidgetDescription.is_paraphrase,
+                WidgetDescription.created_at,
+                WidgetDescription.id,
+            )
+            .subquery()
+        )
+        stmt = (
+            select(Widget, description.c.text)
+            .join(description, description.c.widget_id == Widget.id)
+            .where(Widget.status == WidgetStatus.ACTIVE.value)
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return {row.id: WidgetWithDescription(widget=self._to_record(row), description=text) for row, text in rows}
+
     async def create(
         self,
         *,
@@ -112,3 +146,36 @@ class WidgetRepository(WidgetRepositoryProtocol):
         if row is not None:
             row.status = status.value
             await self._session.flush()
+
+    async def create_config(
+        self,
+        *,
+        primitive_id: str,
+        mode: str,
+        params: dict[str, Any],
+        version: int,
+        created_from_part_id: UUID,
+    ) -> UUID:
+        """Create a config widget with version from primitive."""
+        row = Widget(
+            kind=WidgetKind.CONFIG.value,
+            primitive_id=primitive_id,
+            mode=mode,
+            params=params,
+            version=version,
+            created_from_part_id=created_from_part_id,
+        )
+        self._session.add(row)
+        await self._session.flush()
+        return row.id
+
+    async def list_active_configs(self, primitive_id: str, mode: str) -> list[WidgetRecord]:
+        """List active config widgets for a primitive+mode (for deduplication)."""
+        stmt = select(Widget).where(
+            Widget.kind == WidgetKind.CONFIG.value,
+            Widget.primitive_id == primitive_id,
+            Widget.mode == mode,
+            Widget.status == WidgetStatus.ACTIVE.value,
+        )
+        rows = (await self._session.scalars(stmt)).all()
+        return [self._to_record(row) for row in rows]

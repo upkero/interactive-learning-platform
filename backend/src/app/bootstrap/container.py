@@ -5,10 +5,12 @@ from logging import getLogger
 import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from src.app.contracts.widgets import PrimitiveRecord
 from src.app.core.clock import SystemClock
 from src.app.core.settings.app import get_app_settings
 from src.app.core.settings.auth import AuthSettings, get_auth_settings
 from src.app.core.settings.celery import get_celery_settings
+from src.app.core.settings.embeddings import EmbeddingsSettings, get_embeddings_settings
 from src.app.core.settings.ingest import IngestSettings, get_ingest_settings
 from src.app.core.settings.llm import CheapLLMSettings, LLMSettings, get_cheap_llm_settings, get_llm_settings
 from src.app.core.settings.processing import ProcessingSettings, get_processing_settings
@@ -16,10 +18,13 @@ from src.app.core.settings.progress import get_progress_settings
 from src.app.core.settings.quota import QuotaSettings, get_quota_settings
 from src.app.core.settings.reports import ReportsSettings, get_reports_settings
 from src.app.core.settings.smtp import get_smtp_settings
+from src.app.core.settings.solver import SolverSettings, get_solver_settings
 from src.app.core.settings.storage import get_storage_settings
 from src.app.core.settings.upload import get_upload_settings
 from src.app.db.parsing_lease import PostgresParsingLease
 from src.app.db.session import build_engine, build_session_factory
+from src.app.embeddings.base import Embedder
+from src.app.embeddings.factory import LazyEmbedder
 from src.app.ingest.images import ImageStore
 from src.app.ingest.parsers.base import DocumentParser as IngestDocumentParser
 from src.app.ingest.parsers.base import ParserRegistry
@@ -28,6 +33,7 @@ from src.app.ingest.parsers.markdown_parser import MarkdownParser
 from src.app.ingest.part_planner import DocumentPartPlanner
 from src.app.ingest.splitting import SplitLimits
 from src.app.ingest.tokens import get_token_counter
+from src.app.interfaces.embeddings.embedding_service import EmbeddingServiceInterface
 from src.app.interfaces.llm.llm_client import LLMClient
 from src.app.interfaces.observability.metrics_collector import MetricsCollector
 from src.app.interfaces.services.part_pipeline import PartPipeline
@@ -42,11 +48,14 @@ from src.app.repositories.document_part_repository import DocumentPartRepository
 from src.app.repositories.document_repository import DocumentRepository
 from src.app.repositories.generation_ledger_repository import GenerationLedgerRepository
 from src.app.repositories.image_repository import ImageRepository
+from src.app.repositories.primitive_repository import PrimitiveRepository
 from src.app.repositories.quiz_attempt_repository import QuizAttemptRepository
 from src.app.repositories.report_repository import ReportRepository
 from src.app.repositories.user_material_repository import UserMaterialRepository
 from src.app.repositories.user_repository import UserRepository
+from src.app.repositories.widget_description_repository import WidgetDescriptionRepository
 from src.app.repositories.widget_repository import WidgetRepository
+from src.app.repositories.widget_search_repository import WidgetSearchRepository
 from src.app.repositories.widget_usage_repository import WidgetUsageRepository
 from src.app.services.auth.auth_service import AuthService
 from src.app.services.documents.document_ingest_runner import DocumentIngestRunner
@@ -69,9 +78,19 @@ from src.app.services.quota.quota_service import QuotaService
 from src.app.services.reports.report_service import ReportService
 from src.app.services.sharing.sharing_service import SharingService
 from src.app.services.solver.library.library_normalizer import LibraryNormalizer
+from src.app.services.solver.library.primitive_catalog import PrimitiveCatalog
+from src.app.services.solver.library.widget_library import WidgetLibrary
 from src.app.services.solver.pipeline.part_recovery import PartRecovery
 from src.app.services.solver.pipeline.stub_pipeline import StubPipeline
 from src.app.services.solver.pipeline.watchdog import Watchdog
+from src.app.services.solver.resolver.config_assembler import ConfigAssembler
+from src.app.services.solver.resolver.config_validator import ConfigValidator
+from src.app.services.solver.resolver.describer import Describer
+from src.app.services.solver.resolver.reranker import Reranker
+from src.app.services.solver.resolver.resolver import InstrumentedResolver
+from src.app.services.solver.search.embedding_service import EmbeddingService
+from src.app.services.solver.search.instrumented_embedding_service import InstrumentedEmbeddingService
+from src.app.services.solver.search.widget_search import WidgetSearch
 from src.app.services.users.profile_service import ProfileService
 from src.app.storage.s3_object_storage_client import S3ObjectStorageClient, build_ping_client, build_s3_client
 from src.app.tasks.dispatcher import CeleryTaskDispatcher
@@ -325,6 +344,126 @@ class ApplicationContainer:
         return get_cheap_llm_settings()
 
     @cached_property
+    def embeddings_settings(self) -> EmbeddingsSettings:
+        return get_embeddings_settings()
+
+    @cached_property
+    def solver_settings(self) -> SolverSettings:
+        return get_solver_settings()
+
+    @cached_property
+    def embeddings_redis(self) -> aioredis.Redis:
+        """Dedicated cache DB: flushing it must not touch broker, progress, or rate limits."""
+        client: aioredis.Redis = aioredis.Redis.from_url(self.embeddings_settings.cache_redis_url)
+        return client
+
+    @cached_property
+    def embedder(self) -> Embedder:
+        return LazyEmbedder(self.embeddings_settings)
+
+    @cached_property
+    def embedding_service(self) -> EmbeddingServiceInterface:
+        settings = self.embeddings_settings
+        return InstrumentedEmbeddingService(
+            service=EmbeddingService(
+                embedder=self.embedder,
+                redis=self.embeddings_redis,
+                metrics=self.metrics_collector,
+                revision=settings.revision,
+                batch_size=settings.batch_size,
+                ttl_seconds=settings.cache_ttl_seconds,
+            ),
+            metrics=self.metrics_collector,
+        )
+
+    @cached_property
+    def widget_search(self) -> WidgetSearch:
+        """Widget search by intent."""
+        return WidgetSearch(
+            session_factory=self.session_factory,
+            embeddings=self.embedding_service,
+            catalog=self.primitive_catalog,
+            settings=self.solver_settings,
+            metrics=self.metrics_collector,
+            search_repo=WidgetSearchRepository,
+            widget_repo=WidgetRepository,
+            primitive_repo=PrimitiveRepository,
+        )
+
+    @cached_property
+    def primitive_catalog(self) -> PrimitiveCatalog:
+        """Primitive catalog for soft search filter (built once per process)."""
+        # The catalog is populated from the database on first access
+        # For now, return empty catalog; will be synced in story 2.4
+        return PrimitiveCatalog()
+
+    @cached_property
+    def reranker(self) -> Reranker:
+        """Cheap model reranker for widget candidates (story 2.4.1)."""
+        return Reranker(cheap_llm=self.cheap_llm)
+
+    @cached_property
+    def config_assembler(self) -> ConfigAssembler:
+        """Builds and fixes widget configurations (story 2.4.2, 2.4.3)."""
+        assembler = ConfigAssembler(
+            main_llm=self.main_llm,
+            catalog=self.primitive_catalog,
+        )
+        # Inject primitive repo for schema lookups
+        assembler._get_primitive_record = self._get_primitive_record_impl  # type: ignore[method-assign]
+        return assembler
+
+    async def _get_primitive_record_impl(self, primitive_id: str) -> PrimitiveRecord | None:
+        """Get primitive record from repository."""
+
+        async with self.session_factory() as session:
+            repo = PrimitiveRepository(session)
+            return await repo.get(primitive_id)
+
+    @cached_property
+    def config_validator(self) -> ConfigValidator:
+        """Validates configurations against schema and intent (story 2.4.4)."""
+        return ConfigValidator(cheap_llm=self.cheap_llm)
+
+    @cached_property
+    def widget_library(self) -> WidgetLibrary:
+        """Facade for widget library operations (story 2.4)."""
+        return WidgetLibrary(
+            session_factory=self.session_factory,
+            widget_repo=WidgetRepository,
+            widget_desc_repo=WidgetDescriptionRepository,
+            widget_usage_repo=WidgetUsageRepository,
+            primitive_repo=PrimitiveRepository,
+        )
+
+    @cached_property
+    def describer(self) -> Describer:
+        """Generates descriptions for new widgets (story 2.4.6)."""
+        return Describer(cheap_llm=self.cheap_llm)
+
+    @cached_property
+    def widget_resolver(self) -> InstrumentedResolver:
+        """Full resolver with degradation and instrumentation (story 2.4)."""
+        return InstrumentedResolver(
+            search=self.widget_search,
+            reranker=self.reranker,
+            assembler=self.config_assembler,
+            validator=self.config_validator,
+            library=self.widget_library,
+            describer=self.describer,
+            code_generator=None,  # Story 2.5
+            metrics=self.metrics_collector,
+            decision_log=self.decision_log,
+        )
+
+    @cached_property
+    def decision_log(self) -> DecisionLog:
+        """Decision log for resolver observability (story 1.8)."""
+        from src.app.observability.decision_log import DecisionLog
+
+        return DecisionLog(metrics=self.metrics_collector)
+
+    @cached_property
     def metrics_collector(self) -> MetricsCollector:
         return PrometheusMetricsCollector()
 
@@ -428,7 +567,7 @@ class ApplicationContainer:
             dependency_id = id(dependency)
             if dependency_id in closed_dependency_ids:
                 continue
-            close = getattr(dependency, "close", None)
+            close = getattr(dependency, "aclose", None) or getattr(dependency, "close", None)
             if callable(close):
                 result = close()
                 if inspect.isawaitable(result):

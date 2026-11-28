@@ -20,6 +20,9 @@ async def test_transition_updates_stage_changed_at(
     """A successful transition must refresh stage_changed_at (watchdog anchor)."""
     _, _, part_id = part_ids
     async with session_factory() as session, session.begin():
+        # Keep the row in the identity map across the SQL UPDATE.
+        identity = await session.get(DocumentPart, part_id)
+        assert identity is not None
         repository = DocumentPartRepository(session)
         before = await repository.get(part_id)
         assert before is not None
@@ -32,18 +35,40 @@ async def test_transition_updates_stage_changed_at(
         assert after.status is PartStatus.MAIN_PASS
         assert after.attempts == before.attempts + 1
         assert after.stage_changed_at > before.stage_changed_at
+        assert identity.stage_changed_at == after.stage_changed_at
 
 
 async def test_transition_sets_published_at(session_factory: SessionFactory, part_ids: tuple[UUID, UUID, UUID]) -> None:
     """Transitioning to ``published`` must stamp published_at."""
     _, _, part_id = part_ids
     async with session_factory() as session, session.begin():
+        identity = await session.get(DocumentPart, part_id)
+        assert identity is not None
         repository = DocumentPartRepository(session)
         ok = await repository.transition(part_id, expected=frozenset({PartStatus.QUEUED}), to=PartStatus.PUBLISHED)
         assert ok is True
         published = await repository.get(part_id)
         assert published is not None
         assert published.published_at is not None
+        assert identity.published_at == published.published_at
+
+
+async def test_touch_refreshes_loaded_stage_changed_at(
+    session_factory: SessionFactory, part_ids: tuple[UUID, UUID, UUID]
+) -> None:
+    _, _, part_id = part_ids
+    async with session_factory() as session, session.begin():
+        identity = await session.get(DocumentPart, part_id)
+        assert identity is not None
+        before = identity.stage_changed_at
+        repository = DocumentPartRepository(session)
+
+        await repository.touch(part_id)
+
+        after = await repository.get(part_id)
+        assert after is not None
+        assert after.stage_changed_at > before
+        assert identity.stage_changed_at == after.stage_changed_at
 
 
 async def test_transition_from_unexpected_status_is_rejected(
