@@ -360,6 +360,7 @@ class ApplicationContainer:
                 embedder=self.embedder,
                 redis=self.embeddings_redis,
                 metrics=self.metrics_collector,
+                revision=settings.revision,
                 batch_size=settings.batch_size,
                 ttl_seconds=settings.cache_ttl_seconds,
             ),

@@ -10,6 +10,8 @@ from redis.backoff import NoBackoff
 from redis.exceptions import RedisError
 from redis.retry import Retry
 
+from src.app.embeddings.bge_m3 import BGE_M3_REVISION
+
 pytestmark = pytest.mark.integration
 
 _RATE_LIMIT_URI = "redis://localhost:6379/12"
@@ -41,7 +43,7 @@ def test_flushing_embedding_cache_does_not_remove_rate_limit_keys() -> None:
 
         suffix = uuid4().hex
         rate_limit_key = f"grasp:ratelimit:{suffix}"
-        cache_key = f"emb:BAAI/bge-m3:{suffix}"
+        cache_key = f"emb:BAAI/bge-m3:{BGE_M3_REVISION}:{suffix}"
         try:
             assert rate_limits.set(rate_limit_key, "counter")
             assert cache.set(cache_key, "vector")

@@ -26,6 +26,7 @@ from src.app.contracts.solver.widget_candidate import WidgetMatch
 from src.app.core.settings.embeddings import get_embeddings_settings
 from src.app.db.session import build_engine
 from src.app.embeddings.base import Embedder
+from src.app.embeddings.bge_m3 import BGE_M3_REVISION
 from src.app.embeddings.factory import create_embedder
 from src.app.embeddings.voyage import VoyageEmbedder
 from src.app.models.widget_description import EMBEDDING_DIM
@@ -101,9 +102,14 @@ def _rows[T: BaseModel](contents: bytes, path: Path, model: type[T]) -> list[T]:
     return rows
 
 
+def _canonical_jsonl_bytes(contents: bytes) -> bytes:
+    """Normalize JSONL line endings so corpus fingerprints are platform-independent."""
+    return contents.replace(b"\r\n", b"\n")
+
+
 def load_corpus(library: Path, intents: Path) -> Corpus:
-    library_bytes = library.read_bytes()
-    intent_bytes = intents.read_bytes()
+    library_bytes = _canonical_jsonl_bytes(library.read_bytes())
+    intent_bytes = _canonical_jsonl_bytes(intents.read_bytes())
     widgets = _rows(library_bytes, library, Widget)
     queries = _rows(intent_bytes, intents, Intent)
     ids = {widget.widget_id for widget in widgets}
@@ -279,6 +285,7 @@ async def _run(corpus: Corpus, db_url: str, allow_voyage: bool) -> dict[str, obj
         },
         "provider": settings.provider,
         "model": embedder.model_name,
+        "revision": settings.revision,
         "corpus_sha256": corpus.fingerprint,
         "batch_size": BATCH_SIZE,
         "embedding_batches": math.ceil(len(corpus.texts) / BATCH_SIZE),
@@ -318,7 +325,7 @@ def _compare(paths: Sequence[Path]) -> dict[str, object]:
     return {"voyage_minus_bge_recall_at_5_pp": round(100 * delta, 6), "recommended_provider": selected}
 
 
-def _plan(corpus: Corpus) -> dict[str, object]:
+def _plan(corpus: Corpus, revision: str = BGE_M3_REVISION) -> dict[str, object]:
     texts = corpus.texts
     utf8_bytes = sum(len(value.encode("utf-8")) for value in texts)
     languages = {widget.widget_id: widget.language for widget in corpus.widgets}
@@ -331,6 +338,7 @@ def _plan(corpus: Corpus) -> dict[str, object]:
         ),
         "no_match_intents": sum(intent.widget_id is None for intent in corpus.intents),
         "corpus_sha256": corpus.fingerprint,
+        "revision": revision,
         "embedding_inputs": len(texts),
         "embedding_batches": math.ceil(len(texts) / BATCH_SIZE),
         "full_latency_batches": len(texts) // BATCH_SIZE,
@@ -357,7 +365,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             corpus = load_corpus(args.library, args.intents)
             if args.plan:
-                result = _plan(corpus)
+                result = _plan(corpus, get_embeddings_settings().revision)
             elif args.db_url:
                 result = asyncio.run(_run(corpus, args.db_url, args.allow_voyage))
             else:

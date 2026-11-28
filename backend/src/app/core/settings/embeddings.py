@@ -6,9 +6,9 @@ vectors, so one pgvector column serves either model.
 
 The cache lives in a separate Redis database (``/3`` by default) so that
 flushing it cannot touch the Celery broker, progress streams, or rate-limit
-counters. The model
-name is part of every cache key; switching providers does not require a
-cache flush, only ``python -m src.cli reembed-descriptions`` for the table.
+counters. The model name and revision are part of every cache key; switching
+providers or model revisions does not require a cache flush, only
+``python -m src.cli reembed-descriptions`` for the table.
 """
 
 from functools import lru_cache
@@ -16,6 +16,8 @@ from typing import Literal, Self
 
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from src.app.embeddings.bge_m3 import BGE_M3_REVISION
 
 EmbeddingsProvider = Literal["bge_m3", "voyage"]
 
@@ -26,6 +28,11 @@ class EmbeddingsSettings(BaseSettings):
         description="Embedding model: bge_m3 (local, CPU) or voyage (API).",
     )
     device: str = Field(default="cpu", description="Torch device for the local model.")
+    revision: str = Field(
+        default=BGE_M3_REVISION,
+        min_length=1,
+        description="Pinned model revision used for BGE-M3 weights and embedding cache isolation.",
+    )
     batch_size: int = Field(default=32, ge=1, description="Texts per embedder call.")
     cache_ttl_days: int = Field(default=30, ge=1, description="Lifetime of one cached vector.")
     cache_redis_url: str = Field(

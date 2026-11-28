@@ -1,7 +1,9 @@
 """Unit tests of embedder construction and process-wide caching (story 2.3)."""
 
+import sys
 from collections.abc import Iterator, Sequence
 from threading import get_ident
+from types import ModuleType
 
 import pytest
 from pydantic import SecretStr
@@ -9,7 +11,7 @@ from pydantic import SecretStr
 from src.app.bootstrap.container import ApplicationContainer
 from src.app.core.settings.embeddings import EmbeddingsSettings
 from src.app.embeddings import factory
-from src.app.embeddings.bge_m3 import BGE_M3_DIMENSION, BGE_M3_MODEL
+from src.app.embeddings.bge_m3 import BGE_M3_DIMENSION, BGE_M3_MODEL, BGE_M3_REVISION
 from src.app.embeddings.voyage import VOYAGE_DIMENSION, VOYAGE_MODEL
 from src.app.exceptions.embeddings import EmbeddingConfigurationError
 from tests.support.fakes.cache.redis import FakeRedis
@@ -38,15 +40,16 @@ def test_bge_provider_passes_device(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, str] = {}
 
     class FakeBge:
-        def __init__(self, *, device: str) -> None:
+        def __init__(self, *, device: str, revision: str) -> None:
             captured["device"] = device
+            captured["revision"] = revision
 
     monkeypatch.setattr(factory, "BgeM3Embedder", FakeBge)
 
-    result = factory.create_embedder(_settings(provider="bge_m3", device="cuda"))
+    result = factory.create_embedder(_settings(provider="bge_m3", device="cuda", revision=BGE_M3_REVISION))
 
     assert isinstance(result, FakeBge)
-    assert captured == {"device": "cuda"}
+    assert captured == {"device": "cuda", "revision": BGE_M3_REVISION}
 
 
 def test_voyage_provider_passes_secret_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -91,6 +94,26 @@ def test_get_embedder_caches_one_instance_per_process(monkeypatch: pytest.Monkey
     assert len(created) == 1
 
 
+def test_get_embedder_process_cache_separates_revisions(monkeypatch: pytest.MonkeyPatch) -> None:
+    created: list[str] = []
+
+    def fake_create(settings: EmbeddingsSettings) -> FakeEmbedder:
+        created.append(settings.revision)
+        return FakeEmbedder()
+
+    monkeypatch.setattr(factory, "create_embedder", fake_create)
+    revision_a = "revision-a"
+    revision_b = "revision-b"
+
+    first = factory.get_embedder(_settings(revision=revision_a))
+    same_revision = factory.get_embedder(_settings(revision=revision_a))
+    other_revision = factory.get_embedder(_settings(revision=revision_b))
+
+    assert first is same_revision
+    assert first is not other_revision
+    assert created == [revision_a, revision_b]
+
+
 def test_reset_embedder_creates_a_fresh_instance(monkeypatch: pytest.MonkeyPatch) -> None:
     created: list[FakeEmbedder] = []
 
@@ -111,6 +134,39 @@ def test_reset_embedder_creates_a_fresh_instance(monkeypatch: pytest.MonkeyPatch
     assert len(created) == 2
 
 
+def test_lazy_bge_factory_loads_real_wrapper_on_first_embed_without_network(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeSentenceTransformer:
+        def __init__(self, model_name: str, *, device: str, revision: str) -> None:
+            captured.update(model=model_name, device=device, revision=revision)
+
+        def encode(self, texts: list[str], *, normalize_embeddings: bool) -> list[list[float]]:
+            captured["texts"] = texts
+            captured["normalize"] = normalize_embeddings
+            return [[1.0, 0.0] for _ in texts]
+
+    module = ModuleType("sentence_transformers")
+    module.SentenceTransformer = FakeSentenceTransformer  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "sentence_transformers", module)
+    lazy = factory.LazyEmbedder(_settings(provider="bge_m3", revision=BGE_M3_REVISION))
+
+    assert captured == {}
+
+    vectors = lazy.embed(["query"])
+
+    assert vectors == [[1.0, 0.0]]
+    assert captured == {
+        "model": BGE_M3_MODEL,
+        "device": "cpu",
+        "revision": BGE_M3_REVISION,
+        "texts": ["query"],
+        "normalize": True,
+    }
+
+
 async def test_container_loads_and_encodes_off_event_loop_on_first_cache_miss(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -119,8 +175,9 @@ async def test_container_loads_and_encodes_off_event_loop_on_first_cache_miss(
     class RecordingBge(FakeEmbedder):
         dimension = BGE_M3_DIMENSION
 
-        def __init__(self, *, device: str) -> None:
+        def __init__(self, *, device: str, revision: str) -> None:
             assert device == "cpu"
+            assert revision == BGE_M3_REVISION
             calls.append(("load", get_ident()))
 
         def embed(self, texts: Sequence[str]) -> list[list[float]]:
@@ -176,4 +233,7 @@ async def test_two_container_providers_keep_models_and_redis_keys_separate(monke
             await container.close()
 
     assert created == ["bge_m3", "voyage"]
-    assert {key.rsplit(":", 1)[0] for key in cache.store} == {f"emb:{BGE_M3_MODEL}", f"emb:{VOYAGE_MODEL}"}
+    assert {key.rsplit(":", 1)[0] for key in cache.store} == {
+        f"emb:{BGE_M3_MODEL}:{BGE_M3_REVISION}",
+        f"emb:{VOYAGE_MODEL}:{BGE_M3_REVISION}",
+    }

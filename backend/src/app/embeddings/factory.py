@@ -16,7 +16,7 @@ from src.app.embeddings.bge_m3 import BGE_M3_DIMENSION, BGE_M3_MODEL, BgeM3Embed
 from src.app.embeddings.voyage import VOYAGE_DIMENSION, VOYAGE_MODEL, VoyageEmbedder
 from src.app.exceptions.embeddings import EmbeddingConfigurationError
 
-_EMBEDDERS: dict[tuple[EmbeddingsProvider, str | SecretStr | None], Embedder] = {}
+_EMBEDDERS: dict[tuple[EmbeddingsProvider, str | SecretStr | None, str], Embedder] = {}
 _LOCK = Lock()
 
 
@@ -43,7 +43,7 @@ class LazyEmbedder:
 def create_embedder(settings: EmbeddingsSettings, *, voyage_max_retries: int | None = None) -> Embedder:
     """Build a new embedder for the selected provider."""
     if settings.provider == "bge_m3":
-        return BgeM3Embedder(device=settings.device)
+        return BgeM3Embedder(device=settings.device, revision=settings.revision)
     if settings.voyage_api_key is None:
         raise EmbeddingConfigurationError("VOYAGE_API_KEY is required for the voyage provider.")
     if voyage_max_retries is not None:
@@ -55,7 +55,7 @@ def get_embedder(settings: EmbeddingsSettings | None = None) -> Embedder:
     """Load one model per provider configuration in the process."""
     settings = settings or get_embeddings_settings()
     option = settings.device if settings.provider == "bge_m3" else settings.voyage_api_key
-    key = (settings.provider, option)
+    key = (settings.provider, option, settings.revision)
     with _LOCK:
         existing = _EMBEDDERS.get(key)
         if existing is None:

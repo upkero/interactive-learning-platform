@@ -12,7 +12,7 @@ from typing import Any, ClassVar
 import pytest
 from pydantic import SecretStr
 
-from src.app.embeddings.bge_m3 import BGE_M3_MODEL, BgeM3Embedder
+from src.app.embeddings.bge_m3 import BGE_M3_MODEL, BGE_M3_REVISION, BgeM3Embedder
 from src.app.embeddings.voyage import VOYAGE_DIMENSION, VOYAGE_MODEL, VoyageEmbedder
 from src.app.exceptions.embeddings import EmbeddingConfigurationError
 
@@ -21,9 +21,10 @@ def test_bge_m3_wraps_sentence_transformer(monkeypatch: pytest.MonkeyPatch) -> N
     captured: dict[str, Any] = {}
 
     class FakeSentenceTransformer:
-        def __init__(self, model_name: str, *, device: str) -> None:
+        def __init__(self, model_name: str, *, device: str, revision: str) -> None:
             captured["model_name"] = model_name
             captured["device"] = device
+            captured["revision"] = revision
 
         def encode(self, texts: list[str], *, normalize_embeddings: bool) -> list[list[float]]:
             captured["texts"] = texts
@@ -34,14 +35,17 @@ def test_bge_m3_wraps_sentence_transformer(monkeypatch: pytest.MonkeyPatch) -> N
     module.SentenceTransformer = FakeSentenceTransformer  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "sentence_transformers", module)
 
-    embedder = BgeM3Embedder(device="cuda")
+    revision = "0123456789abcdef0123456789abcdef01234567"
+    embedder = BgeM3Embedder(device="cuda", revision=revision)
 
     assert embedder.model_name == BGE_M3_MODEL
+    assert embedder.revision == revision
     assert embedder.dimension == 1024
     assert embedder.embed(["a", "b"]) == [[1.0, 0.0], [1.0, 0.0]]
     assert captured == {
         "model_name": BGE_M3_MODEL,
         "device": "cuda",
+        "revision": revision,
         "texts": ["a", "b"],
         "normalize": True,
     }
@@ -52,6 +56,23 @@ def test_bge_m3_missing_extra_is_a_configuration_error(monkeypatch: pytest.Monke
 
     with pytest.raises(EmbeddingConfigurationError):
         BgeM3Embedder()
+
+
+def test_bge_m3_default_revision_is_pinned() -> None:
+    module = ModuleType("sentence_transformers")
+
+    class FakeSentenceTransformer:
+        def __init__(self, _model_name: str, *, device: str, revision: str) -> None:
+            del device
+            assert revision == BGE_M3_REVISION
+
+    module.SentenceTransformer = FakeSentenceTransformer  # type: ignore[attr-defined]
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setitem(sys.modules, "sentence_transformers", module)
+
+        embedder = BgeM3Embedder()
+
+    assert embedder.revision == BGE_M3_REVISION
 
 
 def test_voyage_wraps_api_client(monkeypatch: pytest.MonkeyPatch) -> None:

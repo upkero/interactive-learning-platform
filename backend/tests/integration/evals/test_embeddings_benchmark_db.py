@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from evals import embeddings_benchmark as benchmark
 from src.app.core.settings.embeddings import get_embeddings_settings
+from src.app.embeddings.bge_m3 import BGE_M3_REVISION
 
 
 @pytest.mark.integration
@@ -43,6 +44,7 @@ async def test_benchmark_runs_the_full_corpus_on_pgvector_with_fake_embeddings(
         assert await conn.scalar(text("SELECT count(*) FROM public.widgets")) == before
 
     assert batch_sizes == [32] * 13 + [4]
+    assert result["revision"] == BGE_M3_REVISION
     assert result["calibrated_max_distance"] == 0.0
     assert result["test_calibrated"] == {
         "positives": 75,

@@ -2,7 +2,8 @@
 
 The embedding is symmetric (``input_type=None``): an intent and a widget
 description are both short behaviour descriptions, so they share one
-vector space and one cache key format ``emb:{model}:{sha256(text)}``.
+vector space and one cache key format
+``emb:{model}:{revision}:{sha256(text)}``.
 """
 
 from collections.abc import Sequence

@@ -27,6 +27,7 @@ def _clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in (
         "EMBEDDINGS_PROVIDER",
         "EMBEDDINGS_DEVICE",
+        "EMBEDDINGS_REVISION",
         "EMBEDDINGS_BATCH_SIZE",
         "EMBEDDINGS_CACHE_TTL_DAYS",
         "EMBEDDINGS_CACHE_REDIS_URL",
@@ -47,6 +48,7 @@ def test_defaults_select_the_local_model_and_dedicated_cache_database() -> None:
 
     assert settings.provider == "bge_m3"
     assert settings.device == "cpu"
+    assert settings.revision == "5617a9f61b028005a4858fdac845db406aefb181"
     assert settings.batch_size == 32
     assert settings.cache_ttl_days == 30
     assert settings.cache_ttl_seconds == 30 * 24 * 3600
@@ -359,6 +361,15 @@ def test_environment_overrides_provider_and_voyage_key(monkeypatch: pytest.Monke
     assert settings.provider == "voyage"
     assert isinstance(settings.voyage_api_key, SecretStr)
     assert settings.voyage_api_key.get_secret_value() == "secret"
+
+
+def test_environment_overrides_model_revision(monkeypatch: pytest.MonkeyPatch) -> None:
+    revision = "0123456789abcdef0123456789abcdef01234567"
+    monkeypatch.setenv("EMBEDDINGS_REVISION", revision)
+
+    settings = _settings()
+
+    assert settings.revision == revision
 
 
 def test_voyage_requires_a_key(monkeypatch: pytest.MonkeyPatch) -> None:

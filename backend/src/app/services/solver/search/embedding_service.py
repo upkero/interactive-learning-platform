@@ -3,7 +3,7 @@
 The service owns the cache and the batching contract:
 
 - identical texts in one call are embedded once;
-- cache keys are ``emb:{model}:{sha256(text)}`` and hold float32
+- cache keys are ``emb:{model}:{revision}:{sha256(text)}`` and hold float32
   little-endian bytes, not JSON;
 - Redis failures are a cache miss, never a failed embedding;
 - model failures become ``EmbeddingGenerationError``;
@@ -44,17 +44,16 @@ class EmbeddingService(EmbeddingServiceInterface):
         embedder: Embedder,
         redis: EmbeddingCacheProtocol,
         metrics: MetricsCollector,
+        revision: str,
         batch_size: int = 32,
         ttl_seconds: int = 30 * 24 * 3600,
-        logger: logging.Logger | None = None,
-        logger_: logging.Logger | None = None,
     ) -> None:
         self._embedder = embedder
         self._redis = redis
         self._metrics = metrics
+        self._revision = revision
         self._batch_size = batch_size
         self._ttl = ttl_seconds
-        self._logger = logger or logger_ or _LOGGER
         self._vector_format = struct.Struct(f"<{embedder.dimension}f")
 
     @property
@@ -109,16 +108,16 @@ class EmbeddingService(EmbeddingServiceInterface):
         return packed, decoded
 
     def _key(self, text: str) -> str:
-        return f"emb:{self._embedder.model_name}:{sha256(text.encode()).hexdigest()}"
+        return f"emb:{self._embedder.model_name}:{self._revision}:{sha256(text.encode()).hexdigest()}"
 
     async def _read_cache(self, texts: Sequence[str]) -> list[list[float] | None]:
         try:
             raw = await self._redis.mget([self._key(text) for text in texts])
         except RedisError:
-            self._logger.warning("Embedding cache read failed, treating as miss.", exc_info=True)
+            _LOGGER.warning("Embedding cache read failed, treating as miss.", exc_info=True)
             return [None] * len(texts)
         if len(raw) != len(texts):
-            self._logger.warning("Embedding cache returned an unexpected number of values, treating all as misses.")
+            _LOGGER.warning("Embedding cache returned an unexpected number of values, treating all as misses.")
             return [None] * len(texts)
         return [self._decode(item) for item in raw]
 
@@ -129,7 +128,7 @@ class EmbeddingService(EmbeddingServiceInterface):
                     pipe.set(self._key(text), vector, ex=self._ttl)
                 await pipe.execute()
         except RedisError:
-            self._logger.warning("Embedding cache write failed.", exc_info=True)
+            _LOGGER.warning("Embedding cache write failed.", exc_info=True)
 
     def _decode(self, raw: bytes | None) -> list[float] | None:
         if not isinstance(raw, bytes) or len(raw) != self._vector_format.size:

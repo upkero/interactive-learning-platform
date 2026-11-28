@@ -1,6 +1,7 @@
 """Unit tests of the embedding service (story 2.3)."""
 
 import hashlib
+import inspect
 import struct
 from collections.abc import Sequence
 
@@ -15,6 +16,8 @@ from src.app.exceptions.embeddings import (
 from src.app.services.solver.search.embedding_service import EmbeddingService
 from tests.support.fakes.cache.redis import FakeRedis
 from tests.support.fakes.observability.metrics_collector import RecordingMetricsCollector
+
+REVISION = "5617a9f61b028005a4858fdac845db406aefb181"
 
 
 class FakeEmbedder(Embedder):
@@ -55,6 +58,7 @@ def _service(
     embedder: FakeEmbedder | None = None,
     redis: FakeRedis | None = None,
     metrics: RecordingMetricsCollector | None = None,
+    revision: str = REVISION,
     batch_size: int = 32,
     ttl_seconds: int = 30 * 24 * 3600,
 ) -> tuple[EmbeddingService, FakeEmbedder, FakeRedis, RecordingMetricsCollector]:
@@ -65,14 +69,15 @@ def _service(
         embedder=model,
         redis=cache,
         metrics=collector,
+        revision=revision,
         batch_size=batch_size,
         ttl_seconds=ttl_seconds,
     )
     return service, model, cache, collector
 
 
-def _key(text: str) -> str:
-    return f"emb:fake-model:{hashlib.sha256(text.encode()).hexdigest()}"
+def _key(text: str, revision: str = REVISION) -> str:
+    return f"emb:fake-model:{revision}:{hashlib.sha256(text.encode()).hexdigest()}"
 
 
 async def test_duplicate_texts_are_embedded_once_and_cached() -> None:
@@ -106,13 +111,34 @@ async def test_duplicate_texts_are_embedded_once_and_cached() -> None:
     ]
 
 
-async def test_cache_key_contains_model_and_sha256() -> None:
+async def test_cache_key_contains_model_revision_and_sha256() -> None:
     service, _, redis, _ = _service()
 
     await service.embed(["hello world"])
 
     assert redis.mget_calls == [[_key("hello world")]]
     assert redis.set_calls[0][0] == _key("hello world")
+
+
+async def test_cache_key_separates_revisions_and_same_revision_hits() -> None:
+    cache = FakeRedis()
+    service_a, embedder_a, _, _ = _service(redis=cache, revision="revision-a")
+    service_b, embedder_b, _, _ = _service(redis=cache, revision="revision-b")
+
+    await service_a.embed(["hello world"])
+    await service_b.embed(["hello world"])
+    await service_a.embed(["hello world"])
+
+    assert embedder_a.calls == [["hello world"]]
+    assert embedder_b.calls == [["hello world"]]
+    assert set(cache.store) == {_key("hello world", "revision-a"), _key("hello world", "revision-b")}
+
+
+def test_logger_api_has_no_duplicate_parameters() -> None:
+    parameters = inspect.signature(EmbeddingService).parameters
+
+    assert "logger" not in parameters
+    assert "logger_" not in parameters
 
 
 async def test_seventy_texts_with_duplicates_use_three_batches() -> None:

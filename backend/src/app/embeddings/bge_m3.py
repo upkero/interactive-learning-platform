@@ -11,13 +11,20 @@ from collections.abc import Sequence
 from src.app.exceptions.embeddings import EmbeddingConfigurationError
 
 BGE_M3_MODEL = "BAAI/bge-m3"
+BGE_M3_REVISION = "5617a9f61b028005a4858fdac845db406aefb181"
 BGE_M3_DIMENSION = 1024
 
 
 class BgeM3Embedder:
-    """SentenceTransformers wrapper around ``BAAI/bge-m3``."""
+    """SentenceTransformers wrapper around a pinned ``BAAI/bge-m3`` revision."""
 
-    def __init__(self, *, device: str = "cpu", model_name: str = BGE_M3_MODEL) -> None:
+    def __init__(
+        self,
+        *,
+        device: str = "cpu",
+        model_name: str = BGE_M3_MODEL,
+        revision: str = BGE_M3_REVISION,
+    ) -> None:
         try:
             from sentence_transformers import SentenceTransformer
         except ImportError as exc:  # pragma: no cover - depends on the install extra
@@ -25,11 +32,16 @@ class BgeM3Embedder:
                 "sentence-transformers is not installed; install the embeddings-local extra."
             ) from exc
         self._model_name = model_name
-        self._model = SentenceTransformer(model_name, device=device)
+        self._revision = revision
+        self._model = SentenceTransformer(model_name, device=device, revision=revision)
 
     @property
     def model_name(self) -> str:
         return self._model_name
+
+    @property
+    def revision(self) -> str:
+        return self._revision
 
     @property
     def dimension(self) -> int:
@@ -42,4 +54,4 @@ class BgeM3Embedder:
         return [[float(value) for value in vector] for vector in vectors]
 
 
-__all__ = ["BGE_M3_DIMENSION", "BGE_M3_MODEL", "BgeM3Embedder"]
+__all__ = ["BGE_M3_DIMENSION", "BGE_M3_MODEL", "BGE_M3_REVISION", "BgeM3Embedder"]
