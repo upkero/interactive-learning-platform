@@ -52,6 +52,7 @@ from src.app.repositories.quiz_attempt_repository import QuizAttemptRepository
 from src.app.repositories.report_repository import ReportRepository
 from src.app.repositories.user_material_repository import UserMaterialRepository
 from src.app.repositories.user_repository import UserRepository
+from src.app.repositories.widget_description_repository import WidgetDescriptionRepository
 from src.app.repositories.widget_repository import WidgetRepository
 from src.app.repositories.widget_search_repository import WidgetSearchRepository
 from src.app.repositories.widget_usage_repository import WidgetUsageRepository
@@ -76,9 +77,16 @@ from src.app.services.quota.quota_service import QuotaService
 from src.app.services.reports.report_service import ReportService
 from src.app.services.sharing.sharing_service import SharingService
 from src.app.services.solver.library.library_normalizer import LibraryNormalizer
+from src.app.services.solver.library.primitive_catalog import PrimitiveCatalog
+from src.app.services.solver.library.widget_library import WidgetLibrary
 from src.app.services.solver.pipeline.part_recovery import PartRecovery
 from src.app.services.solver.pipeline.stub_pipeline import StubPipeline
 from src.app.services.solver.pipeline.watchdog import Watchdog
+from src.app.services.solver.resolver.config_assembler import ConfigAssembler
+from src.app.services.solver.resolver.config_validator import ConfigValidator
+from src.app.services.solver.resolver.describer import Describer
+from src.app.services.solver.resolver.reranker import Reranker
+from src.app.services.solver.resolver.resolver import InstrumentedResolver
 from src.app.services.solver.search.embedding_service import EmbeddingService
 from src.app.services.solver.search.instrumented_embedding_service import InstrumentedEmbeddingService
 from src.app.services.solver.search.widget_search import WidgetSearch
@@ -373,12 +381,83 @@ class ApplicationContainer:
         return WidgetSearch(
             session_factory=self.session_factory,
             embeddings=self.embedding_service,
+            catalog=self.primitive_catalog,
             settings=self.solver_settings,
             metrics=self.metrics_collector,
             search_repo=WidgetSearchRepository,
             widget_repo=WidgetRepository,
             primitive_repo=PrimitiveRepository,
         )
+
+    @cached_property
+    def primitive_catalog(self) -> PrimitiveCatalog:
+        """Primitive catalog for soft search filter (built once per process)."""
+        # The catalog is populated from the database on first access
+        # For now, return empty catalog; will be synced in story 2.4
+        return PrimitiveCatalog()
+
+    @cached_property
+    def reranker(self) -> Reranker:
+        """Cheap model reranker for widget candidates (story 2.4.1)."""
+        return Reranker(cheap_llm=self.cheap_llm)
+
+    @cached_property
+    def config_assembler(self) -> ConfigAssembler:
+        """Builds and fixes widget configurations (story 2.4.2, 2.4.3)."""
+        assembler = ConfigAssembler(
+            main_llm=self.main_llm,
+            catalog=self.primitive_catalog,
+        )
+        # Inject primitive repo for schema lookups
+        assembler._get_primitive_record = lambda pid: self._get_primitive_record(pid)
+        return assembler
+
+    async def _get_primitive_record(self, primitive_id: str):
+        async with self.session_factory() as session:
+            repo = PrimitiveRepository(session)
+            return await repo.get(primitive_id)
+
+    @cached_property
+    def config_validator(self) -> ConfigValidator:
+        """Validates configurations against schema and intent (story 2.4.4)."""
+        return ConfigValidator(cheap_llm=self.cheap_llm)
+
+    @cached_property
+    def widget_library(self) -> WidgetLibrary:
+        """Facade for widget library operations (story 2.4)."""
+        return WidgetLibrary(
+            session_factory=self.session_factory,
+            widget_repo=WidgetRepository,
+            widget_desc_repo=WidgetDescriptionRepository,
+            widget_usage_repo=WidgetUsageRepository,
+            primitive_repo=PrimitiveRepository,
+        )
+
+    @cached_property
+    def describer(self) -> Describer:
+        """Generates descriptions for new widgets (story 2.4.6)."""
+        return Describer(cheap_llm=self.cheap_llm)
+
+    @cached_property
+    def widget_resolver(self) -> InstrumentedResolver:
+        """Full resolver with degradation and instrumentation (story 2.4)."""
+        return InstrumentedResolver(
+            search=self.widget_search,
+            reranker=self.reranker,
+            assembler=self.config_assembler,
+            validator=self.config_validator,
+            library=self.widget_library,
+            describer=self.describer,
+            code_generator=None,  # Story 2.5
+            metrics=self.metrics_collector,
+            decision_log=self.decision_log,
+        )
+
+    @cached_property
+    def decision_log(self):
+        """Decision log for resolver observability (story 1.8)."""
+        from src.app.observability.decision_log import DecisionLog
+        return DecisionLog(metrics=self.metrics_collector)
 
     @cached_property
     def metrics_collector(self) -> MetricsCollector:

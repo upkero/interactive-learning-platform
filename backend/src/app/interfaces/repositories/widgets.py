@@ -56,6 +56,16 @@ class WidgetRepositoryProtocol(Protocol):
         created_from_part_id: UUID | None = None,
     ) -> WidgetRecord: ...
 
+    async def create_config(
+        self,
+        *,
+        primitive_id: str,
+        mode: str,
+        params: dict[str, Any],
+        version: int,
+        created_from_part_id: UUID,
+    ) -> UUID: ...
+
     async def set_status(self, widget_id: UUID, status: WidgetStatus) -> None: ...
 
     async def lock_for_update(self, widget_id: UUID) -> WidgetRecord | None: ...
@@ -68,6 +78,10 @@ class WidgetRepositoryProtocol(Protocol):
         self,
         widget_ids: Sequence[UUID],
     ) -> dict[UUID, WidgetWithDescription]: ...
+
+    async def list_active_configs(
+        self, primitive_id: str, mode: str
+    ) -> list[WidgetRecord]: ...
 
 
 class WidgetDescriptionRepositoryProtocol(Protocol):

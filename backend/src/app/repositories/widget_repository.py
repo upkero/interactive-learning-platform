@@ -146,3 +146,38 @@ class WidgetRepository(WidgetRepositoryProtocol):
         if row is not None:
             row.status = status.value
             await self._session.flush()
+
+    async def create_config(
+        self,
+        *,
+        primitive_id: str,
+        mode: str,
+        params: dict[str, Any],
+        version: int,
+        created_from_part_id: UUID,
+    ) -> UUID:
+        """Create a config widget with version from primitive."""
+        row = Widget(
+            kind=WidgetKind.CONFIG.value,
+            primitive_id=primitive_id,
+            mode=mode,
+            params=params,
+            version=version,
+            created_from_part_id=created_from_part_id,
+        )
+        self._session.add(row)
+        await self._session.flush()
+        return row.id
+
+    async def list_active_configs(
+        self, primitive_id: str, mode: str
+    ) -> list[WidgetRecord]:
+        """List active config widgets for a primitive+mode (for deduplication)."""
+        stmt = select(Widget).where(
+            Widget.kind == WidgetKind.CONFIG.value,
+            Widget.primitive_id == primitive_id,
+            Widget.mode == mode,
+            Widget.status == WidgetStatus.ACTIVE.value,
+        )
+        rows = (await self._session.scalars(stmt)).all()
+        return [self._to_record(row) for row in rows]
